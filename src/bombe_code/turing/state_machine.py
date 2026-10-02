@@ -15,6 +15,10 @@ class WaveState(str, Enum):
     COMPLETED = "COMPLETED"
 
 
+# Alias para a terminologia oficial de Etapa da ONDA
+TuringStage = WaveState
+
+
 class AutonomyMode(str, Enum):
     AUTO = "AUTO"
     SEMI_AUTO = "SEMI_AUTO"

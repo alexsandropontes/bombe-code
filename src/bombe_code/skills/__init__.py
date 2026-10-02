@@ -1,6 +1,7 @@
-"""Módulo de descoberta, parsing e injeção de skills no contexto do agente."""
+"""Subsistema de Skills sob Demanda do Bombe Code."""
 
-from .discovery import discover_skills, format_skills_for_prompt, get_skill_by_name
-from .manifest import SkillManifest
+from bombe_code.skills.models import SkillDefinition, SkillSummary
+from bombe_code.skills.registry import SkillRegistry
+from bombe_code.skills.tools import make_skill_tools
 
-__all__ = ["SkillManifest", "discover_skills", "format_skills_for_prompt", "get_skill_by_name"]
+__all__ = ["SkillDefinition", "SkillRegistry", "SkillSummary", "make_skill_tools"]

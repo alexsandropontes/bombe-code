@@ -139,3 +139,33 @@ class ProjectDatabase:
             else:
                 rows = conn.execute("SELECT * FROM agent_tasks ORDER BY created_at ASC").fetchall()
             return [dict(r) for r in rows]
+
+    def create_agent_task(
+        self,
+        agent_handle: str,
+        description: str,
+        story_id: str = "GLOBAL",
+    ) -> str:
+        """Cria e registra uma task operacional de agente no SQLite."""
+        return self.create_task(story_id=story_id, agent_role=agent_handle, title=description)
+
+    def update_agent_task_status(
+        self,
+        task_id: str,
+        status: str,
+        output: str = "",
+    ) -> None:
+        """Atualiza o status de uma task operacional de agente."""
+        self.update_task_status(task_id=task_id, status=status, output=output)
+
+    def list_agent_tasks(self, agent_handle: str | None = None) -> list[dict[str, Any]]:
+        """Lista tasks filtradas pelo handle do agente ou todas."""
+        with self._get_connection() as conn:
+            if agent_handle:
+                rows = conn.execute(
+                    "SELECT * FROM agent_tasks WHERE agent_role = ? ORDER BY created_at ASC",
+                    (agent_handle,),
+                ).fetchall()
+            else:
+                rows = conn.execute("SELECT * FROM agent_tasks ORDER BY created_at ASC").fetchall()
+            return [dict(r) for r in rows]
