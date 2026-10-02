@@ -37,6 +37,12 @@ Reach 100%, Impact 3x, Confidence 90%, Effort 2 semanas.
 ## 5. MVP Operacional
 Fluxo ponta a ponta.
 
+## Viabilidade Técnica
+Viável operacionalmente.
+
+## Riscos
+Riscos mitigados e controlados.
+
 ## Entry Points
 Login web.
 
@@ -52,6 +58,12 @@ Clean Architecture.
 ## Stack
 Python FastAPI.
 
+## Schema
+CREATE TABLE payments (id UUID);
+
+## Constraints
+PRIMARY KEY (id);
+
 ## Critérios INVEST
 Independente e Testável.
 
@@ -60,6 +72,9 @@ Independente e Testável.
 * **Dado** usuário
 * **Quando** autenticar
 * **Então** aprovar.
+
+Review: APROVADO
+Veredito: VERDE
 """
     mock_agent.run.return_value = mock_res
     mock_factory.create_agent.return_value = mock_agent
@@ -89,6 +104,11 @@ def test_upstream_gates_recorded_in_orchestrator(orchestrator):
 
 
 def test_downstream_review_gate_in_run_cycle(orchestrator):
+    # Cria story pré-requisito no disco
+    stories_dir = orchestrator.project_dir / "docs" / "stories"
+    stories_dir.mkdir(parents=True, exist_ok=True)
+    (stories_dir / "ST-030.md").write_text("# STORY ST-030\n## INVEST\n## Critérios de Aceite\n### Cenários BDD\n- Dado X\n- Quando Y\n- Então Z\n")
+
     # Transita para EXECUTE
     orchestrator.transition_to(TuringStage.PLAN)
     orchestrator.transition_to(TuringStage.EXECUTE)

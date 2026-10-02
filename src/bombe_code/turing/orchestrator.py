@@ -30,9 +30,11 @@ from bombe_code.turing.state_machine import (
 )
 from bombe_code.turing.upstream_gates import (
     ArchitectureGate,
+    DatabaseQualityGate,
     JourneyGate,
     PRDQualityGate,
     StoryDoRGate,
+    ViabilityQualityGate,
 )
 
 logger = logging.getLogger(__name__)
@@ -63,9 +65,11 @@ class WaveOrchestrator:
         self.llm_factory = llm_factory or PydanticAiFactory()
         self.template_gate = template_gate or TemplateGate()
         self.seal_gate = seal_gate or SealGate()
+        self.viability_gate = ViabilityQualityGate()
         self.prd_gate = prd_gate or PRDQualityGate()
         self.journey_gate = journey_gate or JourneyGate()
         self.architecture_gate = architecture_gate or ArchitectureGate()
+        self.db_gate = DatabaseQualityGate()
         self.story_dor_gate = story_dor_gate or StoryDoRGate()
         self.review_gate = review_gate or TuringReviewGate()
         self.kanban = kanban or KanbanManager(project_dir=str(self.project_dir), db=self.db)
@@ -374,6 +378,80 @@ class WaveOrchestrator:
             extra_tools=self._get_project_fs_tools(),
         )
 
+    AGENT_REQUIRED_INPUTS: ClassVar[dict[str, list[tuple[str, str]]]] = {
+        "@meira": [],
+        "@grace": [
+            ("docs/briefings/VIABILITY.md", "Parecer de Viabilidade Técnica e Estratégica (@meira)")
+        ],
+        "@alan": [
+            ("docs/briefings/PRD.md", "PRD Estruturado (@grace)")
+        ],
+        "@ieru": [
+            ("docs/briefings/PRD.md", "PRD Estruturado (@grace)"),
+            ("docs/architecture/journey.md", "Mapeamento da Jornada do Usuário (@alan)"),
+        ],
+        "@codd": [
+            ("docs/briefings/PRD.md", "PRD Estruturado (@grace)"),
+            ("docs/architecture/SYSTEM_ARCHITECTURE.md", "Arquitetura do Sistema e Decisões Técnicas (@ieru)"),
+        ],
+        "@caroli": [
+            ("docs/briefings/PRD.md", "PRD Estruturado (@grace)"),
+            ("docs/architecture/journey.md", "Mapeamento da Jornada do Usuário (@alan)"),
+            ("docs/architecture/SYSTEM_ARCHITECTURE.md", "Arquitetura do Sistema (@ieru)"),
+        ],
+        "@aniche": [
+            ("docs/stories/{story_id}.md", "Story com INVEST e BDD (@caroli)"),
+        ],
+        "@fowler": [
+            ("docs/stories/{story_id}.md", "Story com INVEST e BDD (@caroli)"),
+            ("docs/stories/{story_id}_test_plan.md", "Plano de Testes da Story (@aniche)"),
+        ],
+        "@barbara": [
+            ("docs/stories/{story_id}.md", "Story com INVEST e BDD (@caroli)"),
+        ],
+        "@ada": [
+            ("docs/stories/{story_id}.md", "Story com INVEST e BDD (@caroli)"),
+        ],
+        "@unclebob": [
+            ("docs/stories/{story_id}.md", "Story com INVEST e BDD (@caroli)"),
+        ],
+    }
+
+    def validate_agent_prerequisites(
+        self, agent_handle: str, story_id: str | None = None
+    ) -> tuple[bool, str]:
+        """REGRA INEGOCIÁVEL 2: Valida se todas as entradas essenciais do agente existem fisicamente no disco antes de chamá-lo."""
+        reqs = self.AGENT_REQUIRED_INPUTS.get(agent_handle, [])
+        for rel_template, desc in reqs:
+            rel_path = rel_template.replace("{story_id}", story_id or "ST-001")
+            target = self.project_dir / rel_path
+            if not target.exists():
+                return False, f"Pré-requisito ausente para {agent_handle}: O arquivo '{rel_path}' ({desc}) não existe no disco."
+            if target.is_file() and target.stat().st_size < 50:
+                return False, f"Pré-requisito inválido para {agent_handle}: O arquivo '{rel_path}' ({desc}) está vazio ou raso (< 50 bytes)."
+        return True, "Entradas validadas com sucesso."
+
+    def handle_agent_block(
+        self, agent_handle: str, reason: str, story_id: str | None = None
+    ) -> None:
+        """Intervenção OBRIGATÓRIA do Turing Runtime ao detectar bloqueio de agente."""
+        logger.error(
+            "🛑 INTERVENÇÃO DO TURING RUNTIME: Agente %s reportou bloqueio ou pré-requisito falho: %s",
+            agent_handle,
+            reason,
+        )
+        target_story = story_id or "ST-001"
+        card = self.kanban.get_card(target_story)
+        if not card:
+            self.kanban.add_card(
+                story_id=target_story,
+                wave_id=self.state_machine.wave_id,
+                title=f"Bloqueio: {agent_handle}",
+                agent=agent_handle,
+                status="BLOCKED",
+            )
+        self.kanban.block_card(target_story, reason=reason, blocked_by=agent_handle)
+
     def run_discuss(self, topic: str, context: dict[str, Any] | None = None) -> dict[str, Any]:
         """Executa a etapa DISCUSS com @meira (viabilidade) e @grace (PRD)."""
         if self.state_machine.current_state != WaveState.DISCUSS:
@@ -385,6 +463,11 @@ class WaveOrchestrator:
         results: list[dict[str, Any]] = []
 
         # 1. Despacha @meira para viabilidade
+        ok, pre_err = self.validate_agent_prerequisites("@meira")
+        if not ok:
+            self.handle_agent_block("@meira", pre_err)
+            return {"success": False, "stage": TuringStage.DISCUSS.value, "error": pre_err}
+
         runner_meira = self._get_runner("@meira")
         if runner_meira:
             res_meira = runner_meira.run(
@@ -396,14 +479,38 @@ class WaveOrchestrator:
                 {"agent": "@meira", "output": res_meira.output, "success": res_meira.success}
             )
 
-            # FAIL-FAST: Se @meira falhou, deu timeout ou bloqueou, ABORTA antes de chamar @grace!
+            # FAIL-FAST: Se @meira bloqueou ou falhou, Turing intervém no ato!
+            if getattr(res_meira, "is_blocked", False):
+                reason = getattr(res_meira, "block_reason", None) or "Agente @meira bloqueou a execução."
+                self.handle_agent_block("@meira", reason)
+                return {
+                    "success": False,
+                    "stage": TuringStage.DISCUSS.value,
+                    "error": f"🛑 BLOCKED: {reason}",
+                    "results": results,
+                }
+
             is_approved, reason = self._check_explicit_approval(res_meira)
             if not is_approved or not res_meira.success:
+                self.handle_agent_block("@meira", reason)
                 return {
                     "success": False,
                     "stage": TuringStage.DISCUSS.value,
                     "error": f"Gate de Viabilidade (@meira) não aprovou: {reason}. Etapa DISCUSS interrompida (Fail-Fast).",
                     "results": results,
+                }
+
+            # Avaliação determinística de qualidade do parecer de viabilidade
+            viab_eval = self.viability_gate.evaluate(res_meira.output)
+            self._gate_evaluations["viability"] = viab_eval
+            if not viab_eval.get("approved"):
+                self.handle_agent_block("@meira", viab_eval.get("message"))
+                return {
+                    "success": False,
+                    "stage": TuringStage.DISCUSS.value,
+                    "error": f"Gate de Viabilidade reprovado: {viab_eval.get('message')}. Interrompendo DISCUSS.",
+                    "results": results,
+                    "gates": self._gate_evaluations,
                 }
 
             # Persiste viabilidade em docs/briefings/
@@ -415,6 +522,11 @@ class WaveOrchestrator:
                 logger.warning("Falha ao salvar VIABILITY.md: %s", e)
 
         # 2. Despacha @grace para PRD estruturado (apenas se @meira foi aprovado)
+        ok, pre_err = self.validate_agent_prerequisites("@grace")
+        if not ok:
+            self.handle_agent_block("@grace", pre_err)
+            return {"success": False, "stage": TuringStage.DISCUSS.value, "error": pre_err}
+
         runner_grace = self._get_runner("@grace")
         grace_output = ""
         if runner_grace:
@@ -439,9 +551,20 @@ class WaveOrchestrator:
                 {"agent": "@grace", "output": res_grace.output, "success": res_grace.success}
             )
 
-            # FAIL-FAST: Se @grace falhou ou bloqueou, ABORTA!
+            # FAIL-FAST: Se @grace bloqueou ou falhou, Turing intervém no ato!
+            if getattr(res_grace, "is_blocked", False):
+                reason = getattr(res_grace, "block_reason", None) or "Agente @grace bloqueou a execução."
+                self.handle_agent_block("@grace", reason)
+                return {
+                    "success": False,
+                    "stage": TuringStage.DISCUSS.value,
+                    "error": f"🛑 BLOCKED: {reason}",
+                    "results": results,
+                }
+
             is_approved, reason = self._check_explicit_approval(res_grace)
             if not is_approved or not res_grace.success:
+                self.handle_agent_block("@grace", reason)
                 return {
                     "success": False,
                     "stage": TuringStage.DISCUSS.value,
@@ -461,6 +584,7 @@ class WaveOrchestrator:
         prd_eval = self.prd_gate.evaluate(grace_output)
         self._gate_evaluations["prd"] = prd_eval
         if not prd_eval.get("approved"):
+            self.handle_agent_block("@grace", prd_eval.get("message"))
             return {
                 "success": False,
                 "stage": TuringStage.DISCUSS.value,
@@ -488,21 +612,17 @@ class WaveOrchestrator:
                     "error": f"Etapa atual é {self.state_machine.current_state.value}, esperado PLAN.",
                 }
 
-        # PRÉ-REQUISITO FUNDAMENTAL: PRD.md DEVE existir fisicamente em disco
-        prd_file = self.project_dir / "docs" / "briefings" / "PRD.md"
-        if not prd_file.exists() or prd_file.stat().st_size < 50:
-            return {
-                "success": False,
-                "stage": TuringStage.PLAN.value,
-                "error": "Pré-requisito ausente: docs/briefings/PRD.md não existe ou está vazio. Conclua DISCUSS antes de PLAN.",
-            }
-
         results: list[dict[str, Any]] = []
         outputs: dict[str, str] = {}
 
         # -------------------------------------------------------------
         # 1. @alan: Mapeamento de Jornada e Telas
         # -------------------------------------------------------------
+        ok, pre_err = self.validate_agent_prerequisites("@alan")
+        if not ok:
+            self.handle_agent_block("@alan", pre_err)
+            return {"success": False, "stage": TuringStage.PLAN.value, "error": pre_err}
+
         runner_alan = self._get_runner("@alan")
         if runner_alan:
             alan_prompt = (
@@ -515,9 +635,14 @@ class WaveOrchestrator:
             outputs["@alan"] = res_alan.output
             results.append({"agent": "@alan", "output": res_alan.output, "success": res_alan.success})
 
-            # FAIL-FAST: Se @alan falhar, interrompe imediatamente!
-            if not res_alan.success or getattr(res_alan, "is_blocked", False):
-                err = getattr(res_alan, "error", None) or getattr(res_alan, "block_reason", None) or "Timeout ou falha de execução"
+            if getattr(res_alan, "is_blocked", False):
+                reason = getattr(res_alan, "block_reason", None) or "Agente @alan bloqueou a execução."
+                self.handle_agent_block("@alan", reason)
+                return {"success": False, "stage": TuringStage.PLAN.value, "error": f"🛑 BLOCKED: {reason}", "results": results}
+
+            if not res_alan.success:
+                err = getattr(res_alan, "error", None) or "Timeout ou falha de execução"
+                self.handle_agent_block("@alan", err)
                 return {
                     "success": False,
                     "stage": TuringStage.PLAN.value,
@@ -537,6 +662,7 @@ class WaveOrchestrator:
             journey_eval = self.journey_gate.evaluate(res_alan.output)
             self._gate_evaluations["journey"] = journey_eval
             if not journey_eval.get("approved"):
+                self.handle_agent_block("@alan", journey_eval.get("message"))
                 return {
                     "success": False,
                     "stage": TuringStage.PLAN.value,
@@ -547,16 +673,11 @@ class WaveOrchestrator:
 
         # -------------------------------------------------------------
         # 2. @ieru: Arquitetura do Sistema e Decisões Técnicas
-        # Pré-requisito: jornada e PRD no disco
         # -------------------------------------------------------------
-        journey_path = self.project_dir / "docs" / "architecture" / "journey.md"
-        if not journey_path.exists() or journey_path.stat().st_size < 50:
-            return {
-                "success": False,
-                "stage": TuringStage.PLAN.value,
-                "error": "Pré-requisito ausente para @ieru: docs/architecture/journey.md não encontrado.",
-                "results": results,
-            }
+        ok, pre_err = self.validate_agent_prerequisites("@ieru")
+        if not ok:
+            self.handle_agent_block("@ieru", pre_err)
+            return {"success": False, "stage": TuringStage.PLAN.value, "error": pre_err}
 
         runner_ieru = self._get_runner("@ieru")
         if runner_ieru:
@@ -570,9 +691,14 @@ class WaveOrchestrator:
             outputs["@ieru"] = res_ieru.output
             results.append({"agent": "@ieru", "output": res_ieru.output, "success": res_ieru.success})
 
-            # FAIL-FAST: Se @ieru falhar, interrompe imediatamente! NÃO CHAMA @codd NEM @caroli!
-            if not res_ieru.success or getattr(res_ieru, "is_blocked", False):
-                err = getattr(res_ieru, "error", None) or getattr(res_ieru, "block_reason", None) or "Timeout ou falha de execução"
+            if getattr(res_ieru, "is_blocked", False):
+                reason = getattr(res_ieru, "block_reason", None) or "Agente @ieru bloqueou a execução."
+                self.handle_agent_block("@ieru", reason)
+                return {"success": False, "stage": TuringStage.PLAN.value, "error": f"🛑 BLOCKED: {reason}", "results": results}
+
+            if not res_ieru.success:
+                err = getattr(res_ieru, "error", None) or "Timeout ou falha de execução"
+                self.handle_agent_block("@ieru", err)
                 return {
                     "success": False,
                     "stage": TuringStage.PLAN.value,
@@ -592,6 +718,7 @@ class WaveOrchestrator:
             arch_eval = self.architecture_gate.evaluate(res_ieru.output)
             self._gate_evaluations["architecture"] = arch_eval
             if not arch_eval.get("approved"):
+                self.handle_agent_block("@ieru", arch_eval.get("message"))
                 return {
                     "success": False,
                     "stage": TuringStage.PLAN.value,
@@ -602,16 +729,11 @@ class WaveOrchestrator:
 
         # -------------------------------------------------------------
         # 3. @codd: Modelagem de Dados e Schemas
-        # Pré-requisito: SYSTEM_ARCHITECTURE.md no disco
         # -------------------------------------------------------------
-        arch_path = self.project_dir / "docs" / "architecture" / "SYSTEM_ARCHITECTURE.md"
-        if not arch_path.exists() or arch_path.stat().st_size < 50:
-            return {
-                "success": False,
-                "stage": TuringStage.PLAN.value,
-                "error": "Pré-requisito ausente para @codd: docs/architecture/SYSTEM_ARCHITECTURE.md não encontrado.",
-                "results": results,
-            }
+        ok, pre_err = self.validate_agent_prerequisites("@codd")
+        if not ok:
+            self.handle_agent_block("@codd", pre_err)
+            return {"success": False, "stage": TuringStage.PLAN.value, "error": pre_err}
 
         runner_codd = self._get_runner("@codd")
         if runner_codd:
@@ -624,9 +746,14 @@ class WaveOrchestrator:
             outputs["@codd"] = res_codd.output
             results.append({"agent": "@codd", "output": res_codd.output, "success": res_codd.success})
 
-            # FAIL-FAST: Se @codd falhar, interrompe imediatamente!
-            if not res_codd.success or getattr(res_codd, "is_blocked", False):
-                err = getattr(res_codd, "error", None) or getattr(res_codd, "block_reason", None) or "Timeout ou falha de execução"
+            if getattr(res_codd, "is_blocked", False):
+                reason = getattr(res_codd, "block_reason", None) or "Agente @codd bloqueou a execução."
+                self.handle_agent_block("@codd", reason)
+                return {"success": False, "stage": TuringStage.PLAN.value, "error": f"🛑 BLOCKED: {reason}", "results": results}
+
+            if not res_codd.success:
+                err = getattr(res_codd, "error", None) or "Timeout ou falha de execução"
+                self.handle_agent_block("@codd", err)
                 return {
                     "success": False,
                     "stage": TuringStage.PLAN.value,
@@ -634,10 +761,35 @@ class WaveOrchestrator:
                     "results": results,
                 }
 
+            # Salva db.md no disco
+            try:
+                db_dir = self.project_dir / "docs" / "architecture"
+                db_dir.mkdir(parents=True, exist_ok=True)
+                (db_dir / "db.md").write_text(res_codd.output, encoding="utf-8")
+            except OSError as e:
+                logger.warning("Falha ao salvar db.md: %s", e)
+
+            # Gate de Banco de Dados
+            db_eval = self.db_gate.evaluate(res_codd.output)
+            self._gate_evaluations["database"] = db_eval
+            if not db_eval.get("approved"):
+                self.handle_agent_block("@codd", db_eval.get("message"))
+                return {
+                    "success": False,
+                    "stage": TuringStage.PLAN.value,
+                    "error": f"Gate de Banco de Dados reprovado: {db_eval.get('message')}. Interrompendo PLAN.",
+                    "results": results,
+                    "gates": self._gate_evaluations,
+                }
+
         # -------------------------------------------------------------
         # 4. @caroli: Decomposição de ai-stories e Backlog
-        # Pré-requisito: Arquitetura e/ou Schemas no disco
         # -------------------------------------------------------------
+        ok, pre_err = self.validate_agent_prerequisites("@caroli")
+        if not ok:
+            self.handle_agent_block("@caroli", pre_err)
+            return {"success": False, "stage": TuringStage.PLAN.value, "error": pre_err}
+
         runner_caroli = self._get_runner("@caroli")
         if runner_caroli:
             caroli_prompt = (
@@ -660,9 +812,14 @@ class WaveOrchestrator:
             outputs["@caroli"] = res_caroli.output
             results.append({"agent": "@caroli", "output": res_caroli.output, "success": res_caroli.success})
 
-            # FAIL-FAST: Se @caroli falhar, interrompe imediatamente!
-            if not res_caroli.success or getattr(res_caroli, "is_blocked", False):
-                err = getattr(res_caroli, "error", None) or getattr(res_caroli, "block_reason", None) or "Timeout ou falha de execução"
+            if getattr(res_caroli, "is_blocked", False):
+                reason = getattr(res_caroli, "block_reason", None) or "Analista @caroli bloqueou a execução."
+                self.handle_agent_block("@caroli", reason)
+                return {"success": False, "stage": TuringStage.PLAN.value, "error": f"🛑 BLOCKED: {reason}", "results": results}
+
+            if not res_caroli.success:
+                err = getattr(res_caroli, "error", None) or "Timeout ou falha de execução"
+                self.handle_agent_block("@caroli", err)
                 return {
                     "success": False,
                     "stage": TuringStage.PLAN.value,
@@ -682,6 +839,7 @@ class WaveOrchestrator:
             story_dor_eval = self.story_dor_gate.evaluate(res_caroli.output)
             self._gate_evaluations["story_dor"] = story_dor_eval
             if not story_dor_eval.get("approved"):
+                self.handle_agent_block("@caroli", story_dor_eval.get("message"))
                 return {
                     "success": False,
                     "stage": TuringStage.PLAN.value,
@@ -815,6 +973,17 @@ class WaveOrchestrator:
             self.kanban.update_status(target_story, "IN_PROGRESS")
 
         # 1. FASE RED: @aniche (QA de Automação) elabora o plano de testes e suíte da story primeiro
+        ok, pre_err = self.validate_agent_prerequisites("@aniche", story_id=target_story)
+        if not ok:
+            self.handle_agent_block("@aniche", pre_err, story_id=target_story)
+            return {
+                "success": False,
+                "is_blocked": True,
+                "blocked_by": "@aniche",
+                "error": pre_err,
+                "message": f"Story {target_story} bloqueada no QA por falta de entrada: {pre_err}",
+            }
+
         runner_aniche = self._get_runner("@aniche")
         test_plan_res = None
         if runner_aniche:

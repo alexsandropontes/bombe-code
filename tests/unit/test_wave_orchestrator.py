@@ -90,6 +90,8 @@ def test_wave_orchestrator_run_discuss_and_plan(project_env):
         m = MagicMock()
         m.data = (
             "Artefato gerado com sucesso e aprovado.\n\n"
+            "## Viabilidade Técnica\nViável com baixo risco\n"
+            "## Riscos\nRiscos mapeados e mitigados\n\n"
             "# PRD - Sistema\n"
             "## Visão Geral\nVisão geral do sistema\n"
             "## Problema\nProblema a resolver\n"
@@ -101,6 +103,8 @@ def test_wave_orchestrator_run_discuss_and_plan(project_env):
             "## Telas\nDashboard\n\n"
             "## Decisões Arquiteturais\nClean Arch\n"
             "## Stack\nPython, FastAPI\n\n"
+            "## Schema\nCREATE TABLE lead (id UUID);\n"
+            "## Constraints\nPRIMARY KEY (id);\n\n"
             "# STORY ST-001: Implementação\n"
             "> **Status:** READY\n"
             "> **Blocked:** false\n"
@@ -134,10 +138,15 @@ def test_wave_orchestrator_run_cycle_atomic(project_env):
 
     tmp_path, db = project_env
 
+    # Cria story pré-requisito no disco
+    stories_dir = tmp_path / "docs" / "stories"
+    stories_dir.mkdir(parents=True, exist_ok=True)
+    (stories_dir / "ST-015.md").write_text("# STORY ST-015\n## INVEST\n## Critérios de Aceite\n### Cenários BDD\n- Dado X\n- Quando Y\n- Então Z\n")
+
     mock_factory = MagicMock()
     mock_agent = MagicMock()
     mock_res = MagicMock()
-    mock_res.data = "TDD concluído e Selo do Cycle concedido."
+    mock_res.data = "TDD concluído e Selo do Cycle concedido e aprovado."
     mock_agent.run.return_value = mock_res
     mock_factory.create_agent.return_value = mock_agent
 
@@ -159,10 +168,16 @@ def test_wave_orchestrator_run_execute_batch_and_manual_pause(project_env):
 
     tmp_path, db = project_env
 
+    # Cria stories pré-requisito no disco
+    stories_dir = tmp_path / "docs" / "stories"
+    stories_dir.mkdir(parents=True, exist_ok=True)
+    for sid in ["ST-001", "ST-002", "ST-003"]:
+        (stories_dir / f"{sid}.md").write_text(f"# STORY {sid}\n## INVEST\n## Critérios de Aceite\n### Cenários BDD\n- Dado X\n- Quando Y\n- Então Z\n")
+
     mock_factory = MagicMock()
     mock_agent = MagicMock()
     mock_res = MagicMock()
-    mock_res.data = "Story finalizada com sucesso."
+    mock_res.data = "Story finalizada com sucesso e aprovado."
     mock_agent.run.return_value = mock_res
     mock_factory.create_agent.return_value = mock_agent
 

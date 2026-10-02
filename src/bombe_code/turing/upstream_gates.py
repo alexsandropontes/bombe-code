@@ -161,3 +161,71 @@ class StoryDoRGate:
                 else f"Story não atende ao DoR. Faltam: {', '.join(missing)}."
             ),
         }
+
+
+class ViabilityQualityGate:
+    """Valida o parecer de viabilidade técnica e estratégica (@meira)."""
+
+    REQUIRED_SECTIONS: ClassVar[list[str]] = [
+        "Viabilidade",
+        "Riscos",
+    ]
+
+    def evaluate(self, content: str) -> dict[str, Any]:
+        normalized = content.lower()
+        missing = []
+        for sec in self.REQUIRED_SECTIONS:
+            keywords = [sec.lower()]
+            if "viabilidade" in sec.lower():
+                keywords.extend(["viab", "parecer", "viavel", "estratég"])
+            if "riscos" in sec.lower():
+                keywords.extend(["risco", "mitiga", "tradeoff", "trade-off", "seguran"])
+            if not any(kw in normalized for kw in keywords):
+                missing.append(sec)
+
+        approved = len(missing) == 0
+        return {
+            "approved": approved,
+            "gate": "ViabilityQualityGate",
+            "missing_sections": missing,
+            "message": (
+                "Viabilidade técnica aprovada."
+                if approved
+                else f"Viabilidade reprovada. Faltam: {', '.join(missing)}."
+            ),
+        }
+
+
+class DatabaseQualityGate:
+    """Valida a modelagem relacional e schemas de banco (@codd)."""
+
+    REQUIRED_SECTIONS: ClassVar[list[str]] = [
+        "Schema",
+        "Constraints",
+    ]
+
+    def evaluate(self, content: str) -> dict[str, Any]:
+        normalized = content.lower()
+        missing = []
+        for sec in self.REQUIRED_SECTIONS:
+            # Schemas, tabelas, ddl, constraints, chaves
+            keywords = [sec.lower()]
+            if "schema" in sec.lower():
+                keywords.extend(["tabela", "ddl", "create table", "modelo"])
+            if "constraints" in sec.lower():
+                keywords.extend(["foreign key", "primary key", "constraint", "integridade", "índice", "indice"])
+
+            if not any(kw in normalized for kw in keywords):
+                missing.append(sec)
+
+        approved = len(missing) == 0
+        return {
+            "approved": approved,
+            "gate": "DatabaseQualityGate",
+            "missing_sections": missing,
+            "message": (
+                "Modelagem de dados e schema aprovados."
+                if approved
+                else f"Modelagem reprovada. Faltam: {', '.join(missing)}."
+            ),
+        }

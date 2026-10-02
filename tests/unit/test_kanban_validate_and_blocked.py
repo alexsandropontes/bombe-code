@@ -80,6 +80,11 @@ def test_orchestrator_moves_to_dev_done_then_done_on_validate(project_env):
     orch.transition_to(TuringStage.PLAN)
     orch.transition_to(TuringStage.EXECUTE)
 
+    # Cria story pré-requisito no disco
+    stories_dir = tmp_path / "docs" / "stories"
+    stories_dir.mkdir(parents=True, exist_ok=True)
+    (stories_dir / "ST-051.md").write_text("# STORY ST-051\n## INVEST\n## Critérios de Aceite\n### Cenários BDD\n- Dado X\n- Quando Y\n- Então Z\n")
+
     # 1. Executa ciclo: ao final do dev + review técnico, status é DEV_DONE
     res_cycle = orch.run_cycle("ST-051")
     assert res_cycle["success"] is True
