@@ -45,7 +45,7 @@ No **Bombe Code**:
 
 A unidade suprema de trabalho no Bombe Code é a **ONDA**. Uma ONDA representa uma entrega de valor completa e rastreável (ex.: `ONDA-002: Implementação do Turing Runtime Engine e Pydantic AI Factory`).
 
-Uma ONDA é estruturada em dois grandes blocos e quatro estações fundamentais:
+Uma ONDA é estruturada em dois grandes blocos e quatro etapas fundamentais:
 
 ```
 ┌────────────────────────────────────── ONDA ──────────────────────────────────────┐
@@ -63,7 +63,7 @@ Uma ONDA é estruturada em dois grandes blocos e quatro estações fundamentais:
 ### Modos de Autonomia da ONDA
 1. **AUTO (Autonomia Máxima):** O humano define a intenção inicial; o Turing conduz `DISCUSS` → `PLAN` → `EXECUTE` → `VALIDATE` de forma contínua, parando apenas se houver uma dúvida de negócio ou risco crítico.
 2. **SEMI-AUTO (Aprovação por Fase):** Executa todo o Upstream de forma contínua, pausa para o humano aprovar a entrada em construção, executa o Downstream e pausa na entrega final.
-3. **MANUAL (Pausa por Estação/Cycle):** O usuário controla cada transição ou inspeciona cada Cycle individualmente.
+3. **MANUAL (Pausa por Etapa/Cycle):** O usuário controla cada transição ou inspeciona cada Cycle individualmente.
 
 ### Modos de Engenharia: Foco Duplo (TDD-Code & Vibe-Code)
 O Bombe Code foca exclusivamente em dois modos de desenvolvimento, simplificando o ecossistema:

@@ -63,7 +63,7 @@ class BombeTuiApp(App):
     """
 
     BINDINGS: ClassVar[list[Binding]] = [
-        Binding("tab", "cycle_station", "Alternar Estação", show=True),
+        Binding("tab", "cycle_stage", "Alternar Etapa", show=True),
         Binding("ctrl+c", "interrupt", "Interromper Turno", show=True),
         Binding("escape", "interrupt", "Interromper", show=False),
         Binding("ctrl+p", "command_palette", "Paleta de Comandos", show=True),
@@ -72,7 +72,8 @@ class BombeTuiApp(App):
         Binding("ctrl+q", "quit", "Sair", show=True),
     ]
 
-    WAVE_STATIONS: ClassVar[list[str]] = ["DISCUSS", "PLAN", "EXECUTE", "VALIDATE"]
+    WAVE_STAGES: ClassVar[list[str]] = ["DISCUSS", "PLAN", "EXECUTE", "VALIDATE"]
+    WAVE_STATIONS = WAVE_STAGES
 
     def __init__(
         self,
@@ -120,17 +121,20 @@ class BombeTuiApp(App):
         except NoMatches:
             pass
 
-    def action_cycle_station(self) -> None:
-        """Alterna ciclicamente entre as 4 estações da ONDA: Discuss, Plan, Execute, Validate."""
-        idx = (self.WAVE_STATIONS.index(self.wave_station) + 1) % len(self.WAVE_STATIONS)
-        self.wave_station = self.WAVE_STATIONS[idx]
+    def action_cycle_stage(self) -> None:
+        """Alterna ciclicamente entre as 4 etapas da ONDA: Discuss, Plan, Execute, Validate."""
+        idx = (self.WAVE_STAGES.index(self.wave_station) + 1) % len(self.WAVE_STAGES)
+        self.wave_station = self.WAVE_STAGES[idx]
         self.update_status()
+
+    def action_cycle_station(self) -> None:
+        self.action_cycle_stage()
 
     def _status_text(self) -> str:
         s_id = self.session_id or "conectando..."
         state = "ativo" if self._is_active_turn else "ocioso"
         return (
-            f"Estação: [{TOKENS['primary']} bold]{self.wave_station}[/] | "
+            f"Etapa: [{TOKENS['primary']} bold]{self.wave_station}[/] | "
             f"Sessão: {s_id} | Modelo: {self.model_name} | Agente: {self.agent_name} | Status: {state}"
         )
 
