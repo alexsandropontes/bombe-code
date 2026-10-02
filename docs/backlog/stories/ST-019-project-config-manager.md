@@ -41,6 +41,7 @@ class ProjectConfig(BaseModel):
     mode: str = "tdd-code"
     autonomy: str = "auto"
 
+
 class ProjectConfigManager:
     def __init__(self, project_dir: str = ".") -> None: ...
     def load(self) -> ProjectConfig: ...

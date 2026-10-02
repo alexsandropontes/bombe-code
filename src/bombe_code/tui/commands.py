@@ -722,14 +722,36 @@ async def handle_slash_command(app: BombeTuiApp, raw_text: str) -> bool:
         if subcmd == "status":
             st = orch.get_status()
             summary = st["tasks_summary"]
-            await chat.mount(
-                Static(
-                    f"[{TOKENS['primary']} bold]⚡ ONDA ATIVA: {st['wave_id']}[/{TOKENS['primary']} bold]\n"
-                    f"  • Etapa Atual: [bold]{st['stage']}[/bold]\n"
-                    f"  • Autonomia: {st['autonomy_mode']} | Engenharia: {st['engineering_mode']}\n"
-                    f"  • Backlog: {summary['completed']} concluídas, {summary['pending']} pendentes, {summary['failed']} falhas (Total: {summary['total']})"
+            gates = st.get("gates", {})
+            cards = st.get("kanban_cards", [])
+
+            lines = [
+                f"[{TOKENS['primary']} bold]⚡ ONDA ATIVA: {st['wave_id']}[/{TOKENS['primary']} bold]",
+                f"  • Etapa Atual: [bold]{st['stage']}[/bold]",
+                f"  • Autonomia: {st['autonomy_mode']} | Engenharia: {st['engineering_mode']}",
+                f"  • Backlog: {summary['completed']} concluídas, {summary['pending']} pendentes, {summary['failed']} falhas (Total: {summary['total']})",
+            ]
+            if gates:
+                lines.append(
+                    f"\n[{TOKENS['secondary']} bold]Gates do Turing:[/{TOKENS['secondary']} bold]"
                 )
-            )
+                for g_name, g_info in gates.items():
+                    icon = "✓" if g_info.get("approved") else "✗"
+                    color = TOKENS["success"] if g_info.get("approved") else TOKENS["error"]
+                    lines.append(
+                        f"  • [{color}]{icon}[/{color}] {g_name.upper()}: {g_info.get('message', '')}"
+                    )
+
+            if cards:
+                lines.append(
+                    f"\n[{TOKENS['secondary']} bold]Kanban de Stories:[/{TOKENS['secondary']} bold]"
+                )
+                for c in cards:
+                    lines.append(
+                        f"  • [{c['status']}] {c['story_id']}: {c['title']} ({c.get('agent', '')})"
+                    )
+
+            await chat.mount(Static("\n".join(lines)))
             return True
 
         if subcmd == "start":

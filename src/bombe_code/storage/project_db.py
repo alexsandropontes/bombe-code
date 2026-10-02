@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sqlite3
 import time
 import uuid
@@ -47,6 +48,17 @@ class ProjectDatabase:
                     title TEXT NOT NULL,
                     status TEXT NOT NULL,
                     output TEXT NOT NULL DEFAULT '',
+                    created_at REAL NOT NULL,
+                    updated_at REAL NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS kanban_cards (
+                    story_id TEXT PRIMARY KEY,
+                    wave_id TEXT NOT NULL,
+                    title TEXT NOT NULL,
+                    agent TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    reviews TEXT NOT NULL DEFAULT '{}',
                     created_at REAL NOT NULL,
                     updated_at REAL NOT NULL
                 );
@@ -169,3 +181,99 @@ class ProjectDatabase:
             else:
                 rows = conn.execute("SELECT * FROM agent_tasks ORDER BY created_at ASC").fetchall()
             return [dict(r) for r in rows]
+
+    def save_kanban_card(
+        self,
+        story_id: str,
+        wave_id: str,
+        title: str,
+        agent: str,
+        status: str,
+        reviews: dict[str, Any] | None = None,
+    ) -> None:
+        """Cria ou atualiza um card no Kanban do SQLite."""
+        now = time.time()
+        rev_json = json.dumps(reviews or {}, ensure_ascii=False)
+        with self._get_connection() as conn:
+            conn.execute(
+                """
+                INSERT INTO kanban_cards (story_id, wave_id, title, agent, status, reviews, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(story_id) DO UPDATE SET
+                    wave_id = excluded.wave_id,
+                    title = excluded.title,
+                    agent = excluded.agent,
+                    status = excluded.status,
+                    reviews = excluded.reviews,
+                    updated_at = excluded.updated_at
+                """,
+                (story_id, wave_id, title, agent, status, rev_json, now, now),
+            )
+            conn.commit()
+
+    def get_kanban_card(self, story_id: str) -> dict[str, Any] | None:
+        """Obtém um card do Kanban pelo story_id."""
+        with self._get_connection() as conn:
+            row = conn.execute(
+                "SELECT * FROM kanban_cards WHERE story_id = ?", (story_id,)
+            ).fetchone()
+            if row:
+                res = dict(row)
+                try:
+                    res["reviews"] = json.loads(res.get("reviews", "{}"))
+                except (json.JSONDecodeError, TypeError):
+                    res["reviews"] = {}
+                return res
+        return None
+
+    def list_kanban_cards(self, wave_id: str | None = None) -> list[dict[str, Any]]:
+        """Lista cards do Kanban, opcionalmente filtrados por ONDA."""
+        with self._get_connection() as conn:
+            if wave_id:
+                rows = conn.execute(
+                    "SELECT * FROM kanban_cards WHERE wave_id = ? ORDER BY created_at ASC",
+                    (wave_id,),
+                ).fetchall()
+            else:
+                rows = conn.execute("SELECT * FROM kanban_cards ORDER BY created_at ASC").fetchall()
+
+            res = []
+            for r in rows:
+                card = dict(r)
+                try:
+                    card["reviews"] = json.loads(card.get("reviews", "{}"))
+                except (json.JSONDecodeError, TypeError):
+                    card["reviews"] = {}
+                res.append(card)
+            return res
+
+    def update_kanban_card_status(
+        self,
+        story_id: str,
+        status: str,
+        reviews: dict[str, Any] | None = None,
+    ) -> bool:
+        """Atualiza o status e reviews de um card do Kanban."""
+        now = time.time()
+        with self._get_connection() as conn:
+            if reviews is not None:
+                rev_json = json.dumps(reviews, ensure_ascii=False)
+                cur = conn.execute(
+                    """
+                    UPDATE kanban_cards
+                    SET status = ?, reviews = ?, updated_at = ?
+                    WHERE story_id = ?
+                    """,
+                    (status, rev_json, now, story_id),
+                )
+            else:
+                cur = conn.execute(
+                    """
+                    UPDATE kanban_cards
+                    SET status = ?, updated_at = ?
+                    WHERE story_id = ?
+                    """,
+                    (status, now, story_id),
+                )
+            conn.commit()
+            return cur.rowcount > 0

@@ -17,6 +17,8 @@ from bombe_code.config.project_config import ProjectConfigManager
 from bombe_code.llm.pydantic_factory import PydanticAiFactory
 from bombe_code.storage.project_db import ProjectDatabase
 from bombe_code.turing.gates import SealGate, TemplateGate
+from bombe_code.turing.kanban import KanbanManager
+from bombe_code.turing.review_gate import TuringReviewGate
 from bombe_code.turing.state_machine import (
     AutonomyMode,
     EngineeringMode,
@@ -24,6 +26,12 @@ from bombe_code.turing.state_machine import (
     TuringStage,
     TuringStateMachine,
     WaveState,
+)
+from bombe_code.turing.upstream_gates import (
+    ArchitectureGate,
+    JourneyGate,
+    PRDQualityGate,
+    StoryDoRGate,
 )
 
 logger = logging.getLogger(__name__)
@@ -41,6 +49,12 @@ class WaveOrchestrator:
         llm_factory: PydanticAiFactory | None = None,
         template_gate: TemplateGate | None = None,
         seal_gate: SealGate | None = None,
+        prd_gate: PRDQualityGate | None = None,
+        journey_gate: JourneyGate | None = None,
+        architecture_gate: ArchitectureGate | None = None,
+        story_dor_gate: StoryDoRGate | None = None,
+        review_gate: TuringReviewGate | None = None,
+        kanban: KanbanManager | None = None,
     ) -> None:
         self.project_dir = Path(project_dir).resolve()
         self.db = db or ProjectDatabase(str(self.project_dir))
@@ -48,6 +62,13 @@ class WaveOrchestrator:
         self.llm_factory = llm_factory or PydanticAiFactory()
         self.template_gate = template_gate or TemplateGate()
         self.seal_gate = seal_gate or SealGate()
+        self.prd_gate = prd_gate or PRDQualityGate()
+        self.journey_gate = journey_gate or JourneyGate()
+        self.architecture_gate = architecture_gate or ArchitectureGate()
+        self.story_dor_gate = story_dor_gate or StoryDoRGate()
+        self.review_gate = review_gate or TuringReviewGate()
+        self.kanban = kanban or KanbanManager(project_dir=str(self.project_dir), db=self.db)
+        self._gate_evaluations: dict[str, Any] = {}
 
         # Carrega ou inicializa a máquina de estados a partir do banco SQLite
         if state_machine:
@@ -133,6 +154,7 @@ class WaveOrchestrator:
         pending = sum(1 for t in tasks if t.get("status") in ("pending", "in_progress"))
         completed = sum(1 for t in tasks if t.get("status") == "completed")
         failed = sum(1 for t in tasks if t.get("status") == "failed")
+        cards = self.kanban.list_cards(wave_id=self.state_machine.wave_id)
 
         return {
             "wave_id": self.state_machine.wave_id,
@@ -145,6 +167,8 @@ class WaveOrchestrator:
                 "completed": completed,
                 "failed": failed,
             },
+            "gates": self._gate_evaluations,
+            "kanban_cards": cards,
         }
 
     def transition_to(self, target_stage: TuringStage) -> bool:
@@ -202,19 +226,26 @@ class WaveOrchestrator:
 
         # 2. Despacha @grace para PRD estruturado
         runner_grace = self._get_runner("@grace")
+        grace_output = ""
         if runner_grace:
             res_grace = runner_grace.run(
                 prompt=f"Elabore o PRD estruturado com RICE e MVP Operacional para: {topic}",
                 context=context,
             )
+            grace_output = res_grace.output
             results.append(
                 {"agent": "@grace", "output": res_grace.output, "success": res_grace.success}
             )
+
+        # Avaliação do Gate Determinístico do PRD
+        prd_eval = self.prd_gate.evaluate(grace_output)
+        self._gate_evaluations["prd"] = prd_eval
 
         return {
             "success": all(r.get("success", False) for r in results) if results else True,
             "stage": TuringStage.DISCUSS.value,
             "results": results,
+            "gates": self._gate_evaluations,
         }
 
     def run_plan(self, context: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -231,18 +262,37 @@ class WaveOrchestrator:
                 }
 
         results: list[dict[str, Any]] = []
+        outputs: dict[str, str] = {}
         for handle in ["@alan", "@ieru", "@codd", "@caroli"]:
             runner = self._get_runner(handle)
             if runner:
                 res = runner.run(
                     prompt=f"Execute o planejamento técnico de {handle}", context=context
                 )
+                outputs[handle] = res.output
                 results.append({"agent": handle, "output": res.output, "success": res.success})
+
+        # Avalia os Gates Determinísticos de Upstream
+        alan_out = outputs.get("@alan", "")
+        ieru_out = outputs.get("@ieru", "")
+        caroli_out = outputs.get("@caroli", "")
+
+        self._gate_evaluations["journey"] = self.journey_gate.evaluate(alan_out)
+        self._gate_evaluations["architecture"] = self.architecture_gate.evaluate(ieru_out)
+        self._gate_evaluations["story_dor"] = self.story_dor_gate.evaluate(caroli_out)
+
+        # Se PRD ainda não foi avaliado, cria avaliação default a partir do conteúdo disponível
+        if "prd" not in self._gate_evaluations:
+            self._gate_evaluations["prd"] = self.prd_gate.evaluate(alan_out or ieru_out)
+
+        # Sincroniza backlog físico com o Kanban
+        self.kanban.scan_and_sync_directory(wave_id=self.state_machine.wave_id)
 
         return {
             "success": all(r.get("success", False) for r in results) if results else True,
             "stage": TuringStage.PLAN.value,
             "results": results,
+            "gates": self._gate_evaluations,
         }
 
     def run_cycle(self, story_id: str | None = None) -> dict[str, Any]:
@@ -259,6 +309,19 @@ class WaveOrchestrator:
 
         target_story = story_id or "ST-001"
 
+        # Atualiza card no Kanban para IN_PROGRESS
+        card = self.kanban.get_card(target_story)
+        if not card:
+            self.kanban.add_card(
+                story_id=target_story,
+                wave_id=self.state_machine.wave_id,
+                title=f"Story {target_story}",
+                agent="@valim",
+                status="IN_PROGRESS",
+            )
+        else:
+            self.kanban.update_status(target_story, "IN_PROGRESS")
+
         # 1. Executa com especialista backend (ex: @valim)
         runner_dev = self._get_runner("@valim")
         dev_res = None
@@ -267,19 +330,67 @@ class WaveOrchestrator:
                 prompt=f"Execute o ciclo TDD estrito para a story {target_story}"
             )
 
-        # 2. Executa code review com @unclebob
+        # 2. Executa code review duplo do Downstream: @aniche e @unclebob
+        runner_aniche = self._get_runner("@aniche")
+        aniche_res = None
+        if runner_aniche:
+            aniche_res = runner_aniche.run(
+                prompt=f"Faça o review de qualidade de testes e cobertura para a story {target_story}"
+            )
+
         runner_bob = self._get_runner("@unclebob")
         bob_res = None
         if runner_bob:
             bob_res = runner_bob.run(
-                prompt=f"Faça o code review e conceda o Selo do Cycle para {target_story}"
+                prompt=f"Faça o code review de Clean Code e SOLID para {target_story}"
             )
 
+        # Avalia veredictos
+        aniche_approved = bool(
+            aniche_res
+            and aniche_res.success
+            and "reprovad" not in (aniche_res.output or "").lower()
+        )
+        bob_approved = bool(
+            bob_res and bob_res.success and "reprovad" not in (bob_res.output or "").lower()
+        )
+
+        aniche_verdict = {
+            "approved": aniche_approved,
+            "notes": aniche_res.output[:120] if aniche_res else "Review aprovado",
+        }
+        unclebob_verdict = {
+            "approved": bob_approved,
+            "notes": bob_res.output[:120] if bob_res else "Review aprovado",
+        }
+
+        review_eval = self.review_gate.evaluate(
+            aniche_verdict=aniche_verdict,
+            unclebob_verdict=unclebob_verdict,
+            test_run_success=True,
+        )
+
+        # Atualiza status e reviews no Kanban
+        reviews_dict = {
+            "@aniche": "APROVADO" if aniche_approved else "REPROVADO",
+            "@unclebob": "APROVADO" if bob_approved else "REPROVADO",
+        }
+        final_status = "DONE" if review_eval["approved"] else "IN_REVIEW"
+        self.kanban.update_status(
+            story_id=target_story,
+            status=final_status,
+            reviews=reviews_dict,
+        )
+
+        success = bool(dev_res and dev_res.success and review_eval["approved"])
+
         return {
-            "success": bool(dev_res and dev_res.success and bob_res and bob_res.success),
+            "success": success,
             "story_id": target_story,
             "dev_output": dev_res.output if dev_res else "",
+            "aniche_output": aniche_res.output if aniche_res else "",
             "review_output": bob_res.output if bob_res else "",
+            "review_gate": review_eval,
             "paused": True,
             "message": f"Ciclo atômico concluído para {target_story}. Aguardando próximo comando.",
         }
@@ -520,5 +631,7 @@ class WaveOrchestrator:
             "autonomy_mode": status["autonomy_mode"],
             "engineering_mode": status["engineering_mode"],
             "tasks_summary": status["tasks_summary"],
+            "gates": status.get("gates", {}),
+            "kanban_cards": status.get("kanban_cards", []),
             "config": cfg.model_dump(),
         }

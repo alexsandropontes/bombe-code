@@ -114,17 +114,31 @@ def wave_start(
 def wave_status(
     project_dir: Annotated[str, typer.Option("--project-dir", help="Pasta do projeto")] = ".",
 ) -> None:
-    """Exibe o status da ONDA ativa."""
+    """Exibe o status da ONDA ativa, Gates do Turing e Kanban de Stories."""
     from bombe_code.turing.orchestrator import WaveOrchestrator
 
     orch = WaveOrchestrator(project_dir=project_dir)
     st = orch.get_status()
     summary = st["tasks_summary"]
+    gates = st.get("gates", {})
+    cards = st.get("kanban_cards", [])
+
     typer.echo(f"ONDA: {st['wave_id']} | Etapa: {st['stage']}")
     typer.echo(f"Modo: {st['autonomy_mode']} | Engenharia: {st['engineering_mode']}")
     typer.echo(
         f"Tasks: {summary['completed']} concluídas, {summary['pending']} pendentes, {summary['failed']} falhas"
     )
+
+    if gates:
+        typer.echo("\nGates do Turing Runtime:")
+        for gate_name, gate_info in gates.items():
+            status_icon = "✓" if gate_info.get("approved") else "✗"
+            typer.echo(f"  [{status_icon}] {gate_name.upper()}: {gate_info.get('message', '')}")
+
+    if cards:
+        typer.echo("\nKanban de Stories:")
+        for c in cards:
+            typer.echo(f"  • [{c['status']}] {c['story_id']}: {c['title']} ({c.get('agent', '')})")
 
 
 @wave_cli.command("discuss")
