@@ -2,7 +2,7 @@
 
 > **Status:** Aberto / Planejado  
 > **Dependência:** ONDA 3 (Sistema Base de Agentes & Skills On-Demand)  
-> **Diretriz de Paridade:** 50% Pioneiros Brasileiros de TI / 50% Mundiais  
+> **Composição:** 1 Maestro Universal + 12 Pioneiros Brasileiros de TI + 10 Referências Mundiais (Total: 23 Agentes)  
 
 ---
 
@@ -12,11 +12,12 @@ O Bombe Core original contemplava mais de 20 especialistas para cobrir cada cama
 - **Especialistas de Backend por Stack:** José Valim não programa em todas as linguagens; temos especialistas dedicados para Python/Go, .NET, Node.js/TypeScript, Java e Elixir.
 - **Arquiteto da Jornada do Usuário:** Reintegração de `@alan` para mapear de ponta a ponta entry points, navegação e telas faltantes.
 - **Engenharia de Testes Automatizados (QA de Automação):** `@aniche` atuando especificamente na arquitetura e implementação de testes unitários, integração e E2E reais.
-- **Paridade Rigorosa Mantida:** 1 Maestro Universal (**@turing**) + **10 Pioneiros Brasileiros de TI (50%)** + **10 Referências Mundiais (50%)**.
+- **Dupla Brasileira de Segurança de Aplicação (AppSec & Criptografia):** A segurança de aplicação não fica diluída. Criamos duas cadeiras técnicas soberanas para AppSec defensivo e ofensivo: `@barreto` (Criptografia, STRIDE, Auth) e `@aranha` (Auditoria Ofensiva, OWASP, Pentest).
+- **Maioria de Pioneiros Brasileiros:** 12 especialistas brasileiros de destaque global contra 10 mundiais (+ Turing como maestro neutro).
 
 ---
 
-## 2. Mapa do Elenco Completo de 21 Agentes
+## 2. Mapa do Elenco Completo de 23 Agentes
 
 ```mermaid
 flowchart TD
@@ -24,7 +25,7 @@ flowchart TD
         TURING["@turing (Universal)<br>Maestro do Runtime"]
     end
 
-    subgraph UPSTREAM["FASE 1: UPSTREAM"]
+    subgraph UPSTREAM["FASE 1: UPSTREAM (Concepção & Planejamento)"]
         direction TB
         MEIRA["@meira (BR)<br>Viabilidade & Inovação"]
         GRACE["@grace (Mundial)<br>Product Manager & PRD"]
@@ -34,9 +35,10 @@ flowchart TD
         CODD["@codd (Mundial)<br>DB Relacional (SQL)"]
         CLAUDIA["@claudia (BR)<br>DB NoSQL, Vetores & Grafos"]
         CAROLI["@caroli (BR)<br>Agile Master (Lean Inception)"]
+        BARRETO_UP["@barreto (BR)<br>Threat Modeling & Cripto"]
     end
 
-    subgraph DOWNSTREAM["FASE 2: DOWNSTREAM"]
+    subgraph DOWNSTREAM["FASE 2: DOWNSTREAM (Construção, Segurança & Validação)"]
         direction TB
         subgraph DEV_STACKS["Desenvolvimento por Stack"]
             VALIM["@valim (BR)<br>Backend Elixir / Concorrência"]
@@ -47,8 +49,9 @@ flowchart TD
             ADA["@ada (Mundial)<br>Frontend React/Tailwind/Flutter"]
         end
 
-        subgraph QUALITY_INFRA["Qualidade, Governança & SRE"]
+        subgraph SECURITY_QUALITY["Segurança, Qualidade & SRE"]
             BOB["@unclebob (Mundial)<br>Tech Lead & Selo do Cycle"]
+            ARANHA["@aranha (BR)<br>AppSec, OWASP & Pentest"]
             ANICHE["@aniche (BR)<br>QA de Automação & Testes E2E"]
             EDITH["@edith (BR)<br>Contract Validator & Selo Final"]
             DEMI["@demi (BR)<br>SRE, Infraestrutura & Redes"]
@@ -63,17 +66,19 @@ flowchart TD
 
 ---
 
-## 3. Catálogo Oficial dos 20 Especialistas
+## 3. Catálogo Oficial dos Especialistas
 
-### A. Pioneiros Brasileiros de TI (10 Agentes — 50%)
+### A. Pioneiros Brasileiros de TI (12 Agentes)
 
 | Handle | Pioneiro Homenageado | Papel no Bombe Code | Fase / Etapa | Especialidade Técnica |
 | :--- | :--- | :--- | :--- | :--- |
 | **@meira** | **Silvio Meira** | Analista de Viabilidade & Inovação | UPSTREAM / `DISCUSS` | Fase Zero, viabilidade de negócio, fatiamento de mercado (CESAR/Porto Digital). |
 | **@ieru** | **Roberto Ierusalimschy** | Arquiteto de Software | UPSTREAM / `PLAN` | Arquitetura de sistemas, modularidade, design de linguagens e ADRs (Criador de Lua). |
+| **@barreto** | **Paulo Barreto** | Principal Security Architect & Cripto | UPSTREAM / `PLAN` | Threat Modeling (STRIDE), criptografia pós-quântica, JWT/OAuth2, proteção de dados sensíveis (Cocriador das curvas BLS/BN e cifra Whirlpool - ISO/IEC). |
 | **@claudia** | **Claudia Bauzer Medeiros** | Database Architect (NoSQL & Vetores) | UPSTREAM / `PLAN` | Schemas NoSQL, Redis, Vector Stores, grafos e dados científicos (ACM SIGMOD, SBC). |
 | **@caroli** | **Paulo Caroli** | Agile Master & Flow Architect | UPSTREAM / `PLAN` | Quebra de Épicos e `ai-stories` com critérios INVEST e DoR (Lean Inception). |
 | **@valim** | **José Valim** | Backend Lead (Elixir / Functional) | DOWNSTREAM / `EXECUTE` | Lógica concorrente, sistemas distribuídos, TDD estrito e core functional (Criador de Elixir). |
+| **@aranha** | **Diego Aranha** | AppSec & Offensive Security Auditor | DOWNSTREAM / `EXECUTE` | Auditoria ofensiva de código, OWASP Top 10, caça a falhas de injeção, Pentest e blindagem contra CVEs (Pesquisador global de segurança de software e auditor de urnas). |
 | **@aniche** | **Maurício Aniche** | Test Architect & QA de Automação | DOWNSTREAM / `EXECUTE` | Arquitetura de testes, unit, integration e suites E2E reais sem mocks falsos (Adyen/TU Delft). |
 | **@demi** | **Demi Getschko** | SRE, Infraestrutura & Redes | DOWNSTREAM / `EXECUTE` | Docker, redes, deploy seguro, resiliência e alta disponibilidade (Pai da Internet no Brasil, Hall of Fame). |
 | **@nelson** | **Nelson Mattos** | Prompt Engineer & AI Context | UPSTREAM / `PLAN` | Engenharia de prompts e contextos com PDW 3.5 (Ex-VP de Engenharia Google e IBM Fellow). |
@@ -82,7 +87,7 @@ flowchart TD
 
 ---
 
-### B. Referências Mundiais (10 Agentes — 50%)
+### B. Referências Mundiais (10 Agentes)
 
 | Handle | Pioneiro Homenageado | Papel no Bombe Code | Fase / Etapa | Especialidade Técnica |
 | :--- | :--- | :--- | :--- | :--- |
@@ -105,7 +110,9 @@ flowchart TD
    - Incorporar `@barbara` (Python/Go), `@scott` (.NET/C#), `@ryan` (Node/TS) e `@james` (Java/Spring) ao `AgentRegistry`.
 2. **Story ST-011: Reintegração do User Journey Architect (`@alan`)**
    - Definir os contratos de mapeamento de entry points, navegação e telas faltantes em `docs/architecture/journey.md`.
-3. **Story ST-012: Registro dos Especialistas de Qualidade, Infra & Governança**
+3. **Story ST-012: Blindagem de Segurança da Aplicação (`@barreto` & `@aranha`)**
+   - Criar os agentes de AppSec defensivo (Threat Modeling/Criptografia) e ofensivo (OWASP/Pentest).
+4. **Story ST-013: Registro dos Especialistas de Qualidade, Infra & Governança**
    - Incorporar `@aniche` (QA de Automação), `@demi` (SRE/Infra), `@claudia` (NoSQL/Vetores), `@nelson` (AI Context) e `@nina` (FinOps/Ética).
-4. **Story ST-013: Testes de Paridade e Integração no AgentRunner**
-   - Validar suite de 21 agentes com 100% de cobertura, mantendo zero erros no Ruff e 100% de testes verdes.
+5. **Story ST-014: Testes de Integração e Suite Completa no AgentRunner**
+   - Validar suite de 23 agentes com 100% de cobertura, mantendo zero erros no Ruff e 100% de testes verdes.
