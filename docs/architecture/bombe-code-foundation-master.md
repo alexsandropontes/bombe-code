@@ -65,6 +65,12 @@ Uma ONDA é estruturada em dois grandes blocos e quatro estações fundamentais:
 2. **SEMI-AUTO (Aprovação por Fase):** Executa todo o Upstream de forma contínua, pausa para o humano aprovar a entrada em construção, executa o Downstream e pausa na entrega final.
 3. **MANUAL (Pausa por Estação/Cycle):** O usuário controla cada transição ou inspeciona cada Cycle individualmente.
 
+### Modos de Engenharia: Foco Duplo (TDD-Code & Vibe-Code)
+O Bombe Code foca exclusivamente em dois modos de desenvolvimento, simplificando o ecossistema:
+* **`tdd-code` (Padrão de Engenharia e Missão Crítica):** Rigor pleno — Backend com TDD estrito (**RED → GREEN → REFACTOR**), Frontend com Construction Integrada e Review obrigatório do Tech Lead antes do fechamento de cada Cycle.
+* **`vibe-code` (Agilidade & Prototipagem Fluida):** Foco em velocidade de iteração, exploração rápida e menor cerimônia, ideal para descobertas rápidas de produto.
+* **Aposentadoria do `spec-code` como Modo de Processo:** A especificação de negócio (Briefings, PRDs, Arquitetura, Épicos) é unificada e comum a ambos os modos (`docs/briefings/` e `docs/backlog/`). A especificação deixa de ser um "modo burocrático apartado" e passa a ser o ativo documental vivo de engenharia do projeto.
+
 ---
 
 ## 4. Os "Múltiplos Cérebros" do Turing e o Princípio de Economia de Tokens
