@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 
 from bombe_code.agents.models import AgentDefinition
 from bombe_code.llm.pydantic_factory import PydanticAiFactory
+from bombe_code.llm.quota_detector import is_quota_or_rate_limit_error
 from bombe_code.skills.registry import SkillRegistry
 from bombe_code.skills.tools import make_skill_tools
 from bombe_code.storage.project_db import ProjectDatabase
@@ -173,6 +174,29 @@ class AgentRunner:
 
         except Exception as exc:  # noqa: BLE001
             logger.error("Falha na execução do agente %s: %s", self.agent.handle, exc)
+
+            is_quota, quota_reason = is_quota_or_rate_limit_error(exc)
+            if is_quota:
+                logger.critical(
+                    "🚨 ESTOURO DE COTA/RATE LIMIT DETECTADO para o agente %s: %s",
+                    self.agent.handle,
+                    quota_reason,
+                )
+                if self.project_db and task_id:
+                    self.project_db.update_agent_task_status(
+                        task_id, "blocked", output=quota_reason
+                    )
+
+                return AgentExecutionResult(
+                    agent_handle=self.agent.handle,
+                    success=False,
+                    status="QUOTA_EXHAUSTED",
+                    is_blocked=True,
+                    block_reason=quota_reason,
+                    error=str(exc),
+                    task_id=task_id,
+                )
+
             if self.project_db and task_id:
                 self.project_db.update_agent_task_status(task_id, "failed")
 

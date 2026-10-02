@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 EXTENSION_MAP: dict[str, str] = {
@@ -42,12 +43,21 @@ def format_code_file(file_path: str | Path, cwd: str = ".") -> bool:
 
     try:
         if formatter == "ruff":
-            # Tenta ruff direto ou via uv
+            # Tenta ruff direto, via python do ambiente ou via uv
             if shutil.which("ruff"):
                 res = subprocess.run(
                     ["ruff", "format", resolved_file], cwd=cwd, capture_output=True, check=False
                 )
-                return res.returncode == 0
+                if res.returncode == 0:
+                    return True
+            res = subprocess.run(
+                [sys.executable, "-m", "ruff", "format", resolved_file],
+                cwd=cwd,
+                capture_output=True,
+                check=False,
+            )
+            if res.returncode == 0:
+                return True
             if shutil.which("uv"):
                 res = subprocess.run(
                     ["uv", "run", "ruff", "format", resolved_file],
