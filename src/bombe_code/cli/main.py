@@ -91,6 +91,128 @@ app = typer.Typer(
     no_args_is_help=False,
 )
 
+wave_cli = typer.Typer(name="wave", help="Comandos de orquestração do ciclo da ONDA.")
+app.add_typer(wave_cli, name="wave")
+
+
+@wave_cli.command("start")
+def wave_start(
+    wave_id: Annotated[
+        str, typer.Argument(help="Identificador da ONDA (ex: ONDA-004)")
+    ] = "ONDA-004",
+    project_dir: Annotated[str, typer.Option("--project-dir", help="Pasta do projeto")] = ".",
+) -> None:
+    """Inicializa uma nova ONDA."""
+    from bombe_code.turing.orchestrator import WaveOrchestrator
+
+    orch = WaveOrchestrator(project_dir=project_dir)
+    res = orch.start_wave(wave_id)
+    typer.echo(res["message"])
+
+
+@wave_cli.command("status")
+def wave_status(
+    project_dir: Annotated[str, typer.Option("--project-dir", help="Pasta do projeto")] = ".",
+) -> None:
+    """Exibe o status da ONDA ativa."""
+    from bombe_code.turing.orchestrator import WaveOrchestrator
+
+    orch = WaveOrchestrator(project_dir=project_dir)
+    st = orch.get_status()
+    summary = st["tasks_summary"]
+    typer.echo(f"ONDA: {st['wave_id']} | Etapa: {st['stage']}")
+    typer.echo(f"Modo: {st['autonomy_mode']} | Engenharia: {st['engineering_mode']}")
+    typer.echo(
+        f"Tasks: {summary['completed']} concluídas, {summary['pending']} pendentes, {summary['failed']} falhas"
+    )
+
+
+@wave_cli.command("discuss")
+def wave_discuss(
+    topic: Annotated[
+        str, typer.Argument(help="Tópico para discussão de viabilidade e PRD")
+    ] = "Evolução do Sistema",
+    project_dir: Annotated[str, typer.Option("--project-dir", help="Pasta do projeto")] = ".",
+) -> None:
+    """Executa a etapa DISCUSS com @meira e @grace."""
+    from bombe_code.turing.orchestrator import WaveOrchestrator
+
+    orch = WaveOrchestrator(project_dir=project_dir)
+    res = orch.run_discuss(topic)
+    if res.get("success"):
+        typer.echo("Etapa DISCUSS concluída com sucesso.")
+    else:
+        typer.echo(f"Erro em DISCUSS: {res.get('error')}", err=True)
+
+
+@wave_cli.command("plan")
+def wave_plan(
+    project_dir: Annotated[str, typer.Option("--project-dir", help="Pasta do projeto")] = ".",
+) -> None:
+    """Executa a etapa PLAN com os arquitetos de Upstream."""
+    from bombe_code.turing.orchestrator import WaveOrchestrator
+
+    orch = WaveOrchestrator(project_dir=project_dir)
+    res = orch.run_plan()
+    if res.get("success"):
+        typer.echo("Etapa PLAN concluída com sucesso.")
+    else:
+        typer.echo(f"Erro em PLAN: {res.get('error')}", err=True)
+
+
+@wave_cli.command("cycle")
+def wave_cycle(
+    story_id: Annotated[
+        str | None, typer.Argument(help="ID da story para execução atômica")
+    ] = None,
+    project_dir: Annotated[str, typer.Option("--project-dir", help="Pasta do projeto")] = ".",
+) -> None:
+    """Executa o ciclo atômico de uma story e pausa."""
+    from bombe_code.turing.orchestrator import WaveOrchestrator
+
+    orch = WaveOrchestrator(project_dir=project_dir)
+    res = orch.run_cycle(story_id)
+    typer.echo(res.get("message", "Ciclo executado."))
+
+
+@wave_cli.command("execute")
+def wave_execute(
+    project_dir: Annotated[str, typer.Option("--project-dir", help="Pasta do projeto")] = ".",
+) -> None:
+    """Executa o lote total de stories da ONDA (Cycle-Full)."""
+    from bombe_code.turing.orchestrator import WaveOrchestrator
+
+    orch = WaveOrchestrator(project_dir=project_dir)
+    res = orch.run_execute()
+    typer.echo(res.get("message", "Execução de stories finalizada."))
+
+
+@wave_cli.command("validate")
+def wave_validate(
+    project_dir: Annotated[str, typer.Option("--project-dir", help="Pasta do projeto")] = ".",
+) -> None:
+    """Executa a validação formal da ONDA com @edith e @nina."""
+    from bombe_code.turing.orchestrator import WaveOrchestrator
+
+    orch = WaveOrchestrator(project_dir=project_dir)
+    res = orch.run_validate()
+    if res.get("success"):
+        typer.echo("ONDA homologada com sucesso.")
+    else:
+        typer.echo(f"Validação não aprovada: {res.get('error')}", err=True)
+
+
+@wave_cli.command("end")
+def wave_end(
+    project_dir: Annotated[str, typer.Option("--project-dir", help="Pasta do projeto")] = ".",
+) -> None:
+    """Finaliza e arquiva a ONDA."""
+    from bombe_code.turing.orchestrator import WaveOrchestrator
+
+    orch = WaveOrchestrator(project_dir=project_dir)
+    res = orch.end_wave()
+    typer.echo(res.get("message", "ONDA finalizada."))
+
 
 @app.command("version")
 def version() -> None:
@@ -140,11 +262,17 @@ def run_command(
     prompt: Annotated[str, typer.Argument(help="Instrução para o agente")],
     model: Annotated[str | None, typer.Option("--model", "-m", help="Modelo a utilizar")] = None,
     agent: Annotated[str | None, typer.Option("--agent", "-a", help="Nome do agente")] = None,
-    session: Annotated[str | None, typer.Option("--session", "-s", help="ID da sessão existente")] = None,
+    session: Annotated[
+        str | None, typer.Option("--session", "-s", help="ID da sessão existente")
+    ] = None,
     project_dir: Annotated[str, typer.Option("--project-dir", help="Diretório do projeto")] = ".",
 ) -> None:
     """Executa um prompt diretamente no terminal e imprime a resposta."""
-    s_obj = crud.load_session(session) if session else crud.create_session(title="CLI Run", directory=project_dir)
+    s_obj = (
+        crud.load_session(session)
+        if session
+        else crud.create_session(title="CLI Run", directory=project_dir)
+    )
     adapter = resolve_default_adapter(model)
     registry = create_default_registry(project_dir=project_dir)
 
@@ -201,7 +329,9 @@ def tui(
 
     server_thread: ServerThread | None = None
     if port is None:
-        server_thread, bound_port, password = start_server_in_process(port=0, project_dir=project_dir)
+        server_thread, bound_port, password = start_server_in_process(
+            port=0, project_dir=project_dir
+        )
         base_url = f"http://127.0.0.1:{bound_port}"
         auth = ("bombe", password)
     else:
@@ -213,7 +343,9 @@ def tui(
     try:
         try:
             client = BombeClient(base_url, auth=auth)
-            tui_app = BombeTuiApp(client=client, session_id=session, model=model, agent=agent, project_dir=project_dir)
+            tui_app = BombeTuiApp(
+                client=client, session_id=session, model=model, agent=agent, project_dir=project_dir
+            )
             tui_app.run()
         finally:
             if server_thread:

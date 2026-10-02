@@ -1,0 +1,200 @@
+"""Testes determinísticos para o WaveOrchestrator (ST-015).
+TDD Estrito: RED -> GREEN -> REFACTOR.
+"""
+
+from pathlib import Path
+
+import pytest
+
+from bombe_code.storage.project_db import ProjectDatabase
+from bombe_code.turing.orchestrator import WaveOrchestrator
+from bombe_code.turing.state_machine import TuringStage, WaveState
+
+
+@pytest.fixture
+def project_env(tmp_path: Path):
+    db = ProjectDatabase(str(tmp_path))
+    return tmp_path, db
+
+
+def test_wave_orchestrator_init_and_start(project_env):
+    tmp_path, db = project_env
+    orchestrator = WaveOrchestrator(project_dir=str(tmp_path), db=db)
+
+    res = orchestrator.start_wave("ONDA-004")
+    assert res["success"] is True
+    assert res["wave_id"] == "ONDA-004"
+    assert res["stage"] == TuringStage.DISCUSS.value
+
+    # Confirma que persistiu no SQLite
+    saved = db.load_wave_state()
+    assert saved is not None
+    assert saved["wave_id"] == "ONDA-004"
+    assert saved["state"] == WaveState.DISCUSS.value
+
+
+def test_wave_orchestrator_get_status(project_env):
+    tmp_path, db = project_env
+    orchestrator = WaveOrchestrator(project_dir=str(tmp_path), db=db)
+    orchestrator.start_wave("ONDA-004")
+
+    status = orchestrator.get_status()
+    assert status["wave_id"] == "ONDA-004"
+    assert status["stage"] == TuringStage.DISCUSS.value
+    assert "autonomy_mode" in status
+    assert "engineering_mode" in status
+    assert "tasks_summary" in status
+
+
+def test_wave_orchestrator_transitions(project_env):
+    tmp_path, db = project_env
+    orchestrator = WaveOrchestrator(project_dir=str(tmp_path), db=db)
+    orchestrator.start_wave("ONDA-004")
+
+    # Transição DISCUSS -> PLAN
+    assert orchestrator.transition_to(TuringStage.PLAN) is True
+    assert orchestrator.get_status()["stage"] == TuringStage.PLAN.value
+
+    # Transição PLAN -> EXECUTE
+    assert orchestrator.transition_to(TuringStage.EXECUTE) is True
+    assert orchestrator.get_status()["stage"] == TuringStage.EXECUTE.value
+
+    # Transição EXECUTE -> VALIDATE
+    assert orchestrator.transition_to(TuringStage.VALIDATE) is True
+    assert orchestrator.get_status()["stage"] == TuringStage.VALIDATE.value
+
+    # Transição VALIDATE -> COMPLETED
+    assert orchestrator.transition_to(TuringStage.COMPLETED) is True
+    assert orchestrator.get_status()["stage"] == TuringStage.COMPLETED.value
+
+
+def test_wave_orchestrator_invalid_transition(project_env):
+    tmp_path, db = project_env
+    orchestrator = WaveOrchestrator(project_dir=str(tmp_path), db=db)
+    orchestrator.start_wave("ONDA-004")
+
+    # Pular de DISCUSS direto para VALIDATE deve ser recusado
+    assert orchestrator.transition_to(TuringStage.VALIDATE) is False
+    assert orchestrator.get_status()["stage"] == TuringStage.DISCUSS.value
+
+
+def test_wave_orchestrator_run_discuss_and_plan(project_env):
+    from unittest.mock import MagicMock
+
+    tmp_path, db = project_env
+
+    mock_factory = MagicMock()
+    mock_agent = MagicMock()
+    mock_res = MagicMock()
+    mock_res.data = "Artefato gerado com sucesso."
+    mock_agent.run.return_value = mock_res
+    mock_factory.create_agent.return_value = mock_agent
+
+    orchestrator = WaveOrchestrator(project_dir=str(tmp_path), db=db, llm_factory=mock_factory)
+    orchestrator.start_wave("ONDA-004")
+
+    # 1. Executa DISCUSS
+    disc_res = orchestrator.run_discuss(topic="Novo Sistema de Pagamentos")
+    assert disc_res["success"] is True
+    assert disc_res["stage"] == TuringStage.DISCUSS.value
+    assert len(disc_res["results"]) == 2  # @meira e @grace
+
+    # 2. Transita e executa PLAN
+    plan_res = orchestrator.run_plan()
+    assert plan_res["success"] is True
+    assert plan_res["stage"] == TuringStage.PLAN.value
+    assert len(plan_res["results"]) == 4  # @alan, @ieru, @codd, @caroli
+
+
+def test_wave_orchestrator_run_cycle_atomic(project_env):
+    from unittest.mock import MagicMock
+
+    tmp_path, db = project_env
+
+    mock_factory = MagicMock()
+    mock_agent = MagicMock()
+    mock_res = MagicMock()
+    mock_res.data = "TDD concluído e Selo do Cycle concedido."
+    mock_agent.run.return_value = mock_res
+    mock_factory.create_agent.return_value = mock_agent
+
+    orchestrator = WaveOrchestrator(project_dir=str(tmp_path), db=db, llm_factory=mock_factory)
+    orchestrator.start_wave("ONDA-004")
+    orchestrator.transition_to(TuringStage.PLAN)
+    orchestrator.transition_to(TuringStage.EXECUTE)
+
+    # Executa ciclo atômico de uma story e para
+    res = orchestrator.run_cycle("ST-015")
+    assert res["success"] is True
+    assert res["story_id"] == "ST-015"
+    assert res["paused"] is True
+    assert "Aguardando próximo comando" in res["message"]
+
+
+def test_wave_orchestrator_run_execute_batch_and_manual_pause(project_env):
+    from unittest.mock import MagicMock
+
+    tmp_path, db = project_env
+
+    mock_factory = MagicMock()
+    mock_agent = MagicMock()
+    mock_res = MagicMock()
+    mock_res.data = "Story finalizada com sucesso."
+    mock_agent.run.return_value = mock_res
+    mock_factory.create_agent.return_value = mock_agent
+
+    # 1. Modo AUTO: executa todas as stories
+    orch_auto = WaveOrchestrator(project_dir=str(tmp_path), db=db, llm_factory=mock_factory)
+    orch_auto.start_wave("ONDA-004", autonomy_mode="AUTO")
+    orch_auto.transition_to(TuringStage.PLAN)
+    orch_auto.transition_to(TuringStage.EXECUTE)
+
+    res_auto = orch_auto.run_execute(stories=["ST-001", "ST-002", "ST-003"])
+    assert res_auto["success"] is True
+    assert res_auto["total_executed"] == 3
+    assert res_auto["completed_stories"] == ["ST-001", "ST-002", "ST-003"]
+
+    # 2. Modo MANUAL: pausa e pede confirmação
+    orch_manual = WaveOrchestrator(project_dir=str(tmp_path), db=db, llm_factory=mock_factory)
+    orch_manual.start_wave("ONDA-004", autonomy_mode="MANUAL")
+    orch_manual.transition_to(TuringStage.PLAN)
+    orch_manual.transition_to(TuringStage.EXECUTE)
+
+    # Simula usuário aprovando ST-001, mas pausando em ST-002
+    def confirm_cb(story: str) -> bool:
+        return story == "ST-001"
+
+    res_manual = orch_manual.run_execute(
+        stories=["ST-001", "ST-002", "ST-003"],
+        confirm_callback=confirm_cb,
+    )
+    assert res_manual["paused_by_user"] is True
+    assert res_manual["completed_stories"] == ["ST-001", "ST-002"]
+
+
+def test_wave_orchestrator_validate_and_end(project_env):
+    from unittest.mock import MagicMock
+
+    tmp_path, db = project_env
+
+    mock_factory = MagicMock()
+    mock_agent = MagicMock()
+    mock_res = MagicMock()
+    mock_res.data = "Auditoria realizada e Selo Final Homologado."
+    mock_agent.run.return_value = mock_res
+    mock_factory.create_agent.return_value = mock_agent
+
+    orchestrator = WaveOrchestrator(project_dir=str(tmp_path), db=db, llm_factory=mock_factory)
+    orchestrator.start_wave("ONDA-004")
+    orchestrator.transition_to(TuringStage.PLAN)
+    orchestrator.transition_to(TuringStage.EXECUTE)
+    orchestrator.transition_to(TuringStage.VALIDATE)
+
+    val_res = orchestrator.run_validate()
+    assert val_res["success"] is True
+    assert val_res["stage"] == TuringStage.VALIDATE.value
+
+    end_res = orchestrator.end_wave()
+    assert end_res["success"] is True
+    assert end_res["stage"] == TuringStage.COMPLETED.value
+    assert orchestrator.get_status()["stage"] == TuringStage.COMPLETED.value

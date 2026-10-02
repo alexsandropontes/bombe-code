@@ -1,0 +1,391 @@
+"""Orquestrador Soberano da ONDA no Turing Runtime (EP-003).
+
+Coordena as transições de estado, despacho de agentes especialistas,
+fiscalização determinística de gates e persistência no banco local do projeto.
+"""
+
+from __future__ import annotations
+
+import logging
+from collections.abc import Callable
+from pathlib import Path
+from typing import Any
+
+from bombe_code.agents.registry import AgentRegistry
+from bombe_code.agents.runner import AgentRunner
+from bombe_code.llm.pydantic_factory import PydanticAiFactory
+from bombe_code.storage.project_db import ProjectDatabase
+from bombe_code.turing.gates import SealGate, TemplateGate
+from bombe_code.turing.state_machine import (
+    AutonomyMode,
+    EngineeringMode,
+    InvalidTransitionError,
+    TuringStage,
+    TuringStateMachine,
+    WaveState,
+)
+
+logger = logging.getLogger(__name__)
+
+
+class WaveOrchestrator:
+    """Motor de execução e orquestração do ciclo de vida da ONDA."""
+
+    def __init__(
+        self,
+        project_dir: str = ".",
+        db: ProjectDatabase | None = None,
+        state_machine: TuringStateMachine | None = None,
+        registry: AgentRegistry | None = None,
+        llm_factory: PydanticAiFactory | None = None,
+        template_gate: TemplateGate | None = None,
+        seal_gate: SealGate | None = None,
+    ) -> None:
+        self.project_dir = Path(project_dir).resolve()
+        self.db = db or ProjectDatabase(str(self.project_dir))
+        self.registry = registry or AgentRegistry.default()
+        self.llm_factory = llm_factory or PydanticAiFactory()
+        self.template_gate = template_gate or TemplateGate()
+        self.seal_gate = seal_gate or SealGate()
+
+        # Carrega ou inicializa a máquina de estados a partir do banco SQLite
+        if state_machine:
+            self.state_machine = state_machine
+        else:
+            self.state_machine = self._load_or_create_state_machine()
+
+    def _load_or_create_state_machine(self) -> TuringStateMachine:
+        saved = self.db.load_wave_state()
+        if saved:
+            wave_id = saved.get("wave_id", "ONDA-001")
+            raw_state = saved.get("state", WaveState.DISCUSS.value)
+            raw_autonomy = saved.get("autonomy_mode", AutonomyMode.AUTO.value)
+            raw_eng = saved.get("engineering_mode", EngineeringMode.TDD_CODE.value)
+
+            try:
+                state = WaveState(raw_state)
+            except ValueError:
+                state = WaveState.DISCUSS
+
+            try:
+                autonomy = AutonomyMode(raw_autonomy)
+            except ValueError:
+                autonomy = AutonomyMode.AUTO
+
+            try:
+                eng = EngineeringMode(raw_eng)
+            except ValueError:
+                eng = EngineeringMode.TDD_CODE
+
+            return TuringStateMachine(
+                wave_id=wave_id,
+                initial_state=state,
+                autonomy_mode=autonomy,
+                engineering_mode=eng,
+            )
+
+        return TuringStateMachine(wave_id="ONDA-001", initial_state=WaveState.DISCUSS)
+
+    def start_wave(
+        self,
+        wave_id: str,
+        autonomy_mode: str = "AUTO",
+        engineering_mode: str = "tdd-code",
+    ) -> dict[str, Any]:
+        """Inicializa formalmente uma nova ONDA, resetando checkpoints para a etapa DISCUSS."""
+        try:
+            autonomy = AutonomyMode(autonomy_mode.upper())
+        except ValueError:
+            autonomy = AutonomyMode.AUTO
+
+        try:
+            eng = EngineeringMode(engineering_mode.lower())
+        except ValueError:
+            eng = EngineeringMode.TDD_CODE
+
+        self.state_machine = TuringStateMachine(
+            wave_id=wave_id,
+            initial_state=WaveState.DISCUSS,
+            autonomy_mode=autonomy,
+            engineering_mode=eng,
+        )
+
+        self.db.save_wave_state(
+            wave_id=wave_id,
+            state=WaveState.DISCUSS,
+            autonomy_mode=autonomy,
+            engineering_mode=eng,
+        )
+
+        return {
+            "success": True,
+            "wave_id": wave_id,
+            "stage": TuringStage.DISCUSS.value,
+            "autonomy_mode": autonomy.value,
+            "engineering_mode": eng.value,
+            "message": f"ONDA {wave_id} inicializada com sucesso na etapa DISCUSS.",
+        }
+
+    def get_status(self) -> dict[str, Any]:
+        """Retorna uma radiografia completa do estado da ONDA ativa."""
+        tasks = self.db.list_agent_tasks()
+        pending = sum(1 for t in tasks if t.get("status") in ("pending", "in_progress"))
+        completed = sum(1 for t in tasks if t.get("status") == "completed")
+        failed = sum(1 for t in tasks if t.get("status") == "failed")
+
+        return {
+            "wave_id": self.state_machine.wave_id,
+            "stage": self.state_machine.current_state.value,
+            "autonomy_mode": self.state_machine.autonomy_mode.value,
+            "engineering_mode": self.state_machine.engineering_mode.value,
+            "tasks_summary": {
+                "total": len(tasks),
+                "pending": pending,
+                "completed": completed,
+                "failed": failed,
+            },
+        }
+
+    def transition_to(self, target_stage: TuringStage) -> bool:
+        """Executa a transição determinística para a etapa solicitada."""
+        if not self.state_machine.can_transition_to(target_stage):
+            logger.warning(
+                "Transição ilegal rejeitada pelo Turing: %s -> %s",
+                self.state_machine.current_state.value,
+                target_stage.value,
+            )
+            return False
+
+        try:
+            self.state_machine.transition_to(target_stage)
+            self.db.save_wave_state(
+                wave_id=self.state_machine.wave_id,
+                state=self.state_machine.current_state,
+                autonomy_mode=self.state_machine.autonomy_mode,
+                engineering_mode=self.state_machine.engineering_mode,
+            )
+            return True
+        except InvalidTransitionError:
+            return False
+
+    def _get_runner(self, agent_handle: str) -> AgentRunner | None:
+        agent = self.registry.get(agent_handle)
+        if not agent:
+            return None
+        return AgentRunner(
+            agent=agent,
+            llm_factory=self.llm_factory,
+            project_db=self.db,
+        )
+
+    def run_discuss(self, topic: str, context: dict[str, Any] | None = None) -> dict[str, Any]:
+        """Executa a etapa DISCUSS com @meira (viabilidade) e @grace (PRD)."""
+        if self.state_machine.current_state != WaveState.DISCUSS:
+            return {
+                "success": False,
+                "error": f"Etapa atual é {self.state_machine.current_state.value}, esperado DISCUSS.",
+            }
+
+        results: list[dict[str, Any]] = []
+
+        # 1. Despacha @meira para viabilidade
+        runner_meira = self._get_runner("@meira")
+        if runner_meira:
+            res_meira = runner_meira.run(
+                prompt=f"Analise a viabilidade técnica e estratégica para: {topic}",
+                context=context,
+            )
+            results.append(
+                {"agent": "@meira", "output": res_meira.output, "success": res_meira.success}
+            )
+
+        # 2. Despacha @grace para PRD estruturado
+        runner_grace = self._get_runner("@grace")
+        if runner_grace:
+            res_grace = runner_grace.run(
+                prompt=f"Elabore o PRD estruturado com RICE e MVP Operacional para: {topic}",
+                context=context,
+            )
+            results.append(
+                {"agent": "@grace", "output": res_grace.output, "success": res_grace.success}
+            )
+
+        return {
+            "success": all(r.get("success", False) for r in results) if results else True,
+            "stage": TuringStage.DISCUSS.value,
+            "results": results,
+        }
+
+    def run_plan(self, context: dict[str, Any] | None = None) -> dict[str, Any]:
+        """Executa a etapa PLAN com arquitetos de Upstream."""
+        if self.state_machine.current_state != WaveState.PLAN:
+            # Tenta transição se estiver em DISCUSS
+            if self.state_machine.current_state == WaveState.DISCUSS:
+                if not self.transition_to(TuringStage.PLAN):
+                    return {"success": False, "error": "Não foi possível transitar para PLAN."}
+            else:
+                return {
+                    "success": False,
+                    "error": f"Etapa atual é {self.state_machine.current_state.value}, esperado PLAN.",
+                }
+
+        results: list[dict[str, Any]] = []
+        for handle in ["@alan", "@ieru", "@codd", "@caroli"]:
+            runner = self._get_runner(handle)
+            if runner:
+                res = runner.run(
+                    prompt=f"Execute o planejamento técnico de {handle}", context=context
+                )
+                results.append({"agent": handle, "output": res.output, "success": res.success})
+
+        return {
+            "success": all(r.get("success", False) for r in results) if results else True,
+            "stage": TuringStage.PLAN.value,
+            "results": results,
+        }
+
+    def run_cycle(self, story_id: str | None = None) -> dict[str, Any]:
+        """Executa atomicamente UMA story (RED -> GREEN -> REFACTOR -> Review) e PARA."""
+        if self.state_machine.current_state != WaveState.EXECUTE:
+            if self.state_machine.current_state == WaveState.PLAN:
+                if not self.transition_to(TuringStage.EXECUTE):
+                    return {"success": False, "error": "Não foi possível transitar para EXECUTE."}
+            else:
+                return {
+                    "success": False,
+                    "error": f"Etapa atual é {self.state_machine.current_state.value}, esperado EXECUTE.",
+                }
+
+        target_story = story_id or "ST-001"
+
+        # 1. Executa com especialista backend (ex: @valim)
+        runner_dev = self._get_runner("@valim")
+        dev_res = None
+        if runner_dev:
+            dev_res = runner_dev.run(
+                prompt=f"Execute o ciclo TDD estrito para a story {target_story}"
+            )
+
+        # 2. Executa code review com @unclebob
+        runner_bob = self._get_runner("@unclebob")
+        bob_res = None
+        if runner_bob:
+            bob_res = runner_bob.run(
+                prompt=f"Faça o code review e conceda o Selo do Cycle para {target_story}"
+            )
+
+        return {
+            "success": bool(dev_res and dev_res.success and bob_res and bob_res.success),
+            "story_id": target_story,
+            "dev_output": dev_res.output if dev_res else "",
+            "review_output": bob_res.output if bob_res else "",
+            "paused": True,
+            "message": f"Ciclo atômico concluído para {target_story}. Aguardando próximo comando.",
+        }
+
+    def run_execute(
+        self,
+        stories: list[str] | None = None,
+        confirm_callback: Callable[[str], bool] | None = None,
+    ) -> dict[str, Any]:
+        """Executa todas as stories da ONDA (Cycle-Full).
+
+        No modo MANUAL/SEMI_AUTO, pausa a cada story e aguarda a confirmação do usuário.
+        """
+        if self.state_machine.current_state != WaveState.EXECUTE:
+            if self.state_machine.current_state == WaveState.PLAN:
+                if not self.transition_to(TuringStage.EXECUTE):
+                    return {"success": False, "error": "Não foi possível transitar para EXECUTE."}
+            else:
+                return {
+                    "success": False,
+                    "error": f"Etapa atual é {self.state_machine.current_state.value}, esperado EXECUTE.",
+                }
+
+        target_stories = stories or ["ST-001"]
+        completed_stories: list[str] = []
+        is_manual = self.state_machine.autonomy_mode in (
+            AutonomyMode.MANUAL,
+            AutonomyMode.SEMI_AUTO,
+        )
+
+        for story in target_stories:
+            cycle_res = self.run_cycle(story_id=story)
+            if not cycle_res.get("success"):
+                return {
+                    "success": False,
+                    "completed_stories": completed_stories,
+                    "failed_story": story,
+                    "error": f"Falha ao executar ciclo na story {story}.",
+                }
+
+            completed_stories.append(story)
+
+            # Pausa no modo MANUAL para confirmação do usuário
+            if is_manual and confirm_callback:
+                user_approved = confirm_callback(story)
+                if not user_approved:
+                    return {
+                        "success": True,
+                        "paused_by_user": True,
+                        "completed_stories": completed_stories,
+                        "message": f"Execução pausada pelo usuário após a story {story}.",
+                    }
+
+        return {
+            "success": True,
+            "completed_stories": completed_stories,
+            "total_executed": len(completed_stories),
+            "message": f"Lote completo executado ({len(completed_stories)} stories).",
+        }
+
+    def run_validate(self) -> dict[str, Any]:
+        """Executa a auditoria de validação final com @edith e @nina."""
+        if self.state_machine.current_state != WaveState.VALIDATE:
+            if self.state_machine.current_state == WaveState.EXECUTE:
+                if not self.transition_to(TuringStage.VALIDATE):
+                    return {"success": False, "error": "Não foi possível transitar para VALIDATE."}
+            else:
+                return {
+                    "success": False,
+                    "error": f"Etapa atual é {self.state_machine.current_state.value}, esperado VALIDATE.",
+                }
+
+        runner_edith = self._get_runner("@edith")
+        edith_res = (
+            runner_edith.run("Audite o entregável contra o PRD e emita o Selo Final.")
+            if runner_edith
+            else None
+        )
+
+        runner_nina = self._get_runner("@nina")
+        nina_res = (
+            runner_nina.run("Audite o consumo de tokens e a governança ética.")
+            if runner_nina
+            else None
+        )
+
+        return {
+            "success": bool(edith_res and edith_res.success and nina_res and nina_res.success),
+            "stage": TuringStage.VALIDATE.value,
+            "validator_output": edith_res.output if edith_res else "",
+            "gov_output": nina_res.output if nina_res else "",
+        }
+
+    def end_wave(self) -> dict[str, Any]:
+        """Finaliza e arquiva a ONDA como COMPLETED."""
+        if self.state_machine.current_state != WaveState.VALIDATE:
+            return {
+                "success": False,
+                "error": f"Etapa atual é {self.state_machine.current_state.value}, esperado VALIDATE para encerrar.",
+            }
+
+        if not self.transition_to(TuringStage.COMPLETED):
+            return {"success": False, "error": "Falha na transição final para COMPLETED."}
+
+        return {
+            "success": True,
+            "wave_id": self.state_machine.wave_id,
+            "stage": TuringStage.COMPLETED.value,
+            "message": f"ONDA {self.state_machine.wave_id} finalizada com sucesso e arquivada.",
+        }

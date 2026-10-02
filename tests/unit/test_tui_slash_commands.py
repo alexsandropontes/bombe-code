@@ -95,21 +95,63 @@ async def test_tui_slash_command_clear():
         assert len(chat.children) == 0
 
 
-def test_command_help_catalog_has_28_commands():
+def test_command_help_catalog_has_29_commands():
     from bombe_code.tui.commands import COMMAND_HELP_CATALOG
 
-    assert len(COMMAND_HELP_CATALOG) == 28
+    assert len(COMMAND_HELP_CATALOG) == 29
     commands = [c["name"].split()[0] for c in COMMAND_HELP_CATALOG]
     expected = [
-        "/connect", "/models", "/sessions", "/new", "/compact",
-        "/undo", "/redo", "/fork", "/share", "/unshare",
-        "/export", "/copy", "/rename", "/timeline", "/help",
-        "/init", "/review", "/themes", "/thinking", "/timestamps",
-        "/details", "/editor", "/sidebar", "/agent", "/mcp",
-        "/lsp", "/workspace", "/exit",
+        "/connect",
+        "/models",
+        "/sessions",
+        "/new",
+        "/compact",
+        "/undo",
+        "/redo",
+        "/fork",
+        "/share",
+        "/unshare",
+        "/export",
+        "/copy",
+        "/rename",
+        "/timeline",
+        "/help",
+        "/init",
+        "/review",
+        "/themes",
+        "/thinking",
+        "/timestamps",
+        "/details",
+        "/editor",
+        "/sidebar",
+        "/agent",
+        "/mcp",
+        "/lsp",
+        "/workspace",
+        "/wave",
+        "/exit",
     ]
     for exp in expected:
         assert exp in commands
+
+
+@pytest.mark.anyio
+async def test_tui_slash_command_wave(tmp_path):
+    client = BombeClient("http://127.0.0.1:9999")
+    app = BombeTuiApp(client=client, session_id="ses_test", project_dir=str(tmp_path))
+
+    async with app.run_test() as pilot:
+        inp = app.query_one("#prompt-input", PromptInput)
+
+        # 1. /wave start ONDA-004
+        inp.value = "/wave start ONDA-004"
+        await pilot.press("enter")
+        await pilot.pause(0.1)
+
+        # 2. /wave status
+        inp.value = "/wave status"
+        await pilot.press("enter")
+        await pilot.pause(0.1)
 
 
 @pytest.mark.anyio
@@ -233,6 +275,3 @@ async def test_tui_slash_command_models_prioritizes_connected_and_recent(tmp_pat
 
         # Verifica se o modelo selecionado foi registrado nos recentes
         assert "llama.cpp/mimo-qwen-9b" in get_recent_models()
-
-
-

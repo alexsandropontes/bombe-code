@@ -50,3 +50,16 @@ def test_cli_serve_health(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         assert resp.json()["status"] == "ok"
     finally:
         server_thread.stop()
+
+
+def test_cli_wave_commands(tmp_path: Path):
+    # 1. wave start
+    res_start = runner.invoke(app, ["wave", "start", "ONDA-004", "--project-dir", str(tmp_path)])
+    assert res_start.exit_code == 0
+    assert "inicializada com sucesso" in res_start.stdout
+
+    # 2. wave status
+    res_status = runner.invoke(app, ["wave", "status", "--project-dir", str(tmp_path)])
+    assert res_status.exit_code == 0
+    assert "ONDA: ONDA-004" in res_status.stdout
+    assert "Etapa: DISCUSS" in res_status.stdout
