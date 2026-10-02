@@ -102,3 +102,22 @@ def test_turing_blocks_card_when_agent_is_blocked(tmp_path: Path):
     card = orch.kanban.get_card("ST-001")
     assert card["is_blocked"] == 1
     assert "BDD" in card["block_reason"] or "bloqueio" in card["block_reason"].lower()
+
+
+def test_orchestrator_project_fs_tools(tmp_path: Path):
+    """Garante que o orquestrador fornece ferramentas de filesystem vinculadas ao projeto."""
+    db = ProjectDatabase(str(tmp_path / "state.db"))
+    orch = WaveOrchestrator(project_dir=tmp_path, db=db)
+    tools = orch._get_project_fs_tools()
+    assert len(tools) == 3
+
+    read_fn, write_fn, list_fn = tools
+    write_res = write_fn("js/app.js", "console.log('hello');")
+    assert "gravado com sucesso" in write_res
+    assert (tmp_path / "js" / "app.js").exists()
+
+    content = read_fn("js/app.js")
+    assert "console.log" in content
+
+    files = list_fn(".")
+    assert "js/app.js" in files

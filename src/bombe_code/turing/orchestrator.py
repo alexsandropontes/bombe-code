@@ -318,6 +318,51 @@ class WaveOrchestrator:
         except InvalidTransitionError:
             return False
 
+    def _get_project_fs_tools(self) -> list[Any]:
+        project_dir = self.project_dir
+
+        def read_project_file(path: str) -> str:
+            """Lê o conteúdo de um arquivo do projeto a partir do caminho relativo (ex: 'docs/stories/ST-001.md')."""
+            try:
+                target = (project_dir / path).resolve()
+                if not target.is_relative_to(project_dir.resolve()):
+                    return f"Erro: Acesso fora do projeto negado para {path}"
+                if not target.exists() or not target.is_file():
+                    return f"Erro: Arquivo {path} não existe no projeto."
+                return target.read_text(encoding="utf-8", errors="replace")
+            except Exception as e:
+                return f"Erro ao ler {path}: {e}"
+
+        def write_project_file(path: str, content: str) -> str:
+            """Grava conteúdo em um arquivo do projeto no caminho relativo especificado (ex: 'js/logic.js')."""
+            try:
+                target = (project_dir / path).resolve()
+                if not target.is_relative_to(project_dir.resolve()):
+                    return f"Erro: Acesso fora do projeto negado para {path}"
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text(content, encoding="utf-8")
+                return f"Arquivo {path} gravado com sucesso ({len(content)} caracteres)."
+            except Exception as e:
+                return f"Erro ao gravar {path}: {e}"
+
+        def list_project_files(directory: str = ".") -> list[str]:
+            """Lista os arquivos existentes no diretório relativo do projeto."""
+            try:
+                target = (project_dir / directory).resolve()
+                if not target.is_relative_to(project_dir.resolve()):
+                    return ["Erro: Acesso fora do projeto negado."]
+                if not target.exists():
+                    return []
+                return [
+                    str(p.relative_to(project_dir))
+                    for p in target.rglob("*.*")
+                    if p.is_file() and not str(p).startswith(str(project_dir / ".git"))
+                ]
+            except Exception as e:
+                return [f"Erro: {e}"]
+
+        return [read_project_file, write_project_file, list_project_files]
+
     def _get_runner(self, agent_handle: str) -> AgentRunner | None:
         agent = self.registry.get(agent_handle)
         if not agent:
@@ -326,6 +371,7 @@ class WaveOrchestrator:
             agent=agent,
             llm_factory=self.llm_factory,
             project_db=self.db,
+            extra_tools=self._get_project_fs_tools(),
         )
 
     def run_discuss(self, topic: str, context: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -611,14 +657,21 @@ class WaveOrchestrator:
         test_plan_res = None
         if runner_aniche:
             aniche_prompt = (
-                f"Elabore o Plano de Testes e escreva a suíte de testes automatizados (unitários/slice) "
-                f"para a story {target_story} cobrindo os cenários BDD antes da implementação do Dev.\n"
+                f"Elabore o Plano de Testes e escreva a suíte de testes automatizados para a story {target_story}.\n"
+                f"Consulte os requisitos e os cenários BDD no arquivo 'docs/stories/{target_story}.md'.\n"
+                f"Gere e salve os testes de unidade/slice na pasta 'tests/' (ou retorne-a no seu parecer).\n"
             )
-            if story_content:
-                aniche_prompt += f"\n--- ESPECIFICAÇÃO E CENÁRIOS BDD DA STORY {target_story} ---\n{story_content}\n"
-
             test_plan_res = runner_aniche.run(prompt=aniche_prompt)
             self._record_telemetry("EXECUTE", "@aniche (QA Plan)", test_plan_res)
+
+            # Persiste o plano no disco para consultas downstream
+            if test_plan_res and getattr(test_plan_res, "output", None):
+                try:
+                    plan_file = self.project_dir / "docs" / "stories" / f"{target_story}_test_plan.md"
+                    plan_file.write_text(test_plan_res.output, encoding="utf-8")
+                    self._extract_and_write_project_files(test_plan_res.output)
+                except OSError as e:
+                    logger.warning("Falha ao salvar test plan: %s", e)
 
             if test_plan_res and (getattr(test_plan_res, "is_blocked", False) or not getattr(test_plan_res, "success", True)):
                 block_reason = getattr(test_plan_res, "block_reason", None) or "QA (@aniche) bloqueou a story: spec ambígua ou faltam cenários BDD"
@@ -637,15 +690,10 @@ class WaveOrchestrator:
         dev_res = None
         if runner_dev:
             dev_prompt = (
-                f"Implemente o código estritamente necessário para fazer a suíte de testes de @aniche passar "
-                f"para a story {target_story}. Siga TDD (GREEN) e refatore com Clean Code.\n"
-                f"É OBRIGATÓRIO estruturar o código em arquivos usando blocos com o caminho relativo (ex: ```javascript:js/logic.js ou ### Arquivo: `js/logic.js`).\n"
+                f"Implemente o código estritamente necessário para fazer a suíte de testes passar para a story {target_story}.\n"
+                f"Consulte os requisitos em 'docs/stories/{target_story}.md' e o plano/testes em 'docs/stories/{target_story}_test_plan.md' (e pasta 'tests/').\n"
+                f"Siga TDD (GREEN) e refatore com Clean Code. Salve os arquivos de código de produção nos caminhos relativos apropriados (ex: 'js/logic.js', 'index.html').\n"
             )
-            if story_content:
-                dev_prompt += f"\n--- STORY {target_story} ---\n{story_content}\n"
-            if test_plan_res and getattr(test_plan_res, "output", None):
-                dev_prompt += f"\n--- SUÍTE DE TESTES ELABORADA POR @aniche ---\n{test_plan_res.output}\n"
-
             dev_res = runner_dev.run(prompt=dev_prompt)
             self._record_telemetry("EXECUTE", "@valim (Dev)", dev_res)
 
@@ -664,8 +712,6 @@ class WaveOrchestrator:
             # Extrai e grava arquivos físicos gerados
             if dev_res and getattr(dev_res, "output", None):
                 self._extract_and_write_project_files(dev_res.output)
-            if test_plan_res and getattr(test_plan_res, "output", None):
-                self._extract_and_write_project_files(test_plan_res.output)
 
         # 3. FASE REVIEW: @unclebob (Tech Lead) revisa Clean Code, SOLID e padrões arquiteturais
         runner_bob = self._get_runner("@unclebob")
@@ -673,13 +719,9 @@ class WaveOrchestrator:
         if runner_bob:
             bob_prompt = (
                 f"Faça o code review de Clean Code e SOLID para {target_story}.\n"
-                f"Se o código e os testes estiverem aprovados, declare explicitamente: 'Review: APROVADO'.\n"
+                f"Inspecione os arquivos de código implementados pelo Dev ('js/', raiz) e os testes em 'tests/'.\n"
+                f"Se o código e os testes estiverem aprovados, declare explicitamente: 'Review: APROVADO'. Caso contrário, aponte os problemas.\n"
             )
-            if dev_res and getattr(dev_res, "output", None):
-                bob_prompt += f"\n--- CÓDIGO IMPLEMENTADO POR @valim ---\n{dev_res.output}\n"
-            if test_plan_res and getattr(test_plan_res, "output", None):
-                bob_prompt += f"\n--- SUÍTE DE TESTES DE @aniche ---\n{test_plan_res.output}\n"
-
             bob_res = runner_bob.run(prompt=bob_prompt)
             self._record_telemetry("EXECUTE", "@unclebob (Tech Lead Review)", bob_res)
 
@@ -699,12 +741,9 @@ class WaveOrchestrator:
         aniche_val_res = None
         if runner_aniche:
             aniche_val_prompt = (
-                f"Execute a suíte de testes da story {target_story} contra o código implementado e emita o veredicto de qualidade.\n"
-                f"Se todos os testes passarem, declare explicitamente: 'Veredito: APROVADO'.\n"
+                f"Execute a suíte de testes da story {target_story} contra os arquivos de código implementados no projeto.\n"
+                f"Inspecione a pasta 'tests/' e 'js/'. Se todos os testes passarem, declare explicitamente: 'Veredito: APROVADO'.\n"
             )
-            if dev_res and getattr(dev_res, "output", None):
-                aniche_val_prompt += f"\n--- CÓDIGO SOB TESTE ---\n{dev_res.output}\n"
-
             aniche_val_res = runner_aniche.run(prompt=aniche_val_prompt)
             self._record_telemetry("EXECUTE", "@aniche (QA Run & Verify)", aniche_val_res)
 
@@ -949,12 +988,9 @@ class WaveOrchestrator:
         edith_res = None
         if runner_edith:
             edith_prompt = (
-                "Audite o entregável integrado da ONDA contra o PRD da @grace e os testes de integração/E2E e emita o Selo Final.\n"
+                "Audite o entregável integrado da ONDA consultando o PRD em 'docs/briefings/PRD.md' e inspecionando os arquivos de código e testes do projeto.\n"
                 "Se aprovado, declare explicitamente: 'Homologação: APROVADO'. Caso contrário, aponte os bloqueios ou faltas.\n"
-                f"\n--- ARQUIVOS DE CÓDIGO NO PROJETO ---\n{file_summary}\n"
             )
-            if prd_content:
-                edith_prompt += f"\n--- PRD OFICIAL ---\n{prd_content[:2500]}\n"
             edith_res = runner_edith.run(edith_prompt)
             self._record_telemetry("VALIDATE", "@edith (Product Homologation)", edith_res)
 
@@ -963,9 +999,8 @@ class WaveOrchestrator:
         nina_res = None
         if runner_nina:
             nina_prompt = (
-                "Audite o consumo de tokens, custos e a governança ética da ONDA.\n"
+                "Audite o consumo de tokens, custos e a governança ética da ONDA consultando o relatório em 'docs/telemetria.md'.\n"
                 "Se conforme com os limites e princípios, declare explicitamente: 'Governança: APROVADO'.\n"
-                f"\n--- TOTAL DE TOKENS CONSUMIDOS ---\n{self.telemetry['total'].get('total_tokens', 0)} tokens (${self.telemetry['total'].get('cost', 0.0):.6f} USD)\n"
             )
             nina_res = runner_nina.run(nina_prompt)
             self._record_telemetry("VALIDATE", "@nina (Gov & FinOps)", nina_res)
