@@ -46,8 +46,25 @@ def resolve_provider_adapter(model_ref: str | None = None) -> Any:
     if ref:
         provider, _, model_name = ref.partition("/")
         if not model_name:
-            model_name = provider
-            provider = ""
+            known_providers = (
+                "zai",
+                "zhipu",
+                "zhipuai",
+                "zai-coding-plan",
+                "openai",
+                "anthropic",
+                "openrouter",
+                "groq",
+                "llama.cpp",
+                "llamacpp",
+                "ollama",
+                "local",
+            )
+            if provider.lower() in known_providers:
+                model_name = ""
+            else:
+                model_name = provider
+                provider = ""
 
         # OpenAI
         if provider == "openai" or model_name.startswith("gpt-"):
@@ -93,6 +110,36 @@ def resolve_provider_adapter(model_ref: str | None = None) -> Any:
                 api_key=key,
                 model=model_name or "llama-3.3-70b-versatile",
                 base_url="https://api.groq.com/openai/v1",
+            )
+
+        # Z.ai / Zhipu AI / GLM
+        if provider in ("zai", "zhipu", "zhipuai", "zai-coding-plan") or model_name.startswith(
+            "glm-"
+        ):
+            key = (
+                os.environ.get("ZAI_API_KEY")
+                or os.environ.get("ZHIPU_API_KEY")
+                or auth_data.get("zai-coding-plan", {}).get("key")
+                or auth_data.get("zai-coding-plan", {}).get("api_key")
+                or auth_data.get("zai", {}).get("key")
+                or auth_data.get("zai", {}).get("api_key")
+            )
+            base_url = (
+                os.environ.get("ZAI_BASE_URL")
+                or auth_data.get("zai-coding-plan", {}).get("base_url")
+                or auth_data.get("zai-coding-plan", {}).get("url")
+                or auth_data.get("zai", {}).get("base_url")
+                or auth_data.get("zai", {}).get("url")
+                or "https://api.z.ai/api/coding/paas/v4"
+            )
+            if not key:
+                raise ProviderConfigurationError(
+                    "Chave ZAI_API_KEY / zai-coding-plan não encontrada no ambiente ou auth.json."
+                )
+            return OpenAICompatAdapter(
+                api_key=key,
+                model=model_name or "glm-5.3-flash",
+                base_url=base_url,
             )
 
         # llama.cpp explícito
@@ -159,6 +206,30 @@ def resolve_provider_adapter(model_ref: str | None = None) -> Any:
             api_key=groq_key,
             model="llama-3.3-70b-versatile",
             base_url="https://api.groq.com/openai/v1",
+        )
+
+    # Z.ai / Zhipu AI / GLM
+    zai_key = (
+        os.environ.get("ZAI_API_KEY")
+        or os.environ.get("ZHIPU_API_KEY")
+        or auth_data.get("zai-coding-plan", {}).get("key")
+        or auth_data.get("zai-coding-plan", {}).get("api_key")
+        or auth_data.get("zai", {}).get("key")
+        or auth_data.get("zai", {}).get("api_key")
+    )
+    if zai_key:
+        zai_url = (
+            os.environ.get("ZAI_BASE_URL")
+            or auth_data.get("zai-coding-plan", {}).get("base_url")
+            or auth_data.get("zai-coding-plan", {}).get("url")
+            or auth_data.get("zai", {}).get("base_url")
+            or auth_data.get("zai", {}).get("url")
+            or "https://api.z.ai/api/coding/paas/v4"
+        )
+        return OpenAICompatAdapter(
+            api_key=zai_key,
+            model="glm-5.3-flash",
+            base_url=zai_url,
         )
 
     # D) Se nenhum provedor configurado

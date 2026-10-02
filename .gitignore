@@ -41,6 +41,20 @@ __pycache__/
 .ruff_cache/
 
 # ============================================================
+# Segredos, Chaves de API e Credenciais Locais (NUNCA VERSIONAR)
+# ============================================================
+.env
+.env.*
+*.env
+auth.json
+.bombe/
+.keys/
+*.key
+*.pem
+secrets/
+!*.example
+
+# ============================================================
 # Do projeto em si (produto) — versionável:
 # README.md, docs/ (do produto), src/, testes, configs do app
 # ============================================================
