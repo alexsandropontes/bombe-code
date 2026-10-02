@@ -1,86 +1,68 @@
-# PRD & Auditoria de Gap — Bombe Code (Onda 2)
+# PRD — ONDA 2: Turing Runtime Engine, Pydantic AI Factory & Dynamic TUI
 
-> **Projeto:** Bombe Code — Reimplementação 100% Python/UV do OpenCode  
-> **Autores:** @demarco (Research & Gap Audit) e @grace (Product & Story Breakdown)  
-> **Data:** Outubro de 2026  
-> **Status:** Aprovado para TDD Cycle Full  
+## 1. Visão Geral e Objetivo
+A **ONDA 2** tem como meta transformar o Bombe Code de um harness convencional de execução isolada de prompts em uma **máquina de engenharia autônoma e determinística**. O objetivo central é introduzir o **Turing Runtime**, que substitui o humano na tarefa repetitiva de guiar turnos de LLM, mantendo controle de fluxo, validação de templates, fiscalização de selos e persistência limpa de estado.
 
 ---
 
-## 1. Auditoria Comparativa: OpenCode vs. Bombe Code
+## 2. Escopo Funcional da Onda 2
 
-### 1.1 Escopo Declarado
-* **Migração 100%:** Todas as funcionalidades do OpenCode open-source (runtime, CLI, TUI, servidor, provedores, MCP, LSP, plugins, snapshots).
-* **Exclusões Declaradas:** Componentes Enterprise, SaaS pagos e telemetria comercial de nuvem (`packages/enterprise`, `packages/identity`, `packages/slack`, `packages/console`).
+### 2.1. Turing Runtime Engine (Máquina de Estados da ONDA)
+* **Estados da ONDA:**
+  - `DISCUSS`: Entendimento, intenção e PRD.
+  - `PLAN`: Arquitetura, ADRs, Épicos e Stories com DoR.
+  - `EXECUTE`: Construção por Cycles (Stories verticais) com TDD e Tech Lead Review.
+  - `VALIDATE`: Auditoria de contrato entre o especificado no Upstream e o entregue no Downstream.
+* **Modos de Autonomia:**
+  - `AUTO`: Avança continuamente entre estações e cycles, escalando apenas dúvidas críticas.
+  - `SEMI-AUTO`: Executa o Upstream completo, pausa para autorização humana e executa o Downstream.
+  - `MANUAL`: Pausa explícita por estação e cycle.
+* **Modos de Engenharia:**
+  - `tdd-code`: Rigor pleno (RED/GREEN no backend, Construction no front, review obrigatório).
+  - `vibe-code`: Agilidade máxima e prototipagem fluida com cerimônia reduzida.
 
-### 1.2 Status das Funcionalidades Auditadas
+### 2.2. Os Cérebros do Turing (Custo Zero de Tokens)
+* **Cérebro Determinístico Local (`TuringIntentClassifier`):**
+  - Reconhecimento ultrarrápido em Python (regex e extração de slots) para comandos e intenções rotineiras de engenharia.
+  - Custo de tokens: **Zero**. Latência: **< 1ms**.
+* **Cérebro Heurístico (Mini-LM / LLM Classificadora sob Demanda):**
+  - Acionado exclusivamente quando o classificador local marcar `needs_llm=True` devido a ambiguidade semântica.
 
-| Subsistema OpenCode | Status Bombe Code | Camada | Observação |
-|---|---|---|---|
-| Core Runtime & Config | Concluído (F1) | Backend | XDG, merge de config, locks |
-| Provedores & models.dev | Concluído (F2) | Backend | Catálogo dinâmico, auth.json 600, consentimento explícito |
-| Sessões, Mensagens e Parts | Concluído (F3) | Backend | Pydantic v2, 10 tipos de Part, CRUD |
-| Sistema de Ferramentas | Concluído (F4) | Backend | 14 built-ins + custom tools |
-| Permissões Granulares | Concluído (F5) | Backend | Wildcards, regras ask/reply persistentes |
-| Agent Loop & Harness | Concluído (F6) | Backend | Stream SSE, subtasks, retry, doom-loop prevention |
-| Servidor HTTP & SSE | Concluído (F7) | Backend | FastAPI com rotas parity completas |
-| TUI Textual Básica | Concluído (F8) | Frontend | Chat view, diálogo de permissão |
-| CLI Typer | Concluído (F9) | Backend | run, serve, tui, models, providers, version |
-| Python SDK | Concluído (F10) | Backend | Cliente tipado assíncrono com SSE |
-| Web UI (Reflex) | Concluído (F11) | Frontend | Espelhamento de packages/app |
-| LSP & AST Diagnostics | Concluído (F12) | Backend | Diagnostics, AST inspection, formatter |
-| Plugins Loader | Concluído (F13) | Backend | Carregamento dinâmico e hooks |
-| MCP & ACP Client | Concluído (F14) | Backend | JSON-RPC stdio e ACP adapter |
-| TUI Modais & Temas | Concluído (F15) | Frontend | CommandPalette, HelpDialog, temas |
-| Desktop Shell | Concluído (F16) | Frontend | pywebview com detecção headless |
-| TUI Vertical Layout | Concluído (F17) | Fullstack | Sidebar 40ch, métricas live, zero stubs |
-| Suíte 28 Comandos / | Concluído (F18) | Fullstack | 28 comandos originais + autocompletar dinâmico |
-| **Skills Discovery & Injection** | **PENDENTE (F19)** | **Backend** | Descoberta e injeção de `.agent/skills/` |
-| **Custom Markdown Commands** | **PENDENTE (F20)** | **Fullstack** | Comandos customizados em `.bombe/commands/*.md` |
-| **Code Formatters Automáticos** | **PENDENTE (F21)** | **Backend** | Execução de ruff/black/prettier pós-edição |
-| **Git Worktrees Manager** | **PENDENTE (F22)** | **Backend** | Worktrees isolados para tarefas simultâneas |
-| **Processador de Imagens / Visão** | **PENDENTE (F23)** | **Fullstack** | Extração MIME, base64 e envio multimodal |
+### 2.3. Governança de Gates e Selos
+* **Turing Gate Cara-Crachá:**
+  - Validação física de presença de arquivos de saída esperados no caminho e nome exatos.
+  - Verificação de templates estruturais obrigatórios.
+  - Verificação de autenticidade dos **Selos** (Selo do Tech Lead no `EXECUTE` e Selo do Contract Validator no `VALIDATE`).
+* **Gate de Entrada do Consumidor (`ConsumerHandoffGate`):**
+  - O agente que recebe o documento valida sua completude e profundidade semântica antes de iniciar o trabalho; insumos rasos são rejeitados com feedback estruturado de retrabalho (*rework prompt*).
+
+### 2.4. Pydantic AI Factory (`PydanticAiFactory`)
+* **Regra Fundamental:** Toda interação com LLMs no Bombe Code passa obrigatoriamente pelo `pydantic-ai`.
+* Modelagem estrita de payloads de entrada e saída (`result_type`).
+* Suporte agnóstico a múltiplos provedores (OpenAI, Anthropic, Gemini, Ollama, llama.cpp local).
+* Retries automáticos e tratamento tipado de desvios de schema.
+
+### 2.5. Segregação Física de Pastas e Persistência Local
+* **Global (`~/.bombe-code/`):** Chaves, provedores configurados, modelos favoritos e preferências do usuário na máquina.
+* **Projeto Local (`<project-dir>/.bombe-code/` — no `.gitignore`):**
+  - `state.db` (SQLite local assíncrono via `aiosqlite`).
+  - Tabela de sessões, checkpoints da máquina de estados e **Kanban Operacional das Tasks dos Agentes**.
+  - Logs de execução e telemetria. Raiz do projeto 100% limpa.
+* **Produto (`docs/` e `src/` — Versionados no Git):**
+  - `docs/briefings/` (PRDs e visão).
+  - `docs/architecture/` (ADRs e diagramas).
+  - `docs/backlog/` (Épicos e Stories).
+
+### 2.6. TUI Dinâmica com Chaveamento via `Tab`
+* A tecla `Tab` alterna visualmente entre as 4 estações: `DISCUSS` → `PLAN` → `EXECUTE` → `VALIDATE`.
+* O status bar e o cabeçalho exibem em tempo real o modo ativo, a estação e o estado da ONDA.
 
 ---
 
-## 2. Especificação das Novas Features (F19 a F23)
-
-### F19: Skills Discovery & Context Injection (`skill-system`)
-* **Layer:** Backend
-* **Descrição:** Escanear diretórios de skills (`.agent/skills/` e `.bombe/skills/`), realizar parsing de frontmatter YAML e injetar no system prompt e catálogo de capacidades.
-* **Critérios de Aceite:**
-  * CA1: Carregar manifestos de skills contendo nome, descrição, gatilhos e instruções.
-  * CA2: Disponibilizar a tool `skill` permitindo que o assistente consulte o conteúdo completo de uma skill sob demanda.
-  * CA3: Fornecer listagem programática para a CLI e TUI.
-
-### F20: Custom Markdown Command Templates (`custom-commands`)
-* **Layer:** Fullstack
-* **Descrição:** Permitir que o usuário crie templates de comandos em markdown (`.bombe/commands/<nome>.md` ou `.opencode/commands/<nome>.md`) que se transformam em comandos executáveis `/nome`.
-* **Critérios de Aceite:**
-  * CA1: Ler arquivos de template e substituir variáveis `$ARGUMENTS`, `$1`, `$FILE`.
-  * CA2: Autocompletar dinâmico na TUI reconhecendo comandos customizados criados pelo usuário.
-  * CA3: Executar o template preenchido como instrução para o prompt runner.
-
-### F21: Automatic Code Formatters (`code-formatters`)
-* **Layer:** Backend
-* **Descrição:** Detectar formatadores instalados no ambiente (ruff, black, prettier, gofmt) e disparar formatação automática após alterações em ferramentas de escrita de arquivos.
-* **Critérios de Aceite:**
-  * CA1: Identificar se o formatador apropriado para a extensão do arquivo (.py, .ts, .go) existe no PATH.
-  * CA2: Formatar silenciosamente o arquivo alterado sem quebrar a execução se o formatador falhar.
-  * CA3: Suportar flag de ativação/desativação no `bombe.json`.
-
-### F22: Git Worktrees Manager (`worktree-manager`)
-* **Layer:** Backend
-* **Descrição:** Gerenciar branches e worktrees git para execuções concorrentes ou isoladas sem poluir o diretório de trabalho ativo.
-* **Critérios de Aceite:**
-  * CA1: Criar worktree temporário via `git worktree add <path> <branch>`.
-  * CA2: Remover worktree de forma limpa via `git worktree remove --force <path>`.
-  * CA3: Listar worktrees ativos e validar sanidade de paths.
-
-### F23: Multimodal Vision & Image Processing (`image-processor`)
-* **Layer:** Fullstack
-* **Descrição:** Processar arquivos de imagem (PNG, JPEG, WebP, GIF) e URLs locais passados nos prompts, codificando em base64 e estruturando `image_url` para adaptadores OpenAI e Anthropic.
-* **Critérios de Aceite:**
-  * CA1: Validar formato e tamanho máximo de imagens anexadas.
-  * CA2: Formatar mensagens com blocos de imagem em conformidade com as APIs dos provedores.
-  * CA3: Exibir indicação visual na TUI de imagens anexadas ao turno do usuário.
+## 3. Critérios de Sucesso e Aceite da Onda 2
+1. O runtime transita deterministamente entre os 4 estados da ONDA.
+2. Comandos de intenção rotineira são resolvidos com 0 tokens pelo classificador NLU local.
+3. Toda chamada de agente utiliza a fábrica do Pydantic AI.
+4. O SQLite local em `.bombe-code/state.db` armazena e recupera o estado e as tasks de agentes sem poluir a raiz.
+5. A TUI Textual responde ao `Tab` alternando entre as 4 estações da ONDA.
+6. 100% de testes automatizados unitários e de integração cobrindo a nova arquitetura sem mocks fraudulentos.
