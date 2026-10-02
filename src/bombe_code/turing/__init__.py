@@ -3,6 +3,15 @@
 from __future__ import annotations
 
 from .classifier import TuringIntentClassifier, TuringIntentResult
+from .gates import (
+    ConsumerHandoffGate,
+    GateEvaluation,
+    GateStatus,
+    HandoffEvaluation,
+    SealGate,
+    SealType,
+    TemplateGate,
+)
 from .state_machine import (
     AutonomyMode,
     EngineeringMode,
@@ -13,8 +22,15 @@ from .state_machine import (
 
 __all__ = [
     "AutonomyMode",
+    "ConsumerHandoffGate",
     "EngineeringMode",
+    "GateEvaluation",
+    "GateStatus",
+    "HandoffEvaluation",
     "InvalidTransitionError",
+    "SealGate",
+    "SealType",
+    "TemplateGate",
     "TuringIntentClassifier",
     "TuringIntentResult",
     "TuringStateMachine",
