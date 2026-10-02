@@ -14,7 +14,7 @@ def test_load_auth_reads_local_project_auth(tmp_path: Path, monkeypatch):
     bombe_dir.mkdir()
     auth_file = bombe_dir / "auth.json"
     auth_file.write_text(
-        '{"zai-coding-plan": {"key": "test-key-123", "base_url": "https://open.bigmodel.cn/api/paas/v4"}}',
+        '{"zai-coding-plan": {"key": "test-key-123", "base_url": "https://api.z.ai/api/coding/paas/v4"}}',
         encoding="utf-8",
     )
 

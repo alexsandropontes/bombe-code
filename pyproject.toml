@@ -19,6 +19,9 @@ dependencies = [
 web = ["reflex"]
 desktop = ["pywebview"]
 
+[project.scripts]
+bombe = "bombe_code.cli.main:app"
+
 [dependency-groups]
 dev = ["pytest>=8", "ruff"]
 

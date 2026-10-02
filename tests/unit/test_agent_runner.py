@@ -34,10 +34,11 @@ def mock_factory():
     factory = MagicMock(spec=PydanticAiFactory)
     # Mock do create_agent
     mock_agent_instance = MagicMock()
-    # Mock do run
     mock_result = MagicMock()
     mock_result.data = "PRD criado com sucesso em docs/briefings/PRD.md"
+    mock_result.output = "PRD criado com sucesso em docs/briefings/PRD.md"
     mock_agent_instance.run.return_value = mock_result
+    mock_agent_instance.run_sync.return_value = mock_result
 
     factory.create_agent.return_value = mock_agent_instance
     return factory
@@ -98,6 +99,7 @@ def test_agent_runner_execution_failure(skill_registry, mock_factory, tmp_path):
 
     mock_agent_instance = MagicMock()
     mock_agent_instance.run.side_effect = RuntimeError("Falha de conexão com LLM")
+    mock_agent_instance.run_sync.side_effect = RuntimeError("Falha de conexão com LLM")
     mock_factory.create_agent.return_value = mock_agent_instance
 
     runner = AgentRunner(

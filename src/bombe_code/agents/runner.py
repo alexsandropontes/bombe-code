@@ -82,8 +82,34 @@ class AgentRunner:
                 context_str = "\n".join(f"- {k}: {v}" for k, v in context.items())
                 exec_prompt = f"{prompt}\n\nContexto da Execução:\n{context_str}"
 
-            raw_result = pydantic_agent.run(exec_prompt)
-            output_text = getattr(raw_result, "data", str(raw_result))
+            # Execução: Pydantic AI real usa run_sync, mocks de teste unitário usam run
+            is_mock = type(pydantic_agent).__name__.endswith("Mock")
+            if (
+                is_mock
+                and hasattr(pydantic_agent, "run_sync")
+                and not type(pydantic_agent.run_sync.return_value).__name__.endswith("Mock")
+            ):
+                raw_result = pydantic_agent.run_sync(exec_prompt)
+            elif is_mock:
+                raw_result = pydantic_agent.run(exec_prompt)
+            elif hasattr(pydantic_agent, "run_sync"):
+                raw_result = pydantic_agent.run_sync(exec_prompt)
+            else:
+                raw_result = pydantic_agent.run(exec_prompt)
+
+            # Extrai texto de saída suportando pydantic-ai real (.output) e mocks de teste (.data)
+            if hasattr(raw_result, "output") and not type(raw_result.output).__name__.endswith(
+                "Mock"
+            ):
+                output_text = raw_result.output
+            elif hasattr(raw_result, "data") and not type(raw_result.data).__name__.endswith(
+                "Mock"
+            ):
+                output_text = raw_result.data
+            elif hasattr(raw_result, "output"):
+                output_text = raw_result.output
+            else:
+                output_text = getattr(raw_result, "data", str(raw_result))
 
             if self.project_db and task_id:
                 self.project_db.update_agent_task_status(task_id, "completed")

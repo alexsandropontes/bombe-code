@@ -26,6 +26,8 @@ GEMINI.md
 
 # Tooling de sessão do agente (também não é código do projeto)
 .mimocode/
+e2e_sandbox/
+workspace_test/
 
 # Material do framework / terceiros dentro de docs/
 # (docs/ do produto, quando existir, continua versionável)

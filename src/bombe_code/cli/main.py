@@ -100,6 +100,9 @@ def wave_start(
     wave_id: Annotated[
         str, typer.Argument(help="Identificador da ONDA (ex: ONDA-004)")
     ] = "ONDA-004",
+    mode: Annotated[
+        str, typer.Option("--mode", "-m", help="Modo de autonomia (auto, semi-auto, manual)")
+    ] = "auto",
     project_dir: Annotated[str, typer.Option("--project-dir", help="Pasta do projeto")] = ".",
 ) -> None:
     """Inicializa uma nova ONDA."""
@@ -107,7 +110,71 @@ def wave_start(
 
     orch = WaveOrchestrator(project_dir=project_dir)
     res = orch.start_wave(wave_id)
+    if mode:
+        orch.set_mode(mode)
     typer.echo(res["message"])
+
+
+@wave_cli.command("run")
+def wave_run(
+    topic: Annotated[
+        str, typer.Option("--topic", "-t", help="Demanda/tópico de produto")
+    ] = "Evolução do Sistema",
+    project_dir: Annotated[str, typer.Option("--project-dir", help="Pasta do projeto")] = ".",
+) -> None:
+    """Executa o pipeline completo da ONDA ativa de acordo com seu modo de autonomia."""
+    from bombe_code.turing.orchestrator import WaveOrchestrator
+
+    orch = WaveOrchestrator(project_dir=project_dir)
+    st = orch.get_status()
+    typer.echo(
+        f"🚀 Iniciando execução governada da ONDA {st['wave_id']} no modo {st['autonomy_mode']}..."
+    )
+
+    # 1. DISCUSS (se necessário)
+    if st["stage"] == "DISCUSS":
+        typer.echo(f"📋 Executando DISCUSS: {topic}...")
+        res_disc = orch.run_discuss(topic)
+        if not res_disc.get("success"):
+            typer.echo(f"❌ Falha em DISCUSS: {res_disc.get('error')}", err=True)
+            return
+        typer.echo("✅ DISCUSS concluído e PRD gerado.")
+
+    # 2. PLAN (se necessário)
+    st = orch.get_status()
+    if st["stage"] in ("DISCUSS", "PLAN"):
+        typer.echo("📐 Executando PLAN e arquitetura de upstream...")
+        res_plan = orch.run_plan()
+        if not res_plan.get("success"):
+            typer.echo(f"❌ Falha em PLAN: {res_plan.get('error')}", err=True)
+            return
+        typer.echo("✅ PLAN concluído e stories catalogadas.")
+
+    # 3. EXECUTE
+    st = orch.get_status()
+    if st["stage"] in ("PLAN", "EXECUTE"):
+        typer.echo("⚡ Executando ciclo de engenharia (TDD + Review)...")
+        cards = orch.kanban.list_cards(wave_id=st["wave_id"])
+        stories = [c["story_id"] for c in cards] if cards else ["ST-001"]
+        res_exec = orch.run_execute(stories=stories)
+        if not res_exec.get("success"):
+            typer.echo(f"❌ Falha em EXECUTE: {res_exec.get('error')}", err=True)
+            return
+        typer.echo("✅ Ciclos de engenharia concluídos (DEV_DONE).")
+
+    # 4. VALIDATE
+    st = orch.get_status()
+    if st["stage"] in ("EXECUTE", "VALIDATE"):
+        typer.echo("🔍 Executando VALIDATE (homologação de produto e governança)...")
+        res_val = orch.run_validate()
+        if not res_val.get("success"):
+            typer.echo(f"❌ Falha em VALIDATE: {res_val.get('error')}", err=True)
+            return
+        typer.echo("✅ VALIDATE aprovado com sucesso! Stories marcadas como DONE.")
+
+    # 5. END / COMPLETED
+    res_end = orch.end_wave()
+    typer.echo(f"🎉 {res_end.get('message', 'ONDA concluída!')}")
 
 
 @wave_cli.command("status")

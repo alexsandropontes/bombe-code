@@ -228,14 +228,36 @@ class WaveOrchestrator:
         runner_grace = self._get_runner("@grace")
         grace_output = ""
         if runner_grace:
+            grace_prompt = (
+                f"Elabore o PRD estruturado completo para o tópico: '{topic}'.\n\n"
+                f"É OBRIGATÓRIO incluir as seguintes seções estruturadas:\n"
+                f"# PRD - {topic}\n"
+                f"## Visão Geral\n"
+                f"## Problema\n"
+                f"## Personas\n"
+                f"## Critérios RICE\n"
+                f"## MVP Operacional\n"
+            )
             res_grace = runner_grace.run(
-                prompt=f"Elabore o PRD estruturado com RICE e MVP Operacional para: {topic}",
+                prompt=grace_prompt,
                 context=context,
             )
             grace_output = res_grace.output
             results.append(
                 {"agent": "@grace", "output": res_grace.output, "success": res_grace.success}
             )
+
+            # Persiste os artefatos em docs/briefings/
+            try:
+                briefings_dir = self.project_dir / "docs" / "briefings"
+                briefings_dir.mkdir(parents=True, exist_ok=True)
+                (briefings_dir / "PRD.md").write_text(grace_output, encoding="utf-8")
+                if results and results[0].get("output"):
+                    (briefings_dir / "VIABILITY.md").write_text(
+                        results[0]["output"], encoding="utf-8"
+                    )
+            except OSError as e:
+                logger.warning("Falha ao salvar artefatos de DISCUSS em disco: %s", e)
 
         # Avaliação do Gate Determinístico do PRD
         prd_eval = self.prd_gate.evaluate(grace_output)
@@ -263,14 +285,61 @@ class WaveOrchestrator:
 
         results: list[dict[str, Any]] = []
         outputs: dict[str, str] = {}
+
+        prompts_map = {
+            "@alan": (
+                f"Mapeie a jornada do usuário e telas para a ONDA {self.state_machine.wave_id}.\n"
+                f"É OBRIGATÓRIO incluir as seções: '## Entry Points', '## Fluxo de Navegação', '## Telas'."
+            ),
+            "@ieru": (
+                f"Defina as decisões técnicas e arquitetura para a ONDA {self.state_machine.wave_id}.\n"
+                f"É OBRIGATÓRIO incluir as seções: '## Decisões Arquiteturais', '## Stack'."
+            ),
+            "@codd": (
+                f"Projete a modelagem de dados e esquemas para a ONDA {self.state_machine.wave_id}."
+            ),
+            "@caroli": (
+                f"Decomponha e gere as ai-stories completas da ONDA {self.state_machine.wave_id}.\n"
+                f"É OBRIGATÓRIO incluir:\n"
+                f"# STORY ST-001: Implementação do Módulo\n"
+                f"> **Status:** READY\n"
+                f"> **Blocked:** false\n"
+                f"## INVEST\n"
+                f"## Critérios de Aceite\n"
+                f"### Cenários BDD\n"
+                f"- Dado um usuário no sistema\n"
+                f"- Quando ele submeter a requisição\n"
+                f"- Então o resultado esperado é retornado\n"
+            ),
+        }
+
         for handle in ["@alan", "@ieru", "@codd", "@caroli"]:
             runner = self._get_runner(handle)
             if runner:
-                res = runner.run(
-                    prompt=f"Execute o planejamento técnico de {handle}", context=context
-                )
+                p_text = prompts_map.get(handle, f"Execute o planejamento técnico de {handle}")
+                res = runner.run(prompt=p_text, context=context)
                 outputs[handle] = res.output
                 results.append({"agent": handle, "output": res.output, "success": res.success})
+
+        # Persiste documentos de Upstream no disco do projeto
+        try:
+            journeys_dir = self.project_dir / "docs" / "journeys"
+            journeys_dir.mkdir(parents=True, exist_ok=True)
+            if outputs.get("@alan"):
+                (journeys_dir / "USER_JOURNEY.md").write_text(outputs["@alan"], encoding="utf-8")
+
+            arch_dir = self.project_dir / "docs" / "architecture"
+            arch_dir.mkdir(parents=True, exist_ok=True)
+            if outputs.get("@ieru"):
+                (arch_dir / "SYSTEM_ARCHITECTURE.md").write_text(outputs["@ieru"], encoding="utf-8")
+
+            stories_dir = self.project_dir / "docs" / "stories"
+            stories_dir.mkdir(parents=True, exist_ok=True)
+            caroli_text = outputs.get("@caroli", "")
+            if caroli_text:
+                (stories_dir / "ST-001.md").write_text(caroli_text, encoding="utf-8")
+        except OSError as e:
+            logger.warning("Falha ao salvar artefatos de PLAN em disco: %s", e)
 
         # Avalia os Gates Determinísticos de Upstream
         alan_out = outputs.get("@alan", "")
