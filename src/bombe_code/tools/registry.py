@@ -7,7 +7,7 @@ from pathlib import Path
 from pydantic import BaseModel, ValidationError
 
 from .base import InvalidArgumentsError, ToolContext, ToolDef, truncate
-from .builtin import agent_tools, fs_tools, shell_tools, web_tools
+from .builtin import agent_tools, fs_tools, shell_tools, snippet_tools, web_tools
 
 _GPT_BLOCKED = frozenset({"edit", "write"})
 
@@ -63,6 +63,8 @@ _BUILTINS = (
     web_tools.WEBSEARCH_TOOL,
     agent_tools.SKILL_TOOL,
     fs_tools.APPLY_PATCH_TOOL,
+    snippet_tools.SNIPPET_SEARCH_TOOL,
+    snippet_tools.SNIPPET_GET_TOOL,
 )
 
 

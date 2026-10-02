@@ -252,6 +252,112 @@ def project_config(
     typer.echo(f"- Autonomia: {cfg.autonomy}")
 
 
+starter_cli = typer.Typer(name="starter", help="Gerenciador de starters e scaffolds de projetos.")
+project_cli.add_typer(starter_cli, name="starter")
+
+
+@starter_cli.command("list")
+def starter_list() -> None:
+    """Lista todos os starters disponíveis no catálogo."""
+    from bombe_code.starters.engine import StarterEngine
+
+    engine = StarterEngine()
+    starters = engine.list_starters()
+    typer.echo("Starters Disponíveis no Bombe Code:")
+    for s in starters:
+        typer.echo(f"• {s['id']} [{s['stack']}] — {s['name']}: {s['description']}")
+
+
+@starter_cli.command("apply")
+def starter_apply(
+    starter_id: Annotated[str, typer.Argument(help="ID do starter a aplicar")],
+    target_dir: Annotated[
+        str, typer.Option("--target-dir", "-t", help="Diretório de destino")
+    ] = ".",
+    name: Annotated[str | None, typer.Option("--name", "-n", help="Nome do projeto")] = None,
+    force: Annotated[
+        bool, typer.Option("--force", "-f", help="Sobrescrever arquivos existentes")
+    ] = False,
+) -> None:
+    """Aplica o scaffolding do starter no diretório de destino."""
+    from bombe_code.starters.engine import StarterEngine
+
+    engine = StarterEngine()
+    res = engine.apply_starter(
+        starter_id=starter_id,
+        target_dir=target_dir,
+        project_name=name,
+        force=force,
+    )
+    if res.get("success"):
+        typer.echo(res.get("message", "Starter aplicado com sucesso."))
+        typer.echo(f"Arquivos gerados: {len(res.get('created_files', []))}")
+    else:
+        typer.echo(f"Erro ao aplicar starter: {res.get('error')}", err=True)
+        raise typer.Exit(code=1)
+
+
+snippet_cli = typer.Typer(name="snippet", help="Gerencia snippets de código (Fábrica de LEGO).")
+app.add_typer(snippet_cli, name="snippet")
+
+
+@snippet_cli.command("list")
+def snippet_list(
+    platform: Annotated[
+        str | None,
+        typer.Option("--platform", "-p", help="Filtrar por linguagem (python, go, nodejs)"),
+    ] = None,
+    category: Annotated[
+        str | None, typer.Option("--category", "-c", help="Filtrar por categoria")
+    ] = None,
+) -> None:
+    """Lista snippets disponíveis no catálogo."""
+    from bombe_code.snippets.registry import SnippetRegistry
+
+    reg = SnippetRegistry()
+    snippets = reg.list_snippets(platform=platform, category=category)
+    typer.echo(f"Snippets Disponíveis ({len(snippets)}):")
+    for s in snippets:
+        typer.echo(f"• {s['name']} [{s['platform']}] ({s['category']}): {s['description']}")
+
+
+@snippet_cli.command("search")
+def snippet_search(
+    query: Annotated[str, typer.Argument(help="Termo de pesquisa")],
+    platform: Annotated[
+        str | None, typer.Option("--platform", "-p", help="Filtrar por linguagem")
+    ] = None,
+) -> None:
+    """Pesquisa snippets por termo no nome, descrição ou tags."""
+    from bombe_code.snippets.registry import SnippetRegistry
+
+    reg = SnippetRegistry()
+    results = reg.search(query=query, platform=platform)
+    typer.echo(f"Snippets Encontrados para '{query}' ({len(results)}):")
+    for s in results:
+        typer.echo(f"• {s['name']} [{s['platform']}]: {s['description']}")
+
+
+@snippet_cli.command("install")
+def snippet_install(
+    name: Annotated[str, typer.Argument(help="Nome do snippet")],
+    to: Annotated[
+        str, typer.Option("--to", "-t", help="Diretório de destino no projeto")
+    ] = "src/utils",
+    platform: Annotated[str, typer.Option("--platform", "-p", help="Linguagem")] = "python",
+) -> None:
+    """Instala o código e testes do snippet no diretório especificado."""
+    from bombe_code.snippets.registry import SnippetRegistry
+
+    reg = SnippetRegistry()
+    res = reg.copy_snippet(name=name, to_dir=to, platform=platform)
+    if res.get("success"):
+        typer.echo(res.get("message", "Snippet instalado com sucesso."))
+    else:
+        typer.echo(f"Erro ao instalar snippet: {res.get('error')}", err=True)
+        raise typer.Exit(code=1)
+
+
 @app.command("mode")
 def set_mode_cmd(
     mode_str: Annotated[

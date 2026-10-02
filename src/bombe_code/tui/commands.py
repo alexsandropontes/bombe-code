@@ -77,8 +77,12 @@ COMMAND_HELP_CATALOG: list[dict[str, str]] = [
         "desc": "Orquestração soberana da ONDA e fluxo de entrega",
     },
     {
-        "name": "/project <config|detect>",
-        "desc": "Configuração do projeto e autodeteção de stack (.bombeconfig)",
+        "name": "/project <config|detect|starter>",
+        "desc": "Configuração do projeto, autodeteção e aplicação de starters",
+    },
+    {
+        "name": "/snippet <list|search|get|install>",
+        "desc": "Buscar e instalar blocos de código auditados (Fábrica de LEGO)",
     },
     {
         "name": "/mode <auto|semi-auto|manual|tdd|vibe>",
@@ -867,6 +871,49 @@ async def handle_slash_command(app: BombeTuiApp, raw_text: str) -> bool:
 
         mgr = ProjectConfigManager(app.project_dir)
         sub = arg.strip().lower()
+
+        if sub.startswith("starter"):
+            from bombe_code.starters.engine import StarterEngine
+
+            s_parts = sub.split(maxsplit=2)
+            s_action = s_parts[1] if len(s_parts) > 1 else "list"
+            engine = StarterEngine()
+
+            if s_action == "list":
+                starters = engine.list_starters()
+                lines = [
+                    f"• [bold]{s['id']}[/bold] [{s['stack']}]: {s['description']}" for s in starters
+                ]
+                await chat.mount(
+                    Static(
+                        f"[{TOKENS['primary']} bold]Starters Disponíveis no Bombe Code ({len(starters)}):[/{TOKENS['primary']} bold]\n"
+                        + "\n".join(lines)
+                    )
+                )
+                return True
+
+            if s_action == "apply":
+                starter_id = s_parts[2] if len(s_parts) > 2 else ""
+                if not starter_id:
+                    await chat.mount(
+                        Static(
+                            f"[{TOKENS['warning']}]Uso: /project starter apply <nome-do-starter>[/{TOKENS['warning']}]"
+                        )
+                    )
+                    return True
+                res = engine.apply_starter(starter_id, target_dir=app.project_dir)
+                if res.get("success"):
+                    await chat.mount(
+                        Static(
+                            f"[{TOKENS['success']}]✓ Starter '{starter_id}' aplicado com sucesso! ({len(res.get('created_files', []))} arquivos gerados)[/{TOKENS['success']}]"
+                        )
+                    )
+                else:
+                    await chat.mount(
+                        Static(f"[{TOKENS['warning']}]{res.get('error')}[/{TOKENS['warning']}]")
+                    )
+                return True
+
         if sub == "detect":
             cfg = mgr.detect_stack()
             mgr.save(cfg)
@@ -891,6 +938,80 @@ async def handle_slash_command(app: BombeTuiApp, raw_text: str) -> bool:
             )
         )
         return True
+
+    if cmd == "snippet":
+        from bombe_code.snippets.registry import SnippetRegistry
+
+        reg = SnippetRegistry()
+        s_parts = arg.strip().split(maxsplit=2)
+        action = s_parts[0].lower() if s_parts and s_parts[0] else "list"
+
+        if action == "list":
+            snippets = reg.list_snippets()
+            lines = [
+                f"• [bold]{s['name']}[/bold] [{s['platform']}]: {s['description']}"
+                for s in snippets
+            ]
+            await chat.mount(
+                Static(
+                    f"[{TOKENS['primary']} bold]Catálogo de Snippets (Fábrica de LEGO) ({len(snippets)}):[/{TOKENS['primary']} bold]\n"
+                    + "\n".join(lines)
+                )
+            )
+            return True
+
+        if action == "search":
+            query = s_parts[1] if len(s_parts) > 1 else ""
+            if not query:
+                await chat.mount(
+                    Static(
+                        f"[{TOKENS['warning']}]Uso: /snippet search <termo>[/{TOKENS['warning']}]"
+                    )
+                )
+                return True
+            res = reg.search(query=query)
+            lines = [
+                f"• [bold]{s['name']}[/bold] [{s['platform']}]: {s['description']}" for s in res
+            ]
+            await chat.mount(
+                Static(
+                    f"[{TOKENS['primary']} bold]Snippets Encontrados para '{query}' ({len(res)}):[/{TOKENS['primary']} bold]\n"
+                    + ("\n".join(lines) if lines else "Nenhum snippet encontrado.")
+                )
+            )
+            return True
+
+        if action in ("get", "show"):
+            name = s_parts[1] if len(s_parts) > 1 else ""
+            plat = s_parts[2] if len(s_parts) > 2 else "python"
+            snip = reg.get_snippet(name, platform=plat)
+            if snip:
+                await chat.mount(
+                    Static(
+                        f"[{TOKENS['primary']} bold]Snippet {snip['name']} ({snip['platform']}):[/{TOKENS['primary']} bold]\n```\n{snip['code']}\n```"
+                    )
+                )
+            else:
+                await chat.mount(
+                    Static(
+                        f"[{TOKENS['warning']}]Snippet '{name}' não encontrado para {plat}.[/{TOKENS['warning']}]"
+                    )
+                )
+            return True
+
+        if action in ("install", "copy"):
+            name = s_parts[1] if len(s_parts) > 1 else ""
+            dest = s_parts[2] if len(s_parts) > 2 else "src/utils"
+            res = reg.copy_snippet(name, to_dir=dest)
+            if res.get("success"):
+                await chat.mount(
+                    Static(f"[{TOKENS['success']}]✓ {res['message']}[/{TOKENS['success']}]")
+                )
+            else:
+                await chat.mount(
+                    Static(f"[{TOKENS['warning']}]{res.get('error')}[/{TOKENS['warning']}]")
+                )
+            return True
 
     if cmd == "mode":
         if not arg:

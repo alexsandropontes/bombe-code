@@ -98,7 +98,7 @@ async def test_tui_slash_command_clear():
 def test_command_help_catalog_has_all_commands():
     from bombe_code.tui.commands import COMMAND_HELP_CATALOG
 
-    assert len(COMMAND_HELP_CATALOG) == 35
+    assert len(COMMAND_HELP_CATALOG) == 36
     commands = [c["name"].split()[0] for c in COMMAND_HELP_CATALOG]
     expected = [
         "/connect",
@@ -130,6 +130,7 @@ def test_command_help_catalog_has_all_commands():
         "/workspace",
         "/wave",
         "/project",
+        "/snippet",
         "/mode",
         "/rca",
         "/simplify",
