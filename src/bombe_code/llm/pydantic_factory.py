@@ -51,12 +51,16 @@ class PydanticAiFactory:
                 model_id = name.split("/", 1)[1]
             if model_id in ("", "zai", "zhipu", "zai-coding-plan"):
                 model_id = "glm-5.3-flash"
-            provider = OpenAIProvider(base_url=zai_url, api_key=zai_key or "dummy")
+            from openai import AsyncOpenAI
+            openai_cli = AsyncOpenAI(base_url=zai_url, api_key=zai_key or "dummy", timeout=600.0, max_retries=2)
+            provider = OpenAIProvider(openai_client=openai_cli)
             return OpenAIChatModel(model_id, provider=provider)
 
         # Se for default/vazio e tiver chave Z.ai, usa Z.ai com glm-5.3-flash como padrão
         if (not name or name in ("padrão", "default")) and zai_key:
-            provider = OpenAIProvider(base_url=zai_url, api_key=zai_key)
+            from openai import AsyncOpenAI
+            openai_cli = AsyncOpenAI(base_url=zai_url, api_key=zai_key, timeout=600.0, max_retries=2)
+            provider = OpenAIProvider(openai_client=openai_cli)
             return OpenAIChatModel("glm-5.3-flash", provider=provider)
 
         if not name or name in ("padrão", "default"):

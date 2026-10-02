@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -26,6 +27,11 @@ class AgentExecutionResult(BaseModel):
     task_id: str | None = Field(
         default=None, description="ID da task registrada no SQLite do projeto"
     )
+    input_tokens: int = Field(default=0, description="Tokens de entrada/prompt")
+    output_tokens: int = Field(default=0, description="Tokens de saída/completion")
+    total_tokens: int = Field(default=0, description="Total de tokens consumidos")
+    cost: float = Field(default=0.0, description="Custo calculado em USD")
+    duration_seconds: float = Field(default=0.0, description="Duração da chamada em segundos")
 
 
 class AgentRunner:
@@ -82,6 +88,7 @@ class AgentRunner:
                 context_str = "\n".join(f"- {k}: {v}" for k, v in context.items())
                 exec_prompt = f"{prompt}\n\nContexto da Execução:\n{context_str}"
 
+            t0 = time.perf_counter()
             # Execução: Pydantic AI real usa run_sync, mocks de teste unitário usam run
             is_mock = type(pydantic_agent).__name__.endswith("Mock")
             if (
@@ -96,6 +103,32 @@ class AgentRunner:
                 raw_result = pydantic_agent.run_sync(exec_prompt)
             else:
                 raw_result = pydantic_agent.run(exec_prompt)
+
+            duration_seconds = round(time.perf_counter() - t0, 3)
+
+            # Extrai telemetria de tokens e custos do Pydantic AI
+            input_tokens = 0
+            output_tokens = 0
+            total_tokens = 0
+            cost = 0.0
+
+            usage_obj = getattr(raw_result, "usage", None)
+            if usage_obj is not None:
+                if callable(usage_obj):
+                    try:
+                        usage_obj = usage_obj()
+                    except (TypeError, AttributeError):  # pragma: no cover
+                        pass
+                input_tokens = getattr(usage_obj, "input_tokens", 0) or 0
+                output_tokens = getattr(usage_obj, "output_tokens", 0) or 0
+                total_tokens = getattr(usage_obj, "total_tokens", 0) or (
+                    input_tokens + output_tokens
+                )
+                c = getattr(usage_obj, "cost", 0.0) or 0.0
+                try:
+                    cost = float(c)
+                except (ValueError, TypeError):
+                    cost = 0.0
 
             # Extrai texto de saída suportando pydantic-ai real (.output) e mocks de teste (.data)
             if hasattr(raw_result, "output") and not type(raw_result.output).__name__.endswith(
@@ -112,13 +145,20 @@ class AgentRunner:
                 output_text = getattr(raw_result, "data", str(raw_result))
 
             if self.project_db and task_id:
-                self.project_db.update_agent_task_status(task_id, "completed")
+                self.project_db.update_agent_task_status(
+                    task_id, "completed", output=str(output_text)
+                )
 
             return AgentExecutionResult(
                 agent_handle=self.agent.handle,
                 success=True,
                 output=str(output_text),
                 task_id=task_id,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                total_tokens=total_tokens,
+                cost=cost,
+                duration_seconds=duration_seconds,
             )
 
         except Exception as exc:  # noqa: BLE001

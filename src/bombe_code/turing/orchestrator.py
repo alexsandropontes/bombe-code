@@ -6,6 +6,7 @@ fiscalização determinística de gates e persistência no banco local do projet
 
 from __future__ import annotations
 
+import json
 import logging
 from collections.abc import Callable
 from pathlib import Path
@@ -69,12 +70,113 @@ class WaveOrchestrator:
         self.review_gate = review_gate or TuringReviewGate()
         self.kanban = kanban or KanbanManager(project_dir=str(self.project_dir), db=self.db)
         self._gate_evaluations: dict[str, Any] = {}
+        self.telemetry: dict[str, Any] = {
+            "stages": {},
+            "total": {
+                "input_tokens": 0,
+                "output_tokens": 0,
+                "total_tokens": 0,
+                "cost": 0.0,
+                "duration_seconds": 0.0,
+            },
+        }
 
         # Carrega ou inicializa a máquina de estados a partir do banco SQLite
         if state_machine:
             self.state_machine = state_machine
         else:
             self.state_machine = self._load_or_create_state_machine()
+
+    def _record_telemetry(self, stage: str, agent: str, result: Any) -> None:
+        """Registra métricas de execução de um agente em uma etapa da ONDA."""
+        if not result:
+            return
+        if stage not in self.telemetry["stages"]:
+            self.telemetry["stages"][stage] = {
+                "agents": [],
+                "input_tokens": 0,
+                "output_tokens": 0,
+                "total_tokens": 0,
+                "cost": 0.0,
+                "duration_seconds": 0.0,
+            }
+        stg = self.telemetry["stages"][stage]
+        in_tok = getattr(result, "input_tokens", 0) or 0
+        out_tok = getattr(result, "output_tokens", 0) or 0
+        tot_tok = getattr(result, "total_tokens", 0) or (in_tok + out_tok)
+        c = getattr(result, "cost", 0.0) or 0.0
+        dur = getattr(result, "duration_seconds", 0.0) or 0.0
+
+        stg["agents"].append({
+            "agent": agent,
+            "input_tokens": in_tok,
+            "output_tokens": out_tok,
+            "total_tokens": tot_tok,
+            "cost": round(c, 6),
+            "duration_seconds": round(dur, 3),
+            "success": getattr(result, "success", True),
+        })
+        stg["input_tokens"] += in_tok
+        stg["output_tokens"] += out_tok
+        stg["total_tokens"] += tot_tok
+        stg["cost"] = round(stg["cost"] + c, 6)
+        stg["duration_seconds"] = round(stg["duration_seconds"] + dur, 3)
+
+        tot = self.telemetry["total"]
+        tot["input_tokens"] += in_tok
+        tot["output_tokens"] += out_tok
+        tot["total_tokens"] += tot_tok
+        tot["cost"] = round(tot["cost"] + c, 6)
+        tot["duration_seconds"] = round(tot["duration_seconds"] + dur, 3)
+
+        self._save_telemetry_files()
+
+    def _save_telemetry_files(self) -> None:
+        """Persiste os arquivos telemetry.json e telemetria.md sob docs/."""
+        try:
+            docs_dir = self.project_dir / "docs"
+            docs_dir.mkdir(parents=True, exist_ok=True)
+
+            telemetry_json = docs_dir / "telemetry.json"
+            telemetry_json.write_text(
+                json.dumps(self.telemetry, indent=2, ensure_ascii=False), encoding="utf-8"
+            )
+
+            tot = self.telemetry["total"]
+            speed = round(tot["total_tokens"] / max(tot["duration_seconds"], 0.001), 1)
+            md_lines = [
+                f"# 📊 Telemetria de Execução da ONDA {self.state_machine.wave_id}",
+                "",
+                "## 📈 Resumo Geral Consolidado",
+                f"- **Tokens de Entrada (Prompt):** {tot['input_tokens']:,}",
+                f"- **Tokens de Saída (Completion):** {tot['output_tokens']:,}",
+                f"- **Total de Tokens:** {tot['total_tokens']:,}",
+                f"- **Custo Total Estimado:** ${tot['cost']:.6f} USD",
+                f"- **Tempo Total em LLM:** {tot['duration_seconds']:.2f}s",
+                f"- **Velocidade Média:** {speed:,} tokens/s",
+                "",
+                "## 📋 Detalhamento por Etapa e Agente Especialista",
+                "| Etapa | Agente | Tokens Entrada | Tokens Saída | Total Tokens | Custo (USD) | Duração (s) | Velocidade (tok/s) |",
+                "| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |",
+            ]
+            for stg_name, stg_data in self.telemetry["stages"].items():
+                for ag in stg_data["agents"]:
+                    ag_speed = round(
+                        ag["total_tokens"] / max(ag["duration_seconds"], 0.001), 1
+                    )
+                    md_lines.append(
+                        f"| **{stg_name}** | `{ag['agent']}` | {ag['input_tokens']:,} | {ag['output_tokens']:,} | {ag['total_tokens']:,} | ${ag['cost']:.6f} | {ag['duration_seconds']:.2f}s | {ag_speed:,} |"
+                    )
+                stg_speed = round(
+                    stg_data["total_tokens"] / max(stg_data["duration_seconds"], 0.001), 1
+                )
+                md_lines.append(
+                    f"| *Subtotal {stg_name}* | - | *{stg_data['input_tokens']:,}* | *{stg_data['output_tokens']:,}* | *{stg_data['total_tokens']:,}* | *${stg_data['cost']:.6f}* | *{stg_data['duration_seconds']:.2f}s* | *{stg_speed:,}* |"
+                )
+
+            (docs_dir / "telemetria.md").write_text("\n".join(md_lines) + "\n", encoding="utf-8")
+        except OSError as exc:
+            logger.warning("Falha ao salvar arquivos de telemetria: %s", exc)
 
     def _load_or_create_state_machine(self) -> TuringStateMachine:
         saved = self.db.load_wave_state()
@@ -243,6 +345,7 @@ class WaveOrchestrator:
                 prompt=f"Analise a viabilidade técnica e estratégica para: {topic}",
                 context=context,
             )
+            self._record_telemetry("DISCUSS", "@meira", res_meira)
             results.append(
                 {"agent": "@meira", "output": res_meira.output, "success": res_meira.success}
             )
@@ -265,6 +368,7 @@ class WaveOrchestrator:
                 prompt=grace_prompt,
                 context=context,
             )
+            self._record_telemetry("DISCUSS", "@grace", res_grace)
             grace_output = res_grace.output
             results.append(
                 {"agent": "@grace", "output": res_grace.output, "success": res_grace.success}
@@ -341,6 +445,7 @@ class WaveOrchestrator:
             if runner:
                 p_text = prompts_map.get(handle, f"Execute o planejamento técnico de {handle}")
                 res = runner.run(prompt=p_text, context=context)
+                self._record_telemetry("PLAN", handle, res)
                 outputs[handle] = res.output
                 results.append({"agent": handle, "output": res.output, "success": res.success})
 
@@ -424,6 +529,7 @@ class WaveOrchestrator:
                     f"para a story {target_story} cobrindo os cenários BDD antes da implementação do Dev."
                 )
             )
+            self._record_telemetry("EXECUTE", "@aniche (QA Plan)", test_plan_res)
 
         # 2. FASE GREEN: Dev implementa o código necessário para satisfazer os testes do QA
         runner_dev = self._get_runner("@valim")
@@ -435,6 +541,7 @@ class WaveOrchestrator:
                     f"para a story {target_story}. Siga TDD (GREEN) e refatore com Clean Code."
                 )
             )
+            self._record_telemetry("EXECUTE", "@valim (Dev)", dev_res)
 
         # 3. FASE REVIEW: @unclebob (Tech Lead) revisa Clean Code, SOLID e padrões arquiteturais
         runner_bob = self._get_runner("@unclebob")
@@ -443,6 +550,7 @@ class WaveOrchestrator:
             bob_res = runner_bob.run(
                 prompt=f"Faça o code review de Clean Code e SOLID para {target_story}"
             )
+            self._record_telemetry("EXECUTE", "@unclebob (Tech Lead Review)", bob_res)
 
         # 4. FASE RUNNER & VERIFICAÇÃO: @aniche executa e valida a suíte de testes da story
         aniche_val_res = None
@@ -450,6 +558,7 @@ class WaveOrchestrator:
             aniche_val_res = runner_aniche.run(
                 prompt=f"Execute a suíte de testes da story {target_story} e emita o veredicto de qualidade."
             )
+            self._record_telemetry("EXECUTE", "@aniche (QA Run & Verify)", aniche_val_res)
 
         # Avalia veredictos
         aniche_approved = bool(
@@ -551,6 +660,7 @@ class WaveOrchestrator:
         resolution_output = ""
         if runner:
             res = runner.run(prompt=prompt_context)
+            self._record_telemetry("EXECUTE", f"{delegated_agent} (Auto-Resolve)", res)
             resolution_output = res.output
 
         # Desbloqueia formalmente no Kanban
@@ -664,6 +774,8 @@ class WaveOrchestrator:
             if runner_edith
             else None
         )
+        if runner_edith and edith_res:
+            self._record_telemetry("VALIDATE", "@edith (Product Homologation)", edith_res)
 
         # 3. Governança e FinOps: @nina audita consumo de tokens e ética
         runner_nina = self._get_runner("@nina")
@@ -672,6 +784,8 @@ class WaveOrchestrator:
             if runner_nina
             else None
         )
+        if runner_nina and nina_res:
+            self._record_telemetry("VALIDATE", "@nina (Gov & FinOps)", nina_res)
 
         success = bool(
             integration_tests_info["all_passed"]
