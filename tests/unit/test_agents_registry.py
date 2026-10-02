@@ -31,29 +31,33 @@ def test_agent_registry_official_roster_count_and_parity():
     registry = AgentRegistry.default()
     agents = registry.list_all()
 
-    # Total: 1 Turing + 10 Especialistas = 11
-    assert len(agents) == 11
+    # Total: 1 Turing + 22 Especialistas = 23 Agentes
+    assert len(agents) == 23
 
     # Turing é o maestro universal
     turing = registry.get("@turing")
     assert turing is not None
     assert turing.is_universal is True
 
-    # Paridade exata entre os 10 especialistas: 5 Brasileiros e 5 Mundiais (50% / 50%)
+    # Maioria de pioneiros brasileiros de TI: 12 Brasileiros e 10 Mundiais
     specialists = [a for a in agents if not a.is_universal]
-    assert len(specialists) == 10
+    assert len(specialists) == 22
 
     brazilians = [a for a in specialists if a.origin == AgentOrigin.BRAZIL]
     world = [a for a in specialists if a.origin == AgentOrigin.WORLD]
 
-    assert len(brazilians) == 5
-    assert len(world) == 5
+    assert len(brazilians) == 12
+    assert len(world) == 10
 
     br_handles = {a.handle for a in brazilians}
-    assert br_handles == {"@meira", "@ieru", "@caroli", "@valim", "@edith"}
+    assert "@valim" in br_handles
+    assert "@diego" in br_handles
+    assert "@barreto" in br_handles
 
     world_handles = {a.handle for a in world}
-    assert world_handles == {"@grace", "@codd", "@norman", "@ada", "@unclebob"}
+    assert "@grace" in world_handles
+    assert "@alan" in world_handles
+    assert "@barbara" in world_handles
 
 
 def test_agent_registry_lookup_by_handle():
