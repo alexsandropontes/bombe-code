@@ -1,0 +1,45 @@
+# ============================================================
+# Bombe Core Runtime — GOVERNANÇA, NÃO É CÓDIGO DO PROJETO
+# Este runtime (agentes, skills, comandos, personas) é apenas
+# a ferramenta de governança da sessão. NUNCA versionar.
+# ============================================================
+
+# Bombe Core runtime
+.agent/
+.claude/
+.gemini/
+.qwen/
+.bombeconfig
+.bombe-workflow/
+
+# Entrypoints / rules gerados pelo sync do framework
+CLAUDE.md
+QWEN.md
+GEMINI.md
+.clauderules
+.cursorrules
+.cursorignore
+.geminiignore
+.qwenignore
+.gitattributes
+
+# Tooling de sessão do agente (também não é código do projeto)
+.mimocode/
+
+# Material do framework / terceiros dentro de docs/
+# (docs/ do produto, quando existir, continua versionável)
+docs/bombe-core/
+docs/opencode/
+
+# Ambiente local
+.python-version
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+
+# ============================================================
+# Do projeto em si (produto) — versionável:
+# README.md, docs/ (do produto), src/, testes, configs do app
+# ============================================================
