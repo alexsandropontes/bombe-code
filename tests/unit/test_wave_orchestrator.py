@@ -85,9 +85,32 @@ def test_wave_orchestrator_run_discuss_and_plan(project_env):
 
     mock_factory = MagicMock()
     mock_agent = MagicMock()
-    mock_res = MagicMock()
-    mock_res.data = "Artefato gerado com sucesso."
-    mock_agent.run.return_value = mock_res
+    
+    def side_effect_run(prompt, context=None):
+        m = MagicMock()
+        m.data = (
+            "Artefato gerado com sucesso e aprovado.\n\n"
+            "# PRD - Sistema\n"
+            "## Visão Geral\nVisão geral do sistema\n"
+            "## Problema\nProblema a resolver\n"
+            "## Personas\nUsuário final\n"
+            "## Critérios RICE\nRICE aprovado\n"
+            "## MVP Operacional\nEntregável v1\n\n"
+            "## Entry Points\nHome\n"
+            "## Fluxo de Navegação\nFluxo 1\n"
+            "## Telas\nDashboard\n\n"
+            "## Decisões Arquiteturais\nClean Arch\n"
+            "## Stack\nPython, FastAPI\n\n"
+            "# STORY ST-001: Implementação\n"
+            "> **Status:** READY\n"
+            "> **Blocked:** false\n"
+            "## INVEST\nIndependente\n"
+            "## Critérios de Aceite\nCritérios claros\n"
+            "### Cenários BDD\n- Dado um usuário\n- Quando clicar\n- Então funciona\n"
+        )
+        return m
+
+    mock_agent.run.side_effect = side_effect_run
     mock_factory.create_agent.return_value = mock_agent
 
     orchestrator = WaveOrchestrator(project_dir=str(tmp_path), db=db, llm_factory=mock_factory)

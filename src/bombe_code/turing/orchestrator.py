@@ -396,12 +396,31 @@ class WaveOrchestrator:
                 {"agent": "@meira", "output": res_meira.output, "success": res_meira.success}
             )
 
-        # 2. Despacha @grace para PRD estruturado
+            # FAIL-FAST: Se @meira falhou, deu timeout ou bloqueou, ABORTA antes de chamar @grace!
+            is_approved, reason = self._check_explicit_approval(res_meira)
+            if not is_approved or not res_meira.success:
+                return {
+                    "success": False,
+                    "stage": TuringStage.DISCUSS.value,
+                    "error": f"Gate de Viabilidade (@meira) não aprovou: {reason}. Etapa DISCUSS interrompida (Fail-Fast).",
+                    "results": results,
+                }
+
+            # Persiste viabilidade em docs/briefings/
+            try:
+                briefings_dir = self.project_dir / "docs" / "briefings"
+                briefings_dir.mkdir(parents=True, exist_ok=True)
+                (briefings_dir / "VIABILITY.md").write_text(res_meira.output, encoding="utf-8")
+            except OSError as e:
+                logger.warning("Falha ao salvar VIABILITY.md: %s", e)
+
+        # 2. Despacha @grace para PRD estruturado (apenas se @meira foi aprovado)
         runner_grace = self._get_runner("@grace")
         grace_output = ""
         if runner_grace:
             grace_prompt = (
                 f"Elabore o PRD estruturado completo para o tópico: '{topic}'.\n\n"
+                f"Consulte o parecer de viabilidade prévio salvo em 'docs/briefings/VIABILITY.md'.\n"
                 f"É OBRIGATÓRIO incluir as seguintes seções estruturadas:\n"
                 f"# PRD - {topic}\n"
                 f"## Visão Geral\n"
@@ -420,33 +439,46 @@ class WaveOrchestrator:
                 {"agent": "@grace", "output": res_grace.output, "success": res_grace.success}
             )
 
+            # FAIL-FAST: Se @grace falhou ou bloqueou, ABORTA!
+            is_approved, reason = self._check_explicit_approval(res_grace)
+            if not is_approved or not res_grace.success:
+                return {
+                    "success": False,
+                    "stage": TuringStage.DISCUSS.value,
+                    "error": f"Gate de PRD (@grace) não aprovou: {reason}. Etapa DISCUSS interrompida (Fail-Fast).",
+                    "results": results,
+                }
+
             # Persiste os artefatos em docs/briefings/
             try:
                 briefings_dir = self.project_dir / "docs" / "briefings"
                 briefings_dir.mkdir(parents=True, exist_ok=True)
                 (briefings_dir / "PRD.md").write_text(grace_output, encoding="utf-8")
-                if results and results[0].get("output"):
-                    (briefings_dir / "VIABILITY.md").write_text(
-                        results[0]["output"], encoding="utf-8"
-                    )
             except OSError as e:
-                logger.warning("Falha ao salvar artefatos de DISCUSS em disco: %s", e)
+                logger.warning("Falha ao salvar PRD.md: %s", e)
 
         # Avaliação do Gate Determinístico do PRD
         prd_eval = self.prd_gate.evaluate(grace_output)
         self._gate_evaluations["prd"] = prd_eval
+        if not prd_eval.get("approved"):
+            return {
+                "success": False,
+                "stage": TuringStage.DISCUSS.value,
+                "error": f"Gate do PRD reprovado: {prd_eval.get('message')}. Etapa DISCUSS interrompida.",
+                "results": results,
+                "gates": self._gate_evaluations,
+            }
 
         return {
-            "success": all(r.get("success", False) for r in results) if results else True,
+            "success": True,
             "stage": TuringStage.DISCUSS.value,
             "results": results,
             "gates": self._gate_evaluations,
         }
 
     def run_plan(self, context: dict[str, Any] | None = None) -> dict[str, Any]:
-        """Executa a etapa PLAN com arquitetos de Upstream."""
+        """Executa a etapa PLAN com arquitetos de Upstream com FAIL-FAST estrito e validação de pré-requisitos."""
         if self.state_machine.current_state != WaveState.PLAN:
-            # Tenta transição se estiver em DISCUSS
             if self.state_machine.current_state == WaveState.DISCUSS:
                 if not self.transition_to(TuringStage.PLAN):
                     return {"success": False, "error": "Não foi possível transitar para PLAN."}
@@ -456,23 +488,162 @@ class WaveOrchestrator:
                     "error": f"Etapa atual é {self.state_machine.current_state.value}, esperado PLAN.",
                 }
 
+        # PRÉ-REQUISITO FUNDAMENTAL: PRD.md DEVE existir fisicamente em disco
+        prd_file = self.project_dir / "docs" / "briefings" / "PRD.md"
+        if not prd_file.exists() or prd_file.stat().st_size < 50:
+            return {
+                "success": False,
+                "stage": TuringStage.PLAN.value,
+                "error": "Pré-requisito ausente: docs/briefings/PRD.md não existe ou está vazio. Conclua DISCUSS antes de PLAN.",
+            }
+
         results: list[dict[str, Any]] = []
         outputs: dict[str, str] = {}
 
-        prompts_map = {
-            "@alan": (
+        # -------------------------------------------------------------
+        # 1. @alan: Mapeamento de Jornada e Telas
+        # -------------------------------------------------------------
+        runner_alan = self._get_runner("@alan")
+        if runner_alan:
+            alan_prompt = (
                 f"Mapeie a jornada do usuário e telas para a ONDA {self.state_machine.wave_id}.\n"
+                f"Consulte o PRD em 'docs/briefings/PRD.md'.\n"
                 f"É OBRIGATÓRIO incluir as seções: '## Entry Points', '## Fluxo de Navegação', '## Telas'."
-            ),
-            "@ieru": (
+            )
+            res_alan = runner_alan.run(prompt=alan_prompt, context=context)
+            self._record_telemetry("PLAN", "@alan", res_alan)
+            outputs["@alan"] = res_alan.output
+            results.append({"agent": "@alan", "output": res_alan.output, "success": res_alan.success})
+
+            # FAIL-FAST: Se @alan falhar, interrompe imediatamente!
+            if not res_alan.success or getattr(res_alan, "is_blocked", False):
+                err = getattr(res_alan, "error", None) or getattr(res_alan, "block_reason", None) or "Timeout ou falha de execução"
+                return {
+                    "success": False,
+                    "stage": TuringStage.PLAN.value,
+                    "error": f"Falha no arquiteto @alan: {err}. Etapa PLAN interrompida no ato (Fail-Fast).",
+                    "results": results,
+                }
+
+            # Salva journey no disco
+            try:
+                journeys_dir = self.project_dir / "docs" / "architecture"
+                journeys_dir.mkdir(parents=True, exist_ok=True)
+                (journeys_dir / "journey.md").write_text(res_alan.output, encoding="utf-8")
+            except OSError as e:
+                logger.warning("Falha ao salvar journey.md: %s", e)
+
+            # Gate de Jornada
+            journey_eval = self.journey_gate.evaluate(res_alan.output)
+            self._gate_evaluations["journey"] = journey_eval
+            if not journey_eval.get("approved"):
+                return {
+                    "success": False,
+                    "stage": TuringStage.PLAN.value,
+                    "error": f"Gate de Jornada reprovado: {journey_eval.get('message')}. Interrompendo PLAN.",
+                    "results": results,
+                    "gates": self._gate_evaluations,
+                }
+
+        # -------------------------------------------------------------
+        # 2. @ieru: Arquitetura do Sistema e Decisões Técnicas
+        # Pré-requisito: jornada e PRD no disco
+        # -------------------------------------------------------------
+        journey_path = self.project_dir / "docs" / "architecture" / "journey.md"
+        if not journey_path.exists() or journey_path.stat().st_size < 50:
+            return {
+                "success": False,
+                "stage": TuringStage.PLAN.value,
+                "error": "Pré-requisito ausente para @ieru: docs/architecture/journey.md não encontrado.",
+                "results": results,
+            }
+
+        runner_ieru = self._get_runner("@ieru")
+        if runner_ieru:
+            ieru_prompt = (
                 f"Defina as decisões técnicas e arquitetura para a ONDA {self.state_machine.wave_id}.\n"
+                f"Consulte o PRD em 'docs/briefings/PRD.md' e a Jornada em 'docs/architecture/journey.md'.\n"
                 f"É OBRIGATÓRIO incluir as seções: '## Decisões Arquiteturais', '## Stack'."
-            ),
-            "@codd": (
-                f"Projete a modelagem de dados e esquemas para a ONDA {self.state_machine.wave_id}."
-            ),
-            "@caroli": (
+            )
+            res_ieru = runner_ieru.run(prompt=ieru_prompt, context=context)
+            self._record_telemetry("PLAN", "@ieru", res_ieru)
+            outputs["@ieru"] = res_ieru.output
+            results.append({"agent": "@ieru", "output": res_ieru.output, "success": res_ieru.success})
+
+            # FAIL-FAST: Se @ieru falhar, interrompe imediatamente! NÃO CHAMA @codd NEM @caroli!
+            if not res_ieru.success or getattr(res_ieru, "is_blocked", False):
+                err = getattr(res_ieru, "error", None) or getattr(res_ieru, "block_reason", None) or "Timeout ou falha de execução"
+                return {
+                    "success": False,
+                    "stage": TuringStage.PLAN.value,
+                    "error": f"Falha no arquiteto @ieru: {err}. Etapa PLAN interrompida no ato (Fail-Fast, economizando downstream).",
+                    "results": results,
+                }
+
+            # Salva arquitetura no disco
+            try:
+                arch_dir = self.project_dir / "docs" / "architecture"
+                arch_dir.mkdir(parents=True, exist_ok=True)
+                (arch_dir / "SYSTEM_ARCHITECTURE.md").write_text(res_ieru.output, encoding="utf-8")
+            except OSError as e:
+                logger.warning("Falha ao salvar SYSTEM_ARCHITECTURE.md: %s", e)
+
+            # Gate de Arquitetura
+            arch_eval = self.architecture_gate.evaluate(res_ieru.output)
+            self._gate_evaluations["architecture"] = arch_eval
+            if not arch_eval.get("approved"):
+                return {
+                    "success": False,
+                    "stage": TuringStage.PLAN.value,
+                    "error": f"Gate de Arquitetura reprovado: {arch_eval.get('message')}. Interrompendo PLAN.",
+                    "results": results,
+                    "gates": self._gate_evaluations,
+                }
+
+        # -------------------------------------------------------------
+        # 3. @codd: Modelagem de Dados e Schemas
+        # Pré-requisito: SYSTEM_ARCHITECTURE.md no disco
+        # -------------------------------------------------------------
+        arch_path = self.project_dir / "docs" / "architecture" / "SYSTEM_ARCHITECTURE.md"
+        if not arch_path.exists() or arch_path.stat().st_size < 50:
+            return {
+                "success": False,
+                "stage": TuringStage.PLAN.value,
+                "error": "Pré-requisito ausente para @codd: docs/architecture/SYSTEM_ARCHITECTURE.md não encontrado.",
+                "results": results,
+            }
+
+        runner_codd = self._get_runner("@codd")
+        if runner_codd:
+            codd_prompt = (
+                f"Projete a modelagem de dados e esquemas para a ONDA {self.state_machine.wave_id}.\n"
+                f"Consulte o PRD em 'docs/briefings/PRD.md' e a Arquitetura em 'docs/architecture/SYSTEM_ARCHITECTURE.md'."
+            )
+            res_codd = runner_codd.run(prompt=codd_prompt, context=context)
+            self._record_telemetry("PLAN", "@codd", res_codd)
+            outputs["@codd"] = res_codd.output
+            results.append({"agent": "@codd", "output": res_codd.output, "success": res_codd.success})
+
+            # FAIL-FAST: Se @codd falhar, interrompe imediatamente!
+            if not res_codd.success or getattr(res_codd, "is_blocked", False):
+                err = getattr(res_codd, "error", None) or getattr(res_codd, "block_reason", None) or "Timeout ou falha de execução"
+                return {
+                    "success": False,
+                    "stage": TuringStage.PLAN.value,
+                    "error": f"Falha no arquiteto @codd: {err}. Etapa PLAN interrompida no ato (Fail-Fast).",
+                    "results": results,
+                }
+
+        # -------------------------------------------------------------
+        # 4. @caroli: Decomposição de ai-stories e Backlog
+        # Pré-requisito: Arquitetura e/ou Schemas no disco
+        # -------------------------------------------------------------
+        runner_caroli = self._get_runner("@caroli")
+        if runner_caroli:
+            caroli_prompt = (
                 f"Decomponha e gere as ai-stories completas da ONDA {self.state_machine.wave_id}.\n"
+                f"Consulte o PRD em 'docs/briefings/PRD.md', a Jornada em 'docs/architecture/journey.md' "
+                f"e a Arquitetura em 'docs/architecture/SYSTEM_ARCHITECTURE.md'.\n"
                 f"É OBRIGATÓRIO incluir:\n"
                 f"# STORY ST-001: Implementação do Módulo\n"
                 f"> **Status:** READY\n"
@@ -483,56 +654,47 @@ class WaveOrchestrator:
                 f"- Dado um usuário no sistema\n"
                 f"- Quando ele submeter a requisição\n"
                 f"- Então o resultado esperado é retornado\n"
-            ),
-        }
+            )
+            res_caroli = runner_caroli.run(prompt=caroli_prompt, context=context)
+            self._record_telemetry("PLAN", "@caroli", res_caroli)
+            outputs["@caroli"] = res_caroli.output
+            results.append({"agent": "@caroli", "output": res_caroli.output, "success": res_caroli.success})
 
-        for handle in ["@alan", "@ieru", "@codd", "@caroli"]:
-            runner = self._get_runner(handle)
-            if runner:
-                p_text = prompts_map.get(handle, f"Execute o planejamento técnico de {handle}")
-                res = runner.run(prompt=p_text, context=context)
-                self._record_telemetry("PLAN", handle, res)
-                outputs[handle] = res.output
-                results.append({"agent": handle, "output": res.output, "success": res.success})
+            # FAIL-FAST: Se @caroli falhar, interrompe imediatamente!
+            if not res_caroli.success or getattr(res_caroli, "is_blocked", False):
+                err = getattr(res_caroli, "error", None) or getattr(res_caroli, "block_reason", None) or "Timeout ou falha de execução"
+                return {
+                    "success": False,
+                    "stage": TuringStage.PLAN.value,
+                    "error": f"Falha na analista @caroli: {err}. Etapa PLAN interrompida no ato (Fail-Fast).",
+                    "results": results,
+                }
 
-        # Persiste documentos de Upstream no disco do projeto
-        try:
-            journeys_dir = self.project_dir / "docs" / "journeys"
-            journeys_dir.mkdir(parents=True, exist_ok=True)
-            if outputs.get("@alan"):
-                (journeys_dir / "USER_JOURNEY.md").write_text(outputs["@alan"], encoding="utf-8")
+            # Salva story ST-001 no disco
+            try:
+                stories_dir = self.project_dir / "docs" / "stories"
+                stories_dir.mkdir(parents=True, exist_ok=True)
+                (stories_dir / "ST-001.md").write_text(res_caroli.output, encoding="utf-8")
+            except OSError as e:
+                logger.warning("Falha ao salvar ST-001.md: %s", e)
 
-            arch_dir = self.project_dir / "docs" / "architecture"
-            arch_dir.mkdir(parents=True, exist_ok=True)
-            if outputs.get("@ieru"):
-                (arch_dir / "SYSTEM_ARCHITECTURE.md").write_text(outputs["@ieru"], encoding="utf-8")
-
-            stories_dir = self.project_dir / "docs" / "stories"
-            stories_dir.mkdir(parents=True, exist_ok=True)
-            caroli_text = outputs.get("@caroli", "")
-            if caroli_text:
-                (stories_dir / "ST-001.md").write_text(caroli_text, encoding="utf-8")
-        except OSError as e:
-            logger.warning("Falha ao salvar artefatos de PLAN em disco: %s", e)
-
-        # Avalia os Gates Determinísticos de Upstream
-        alan_out = outputs.get("@alan", "")
-        ieru_out = outputs.get("@ieru", "")
-        caroli_out = outputs.get("@caroli", "")
-
-        self._gate_evaluations["journey"] = self.journey_gate.evaluate(alan_out)
-        self._gate_evaluations["architecture"] = self.architecture_gate.evaluate(ieru_out)
-        self._gate_evaluations["story_dor"] = self.story_dor_gate.evaluate(caroli_out)
-
-        # Se PRD ainda não foi avaliado, cria avaliação default a partir do conteúdo disponível
-        if "prd" not in self._gate_evaluations:
-            self._gate_evaluations["prd"] = self.prd_gate.evaluate(alan_out or ieru_out)
+            # Gate de Story DoR
+            story_dor_eval = self.story_dor_gate.evaluate(res_caroli.output)
+            self._gate_evaluations["story_dor"] = story_dor_eval
+            if not story_dor_eval.get("approved"):
+                return {
+                    "success": False,
+                    "stage": TuringStage.PLAN.value,
+                    "error": f"Gate de Story DoR reprovado: {story_dor_eval.get('message')}. Interrompendo PLAN.",
+                    "results": results,
+                    "gates": self._gate_evaluations,
+                }
 
         # Sincroniza backlog físico com o Kanban
         self.kanban.scan_and_sync_directory(wave_id=self.state_machine.wave_id)
 
         return {
-            "success": all(r.get("success", False) for r in results) if results else True,
+            "success": True,
             "stage": TuringStage.PLAN.value,
             "results": results,
             "gates": self._gate_evaluations,
