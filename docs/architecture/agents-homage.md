@@ -6,6 +6,22 @@
 
 ---
 
+## ⚠️ Disclaimer de Homenagens
+
+### Nomes e Homenagens
+
+Os nomes, pseudônimos e referências a profissionais utilizados neste projeto são homenagens a pessoas que contribuíram significativamente para a computação, engenharia de software, ciência da computação e áreas relacionadas.
+
+A utilização desses nomes tem finalidade exclusivamente referencial e honorífica. Ela não implica, sugere ou representa participação, colaboração, endosso, afiliação, patrocínio ou contribuição direta dessas pessoas para este projeto.
+
+As personas e agentes que utilizam esses nomes são personagens conceituais criados exclusivamente para representar papéis dentro da arquitetura do Bombe Code. Suas opiniões, decisões, comportamentos e instruções são definidos pelo projeto e não representam necessariamente as opiniões ou posições das pessoas homenageadas.
+
+Os nomes foram escolhidos por sua relação histórica ou profissional com as áreas representadas pelas respectivas personas. O projeto não pretende reproduzir, simular ou se passar pelas pessoas homenageadas.
+
+> **Aviso Específico:** Uma persona denominada `@turing`, `@unclebob`, `@grace`, ou qualquer outra referência nominal **não constitui** uma representação digital, réplica ou simulação da pessoa homenageada.
+
+---
+
 ## 1. Composição do Elenco por País de Origem
 
 O Bombe Code homenageia 23 grandes mentes da história da computação, valorizando a vanguarda pioneira do Brasil e marcos fundamentais do Reino Unido, Estados Unidos e Canadá:

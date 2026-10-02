@@ -3,6 +3,7 @@
 > **Status:** Aberto / Planejado  
 > **Dependência:** ONDA 3 (Sistema Base de Agentes & Skills On-Demand)  
 > **Composição:** 23 Agentes Oficiais (12 do Brasil, 6 dos Estados Unidos, 3 do Reino Unido, 1 do Canadá e 1 Maestro Universal)  
+> **Aviso Legal:** Nomes e referências possuem finalidade exclusivamente honorífica e referencial de papéis conceituais. Consulte o [Disclaimer de Homenagens](file:///home/lexpontes/projetos/struct/bombe-code/docs/architecture/agents-homage.md).  
 
 ---
 
