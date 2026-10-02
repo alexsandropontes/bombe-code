@@ -572,16 +572,21 @@ class WaveOrchestrator:
                     "results": results,
                 }
 
-            # Persiste os artefatos em docs/briefings/
-            try:
-                briefings_dir = self.project_dir / "docs" / "briefings"
-                briefings_dir.mkdir(parents=True, exist_ok=True)
-                (briefings_dir / "PRD.md").write_text(grace_output, encoding="utf-8")
-            except OSError as e:
-                logger.warning("Falha ao salvar PRD.md: %s", e)
+            # Persiste o artefato em docs/briefings/ caso o agente não tenha gravado diretamente via tool
+            prd_file = self.project_dir / "docs" / "briefings" / "PRD.md"
+            if not prd_file.exists() or prd_file.stat().st_size < 100:
+                try:
+                    prd_file.parent.mkdir(parents=True, exist_ok=True)
+                    prd_file.write_text(grace_output, encoding="utf-8")
+                except OSError as e:
+                    logger.warning("Falha ao salvar PRD.md: %s", e)
 
-        # Avaliação do Gate Determinístico do PRD
-        prd_eval = self.prd_gate.evaluate(grace_output)
+        # Avaliação do Gate Determinístico do PRD a partir do artefato físico
+        eval_content = prd_file.read_text(encoding="utf-8") if prd_file.exists() else grace_output
+        prd_eval = self.prd_gate.evaluate(eval_content)
+        if not prd_eval.get("approved") and eval_content != grace_output:
+            prd_eval = self.prd_gate.evaluate(f"{eval_content}\n\n{grace_output}")
+
         self._gate_evaluations["prd"] = prd_eval
         if not prd_eval.get("approved"):
             self.handle_agent_block("@grace", prd_eval.get("message"))

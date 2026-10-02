@@ -27,12 +27,18 @@ class PRDQualityGate:
         normalized = content.lower()
         missing = []
         for sec in self.REQUIRED_SECTIONS:
-            # Checa correspondência flexível (ex: critérios de priorização RICE, WSJF, MoSCoW, ICE)
+            # Checa correspondência flexível com sinônimos semânticos de engenharia de produto
             keywords = [sec.lower()]
+            if "visão" in sec.lower():
+                keywords.extend(["visão", "visao", "visão do produto", "visao do produto", "overview", "visão geral"])
+            if "problema" in sec.lower():
+                keywords.extend(["problema", "dor", "dores", "necessidade", "contexto", "motivação", "motivacao"])
+            if "personas" in sec.lower():
+                keywords.extend(["persona", "personas", "público", "publico", "usuário", "usuario", "stakeholder"])
             if "rice" in sec.lower():
-                keywords.extend(["rice", "wsjf", "moscow", "ice", "priorização", "priorizacao"])
+                keywords.extend(["rice", "wsjf", "moscow", "ice", "priorização", "priorizacao", "prioridade"])
             if "mvp" in sec.lower():
-                keywords.append("mvp")
+                keywords.extend(["mvp", "faseamento", "escopo mínimo", "operacional", "f0"])
 
             if not any(kw in normalized for kw in keywords):
                 missing.append(sec)

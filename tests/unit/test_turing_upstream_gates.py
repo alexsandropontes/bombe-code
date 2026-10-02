@@ -34,6 +34,25 @@ Fluxo ponta a ponta de conciliação.
     assert len(result["missing_sections"]) == 0
 
 
+def test_prd_quality_gate_accepts_flexible_synonyms():
+    gate = PRDQualityGate()
+    prd_with_synonyms = """# PRD Oficial
+## Visão do Produto
+Instrumento de qualificação de funil financeiro.
+## Contexto e Dores
+Dificuldade de controle de fluxo de caixa pessoal.
+## Stakeholders e Personas
+Operador financeiro e auditor.
+## Priorização RICE
+Reach: 100%, Impact: 3x, Confidence: 80%, Effort: 2 semanas.
+## Escopo Mínimo F0
+Fluxo ponta a ponta de conciliação.
+"""
+    result = gate.evaluate(prd_with_synonyms)
+    assert result["approved"] is True
+    assert len(result["missing_sections"]) == 0
+
+
 def test_prd_quality_gate_rejects_incomplete_prd():
     gate = PRDQualityGate()
     incomplete_prd = """# PRD Incompleto
