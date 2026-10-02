@@ -59,11 +59,34 @@ class ProjectDatabase:
                     agent TEXT NOT NULL,
                     status TEXT NOT NULL,
                     reviews TEXT NOT NULL DEFAULT '{}',
+                    is_blocked INTEGER NOT NULL DEFAULT 0,
+                    block_reason TEXT NOT NULL DEFAULT '',
+                    blocked_by TEXT NOT NULL DEFAULT '',
                     created_at REAL NOT NULL,
                     updated_at REAL NOT NULL
                 );
                 """
             )
+            # Migração segura para tabelas já criadas
+            try:
+                conn.execute(
+                    "ALTER TABLE kanban_cards ADD COLUMN is_blocked INTEGER NOT NULL DEFAULT 0"
+                )
+            except Exception:  # noqa: BLE001, S110
+                pass
+            try:
+                conn.execute(
+                    "ALTER TABLE kanban_cards ADD COLUMN block_reason TEXT NOT NULL DEFAULT ''"
+                )
+            except Exception:  # noqa: BLE001, S110
+                pass
+            try:
+                conn.execute(
+                    "ALTER TABLE kanban_cards ADD COLUMN blocked_by TEXT NOT NULL DEFAULT ''"
+                )
+            except Exception:  # noqa: BLE001, S110
+                pass
+
             conn.commit()
 
     def save_wave_state(
@@ -190,24 +213,46 @@ class ProjectDatabase:
         agent: str,
         status: str,
         reviews: dict[str, Any] | None = None,
+        is_blocked: bool = False,
+        block_reason: str = "",
+        blocked_by: str = "",
     ) -> None:
         """Cria ou atualiza um card no Kanban do SQLite."""
         now = time.time()
         rev_json = json.dumps(reviews or {}, ensure_ascii=False)
+        flag_val = 1 if is_blocked else 0
         with self._get_connection() as conn:
             conn.execute(
                 """
-                INSERT INTO kanban_cards (story_id, wave_id, title, agent, status, reviews, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO kanban_cards (
+                    story_id, wave_id, title, agent, status, reviews,
+                    is_blocked, block_reason, blocked_by, created_at, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(story_id) DO UPDATE SET
                     wave_id = excluded.wave_id,
                     title = excluded.title,
                     agent = excluded.agent,
                     status = excluded.status,
                     reviews = excluded.reviews,
+                    is_blocked = excluded.is_blocked,
+                    block_reason = excluded.block_reason,
+                    blocked_by = excluded.blocked_by,
                     updated_at = excluded.updated_at
                 """,
-                (story_id, wave_id, title, agent, status, rev_json, now, now),
+                (
+                    story_id,
+                    wave_id,
+                    title,
+                    agent,
+                    status,
+                    rev_json,
+                    flag_val,
+                    block_reason,
+                    blocked_by,
+                    now,
+                    now,
+                ),
             )
             conn.commit()
 
@@ -275,5 +320,33 @@ class ProjectDatabase:
                     """,
                     (status, now, story_id),
                 )
+            conn.commit()
+            return cur.rowcount > 0
+
+    def set_kanban_card_blocked(
+        self,
+        story_id: str,
+        is_blocked: bool,
+        reason: str = "",
+        blocked_by: str = "",
+    ) -> bool:
+        """Altera a flag de bloqueio de um card no local do problema."""
+        now = time.time()
+        flag_val = 1 if is_blocked else 0
+        with self._get_connection() as conn:
+            cur = conn.execute(
+                """
+                UPDATE kanban_cards
+                SET is_blocked = ?, block_reason = ?, blocked_by = ?, updated_at = ?
+                WHERE story_id = ?
+                """,
+                (
+                    flag_val,
+                    reason if is_blocked else "",
+                    blocked_by if is_blocked else "",
+                    now,
+                    story_id,
+                ),
+            )
             conn.commit()
             return cur.rowcount > 0

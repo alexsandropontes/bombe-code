@@ -17,7 +17,7 @@ from bombe_code.config.project_config import ProjectConfigManager
 from bombe_code.llm.pydantic_factory import PydanticAiFactory
 from bombe_code.storage.project_db import ProjectDatabase
 from bombe_code.turing.gates import SealGate, TemplateGate
-from bombe_code.turing.kanban import KanbanManager
+from bombe_code.turing.kanban import KanbanCardStatus, KanbanManager
 from bombe_code.turing.review_gate import TuringReviewGate
 from bombe_code.turing.state_machine import (
     AutonomyMode,
@@ -368,6 +368,7 @@ class WaveOrchestrator:
             aniche_verdict=aniche_verdict,
             unclebob_verdict=unclebob_verdict,
             test_run_success=True,
+            code_content=dev_res.output if dev_res else "",
         )
 
         # Atualiza status e reviews no Kanban
@@ -375,7 +376,11 @@ class WaveOrchestrator:
             "@aniche": "APROVADO" if aniche_approved else "REPROVADO",
             "@unclebob": "APROVADO" if bob_approved else "REPROVADO",
         }
-        final_status = "DONE" if review_eval["approved"] else "IN_REVIEW"
+        final_status = (
+            KanbanCardStatus.DEV_DONE.value
+            if review_eval["approved"]
+            else KanbanCardStatus.IN_REVIEW.value
+        )
         self.kanban.update_status(
             story_id=target_story,
             status=final_status,
@@ -477,8 +482,18 @@ class WaveOrchestrator:
             else None
         )
 
+        success = bool(edith_res and edith_res.success and nina_res and nina_res.success)
+        if success:
+            cards = self.kanban.list_cards(wave_id=self.state_machine.wave_id)
+            for c in cards:
+                if c.get("status") == KanbanCardStatus.DEV_DONE.value:
+                    self.kanban.update_status(
+                        story_id=c["story_id"],
+                        status=KanbanCardStatus.DONE.value,
+                    )
+
         return {
-            "success": bool(edith_res and edith_res.success and nina_res and nina_res.success),
+            "success": success,
             "stage": TuringStage.VALIDATE.value,
             "validator_output": edith_res.output if edith_res else "",
             "gov_output": nina_res.output if nina_res else "",

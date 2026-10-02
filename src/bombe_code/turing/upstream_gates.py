@@ -27,10 +27,10 @@ class PRDQualityGate:
         normalized = content.lower()
         missing = []
         for sec in self.REQUIRED_SECTIONS:
-            # Checa correspondência flexível (ex: "critérios rice" ou "rice")
+            # Checa correspondência flexível (ex: critérios de priorização RICE, WSJF, MoSCoW, ICE)
             keywords = [sec.lower()]
             if "rice" in sec.lower():
-                keywords.append("rice")
+                keywords.extend(["rice", "wsjf", "moscow", "ice", "priorização", "priorizacao"])
             if "mvp" in sec.lower():
                 keywords.append("mvp")
 

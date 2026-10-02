@@ -20,6 +20,7 @@ class TuringReviewGate:
         aniche_verdict: dict[str, Any] | None,
         unclebob_verdict: dict[str, Any] | None,
         test_run_success: bool = True,
+        code_content: str | None = None,
     ) -> dict[str, Any]:
         veto_reasons: list[str] = []
 
@@ -27,12 +28,22 @@ class TuringReviewGate:
         if not test_run_success:
             veto_reasons.append("Suíte de testes automatizados falhou.")
 
-        # 2. Parecer de @aniche (Test Architect)
+        # 2. Scanner anti-fraude determinístico
+        if code_content:
+            lower_code = code_content.lower()
+            if "notimplementederror" in lower_code:
+                veto_reasons.append("Fraude detectada: código contém NotImplementedError.")
+            if "todo implementar" in lower_code or "todo: implementar" in lower_code:
+                veto_reasons.append(
+                    "Fraude detectada: código contém TODO pendente de implementação."
+                )
+
+        # 3. Parecer de @aniche (Test Architect)
         if not aniche_verdict or not aniche_verdict.get("approved"):
             notes = aniche_verdict.get("notes") if aniche_verdict else "Parecer ausente"
             veto_reasons.append(f"@aniche reprovou a entrega: {notes}")
 
-        # 3. Parecer de @unclebob (Tech Lead & Clean Code)
+        # 4. Parecer de @unclebob (Tech Lead & Clean Code)
         if not unclebob_verdict or not unclebob_verdict.get("approved"):
             notes = unclebob_verdict.get("notes") if unclebob_verdict else "Parecer ausente"
             veto_reasons.append(f"@unclebob reprovou a entrega: {notes}")
@@ -44,7 +55,7 @@ class TuringReviewGate:
             "gate": "TuringReviewGate",
             "veto_reasons": veto_reasons,
             "message": (
-                "Entrega homologada por @aniche e @unclebob com testes verdes."
+                "Entrega homologada por @aniche e @unclebob com testes verdes e código auditado."
                 if approved
                 else f"Entrega vetada pelo Turing: {' | '.join(veto_reasons)}"
             ),

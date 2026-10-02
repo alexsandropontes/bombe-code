@@ -747,8 +747,13 @@ async def handle_slash_command(app: BombeTuiApp, raw_text: str) -> bool:
                     f"\n[{TOKENS['secondary']} bold]Kanban de Stories:[/{TOKENS['secondary']} bold]"
                 )
                 for c in cards:
+                    blocked_tag = (
+                        f" 🛑 [bold red][BLOCKED: {c.get('block_reason')}][/bold red]"
+                        if c.get("is_blocked")
+                        else ""
+                    )
                     lines.append(
-                        f"  • [{c['status']}] {c['story_id']}: {c['title']} ({c.get('agent', '')})"
+                        f"  • [{c['status']}] {c['story_id']}: {c['title']} ({c.get('agent', '')}){blocked_tag}"
                     )
 
             await chat.mount(Static("\n".join(lines)))

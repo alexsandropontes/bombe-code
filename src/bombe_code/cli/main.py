@@ -138,7 +138,10 @@ def wave_status(
     if cards:
         typer.echo("\nKanban de Stories:")
         for c in cards:
-            typer.echo(f"  • [{c['status']}] {c['story_id']}: {c['title']} ({c.get('agent', '')})")
+            blocked_tag = f" 🛑 [BLOCKED: {c.get('block_reason')}]" if c.get("is_blocked") else ""
+            typer.echo(
+                f"  • [{c['status']}] {c['story_id']}: {c['title']} ({c.get('agent', '')}){blocked_tag}"
+            )
 
 
 @wave_cli.command("discuss")

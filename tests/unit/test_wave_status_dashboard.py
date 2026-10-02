@@ -99,9 +99,14 @@ def test_downstream_review_gate_in_run_cycle(orchestrator):
     assert "review_gate" in res
     assert res["review_gate"]["approved"] is True
 
-    # Verifica se o card no Kanban foi atualizado para DONE
+    # Verifica se o card no Kanban foi atualizado para DEV_DONE
     card = orchestrator.kanban.get_card("ST-030")
     assert card is not None
-    assert card["status"] == "DONE"
+    assert card["status"] == "DEV_DONE"
     assert "@aniche" in card["reviews"]
     assert "@unclebob" in card["reviews"]
+
+    # Após homologação em VALIDATE, promove para DONE definitivo
+    res_val = orchestrator.run_validate()
+    assert res_val["success"] is True
+    assert orchestrator.kanban.get_card("ST-030")["status"] == "DONE"

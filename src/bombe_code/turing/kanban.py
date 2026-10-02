@@ -22,6 +22,8 @@ class KanbanCardStatus(str, Enum):
     READY = "READY"
     IN_PROGRESS = "IN_PROGRESS"
     IN_REVIEW = "IN_REVIEW"
+    DEV_DONE = "DEV_DONE"
+    VALIDATE = "VALIDATE"
     DONE = "DONE"
 
 
@@ -45,6 +47,9 @@ class KanbanManager:
         agent: str,
         status: str = KanbanCardStatus.BACKLOG.value,
         reviews: dict[str, Any] | None = None,
+        is_blocked: bool = False,
+        block_reason: str = "",
+        blocked_by: str = "",
     ) -> dict[str, Any]:
         """Registra um novo card de story no Kanban."""
         self.db.save_kanban_card(
@@ -54,6 +59,9 @@ class KanbanManager:
             agent=agent,
             status=status,
             reviews=reviews or {},
+            is_blocked=is_blocked,
+            block_reason=block_reason,
+            blocked_by=blocked_by,
         )
         return self.get_card(story_id) or {
             "story_id": story_id,
@@ -62,6 +70,9 @@ class KanbanManager:
             "agent": agent,
             "status": status,
             "reviews": reviews or {},
+            "is_blocked": is_blocked,
+            "block_reason": block_reason,
+            "blocked_by": blocked_by,
         }
 
     def update_status(
@@ -85,7 +96,43 @@ class KanbanManager:
             "story_id": story_id,
             "status": card.get("status") if card else status,
             "reviews": card.get("reviews") if card else (reviews or {}),
+            "is_blocked": card.get("is_blocked", False) if card else False,
+            "block_reason": card.get("block_reason", "") if card else "",
+            "blocked_by": card.get("blocked_by", "") if card else "",
         }
+
+    def block_card(
+        self,
+        story_id: str,
+        reason: str,
+        blocked_by: str = "",
+    ) -> dict[str, Any]:
+        """Sinaliza bloqueio da linha no local exato do problema (sem alterar status)."""
+        success = self.db.set_kanban_card_blocked(
+            story_id=story_id,
+            is_blocked=True,
+            reason=reason,
+            blocked_by=blocked_by,
+        )
+        if success:
+            self.sync_markdown_file(
+                story_id=story_id,
+                blocked=True,
+                blocked_reason=reason,
+            )
+        return self.get_card(story_id) or {}
+
+    def unblock_card(self, story_id: str) -> dict[str, Any]:
+        """Remove o bloqueio do card após resolução, permitindo o fluxo seguir."""
+        success = self.db.set_kanban_card_blocked(
+            story_id=story_id,
+            is_blocked=False,
+            reason="",
+            blocked_by="",
+        )
+        if success:
+            self.sync_markdown_file(story_id=story_id, blocked=False)
+        return self.get_card(story_id) or {}
 
     def get_card(self, story_id: str) -> dict[str, Any] | None:
         """Recupera um card pelo ID."""
@@ -95,8 +142,14 @@ class KanbanManager:
         """Lista cards cadastrados na ONDA."""
         return self.db.list_kanban_cards(wave_id=wave_id)
 
-    def sync_markdown_file(self, story_id: str, new_status: str) -> bool:
-        """Atualiza a linha de status no arquivo markdown correspondente."""
+    def sync_markdown_file(
+        self,
+        story_id: str,
+        new_status: str | None = None,
+        blocked: bool | None = None,
+        blocked_reason: str = "",
+    ) -> bool:
+        """Atualiza a linha de status e blocked no arquivo markdown correspondente."""
         if not self.stories_dir.exists():
             return False
 
@@ -104,12 +157,30 @@ class KanbanManager:
         for path in self.stories_dir.glob(f"{story_id}*.md"):
             try:
                 content = path.read_text(encoding="utf-8")
-                # Substitui > **Status:** ... por > **Status:** <new_status>
-                updated = re.sub(
-                    r">\s*\*\*Status:\*\*.*",
-                    f"> **Status:** {new_status}",
-                    content,
-                )
+                updated = content
+                if new_status is not None:
+                    updated = re.sub(
+                        r">\s*\*\*Status:\*\*.*",
+                        f"> **Status:** {new_status}",
+                        updated,
+                    )
+                if blocked is not None:
+                    blocked_str = (
+                        f"True ({blocked_reason})" if blocked and blocked_reason else str(blocked)
+                    )
+                    if re.search(r">\s*\*\*Blocked:\*\*.*", updated):
+                        updated = re.sub(
+                            r">\s*\*\*Blocked:\*\*.*",
+                            f"> **Blocked:** {blocked_str}",
+                            updated,
+                        )
+                    else:
+                        # Insere após o Status
+                        updated = re.sub(
+                            r"(>\s*\*\*Status:\*\*.*)",
+                            rf"\1\n> **Blocked:** {blocked_str}",
+                            updated,
+                        )
                 path.write_text(updated, encoding="utf-8")
                 return True
             except Exception as e:  # noqa: BLE001
@@ -145,12 +216,22 @@ class KanbanManager:
                 agent_match = re.search(r">\s*\*\*Responsáveis:\*\*\s*(@\w+)", content)
                 agent = agent_match.group(1).strip() if agent_match else "@unclebob"
 
+                # Extrai Blocked
+                blocked_match = re.search(
+                    r">\s*\*\*Blocked:\*\*\s*(True|False|Sim|Não)", content, re.IGNORECASE
+                )
+                is_blocked = False
+                if blocked_match:
+                    val = blocked_match.group(1).lower()
+                    is_blocked = val in ("true", "sim")
+
                 card = self.add_card(
                     story_id=story_id,
                     wave_id=wave_id,
                     title=title,
                     agent=agent,
                     status=status,
+                    is_blocked=is_blocked,
                 )
                 synced_cards.append(card)
             except Exception as e:  # noqa: BLE001
