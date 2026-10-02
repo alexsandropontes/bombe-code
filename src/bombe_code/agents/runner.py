@@ -22,6 +22,9 @@ class AgentExecutionResult(BaseModel):
 
     agent_handle: str = Field(..., description="Handle do agente que executou")
     success: bool = Field(..., description="Indica se a execução ocorreu com sucesso")
+    status: str = Field(default="COMPLETED", description="Status da execução: COMPLETED, BLOCKED ou FAILED")
+    is_blocked: bool = Field(default=False, description="Indica se o agente reportou bloqueio ou impedimento")
+    block_reason: str | None = Field(default=None, description="Motivo do bloqueio caso is_blocked seja True")
     output: str = Field(default="", description="Saída textual ou estruturada gerada pelo agente")
     error: str | None = Field(default=None, description="Mensagem de erro em caso de falha")
     task_id: str | None = Field(
@@ -144,15 +147,22 @@ class AgentRunner:
             else:
                 output_text = getattr(raw_result, "data", str(raw_result))
 
+            output_str = str(output_text)
+            is_blocked, block_reason = self._detect_block(output_str)
+
+            task_status = "blocked" if is_blocked else "completed"
             if self.project_db and task_id:
                 self.project_db.update_agent_task_status(
-                    task_id, "completed", output=str(output_text)
+                    task_id, task_status, output=output_str
                 )
 
             return AgentExecutionResult(
                 agent_handle=self.agent.handle,
-                success=True,
-                output=str(output_text),
+                success=not is_blocked,
+                status="BLOCKED" if is_blocked else "COMPLETED",
+                is_blocked=is_blocked,
+                block_reason=block_reason,
+                output=output_str,
                 task_id=task_id,
                 input_tokens=input_tokens,
                 output_tokens=output_tokens,
@@ -169,6 +179,41 @@ class AgentRunner:
             return AgentExecutionResult(
                 agent_handle=self.agent.handle,
                 success=False,
+                status="FAILED",
+                is_blocked=False,
                 error=str(exc),
                 task_id=task_id,
             )
+
+    @staticmethod
+    def _detect_block(output_text: str) -> tuple[bool, str | None]:
+        """Detecta deterministicamente se a LLM sinalizou bloqueio ou impedimento."""
+        text_lower = output_text.lower()
+        block_keywords = [
+            "bloqueio registrado",
+            "auditoria bloqueada",
+            "auditoria não iniciável",
+            "auditoria não iniciada",
+            "auditoria nao iniciavel",
+            "auditoria nao iniciada",
+            "sem red legítimo",
+            "sem red legitimo",
+            "status: blocked",
+            "status: ⛔",
+            "status: ⚠️",
+            "[blocked:",
+            "🛑 [blocked",
+            "impossível prosseguir",
+            "impossivel prosseguir",
+            "artefatos insuficientes",
+            "evidências obrigatórias não recebidas",
+            "evidencias obrigatorias nao recebidas",
+        ]
+        for kw in block_keywords:
+            if kw in text_lower:
+                for line in output_text.splitlines():
+                    if kw in line.lower():
+                        clean = line.strip().strip("*#-> []")
+                        return True, clean or f"Bloqueio detectado ({kw})"
+                return True, f"Bloqueio detectado: {kw}"
+        return False, None
