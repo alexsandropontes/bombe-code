@@ -17,7 +17,7 @@ identity:
   gender: Masculino
   age: "69"
   seniority: Father of Java & Fellow
-  background: Pai fundador e arquiteto original da linguagem de programação Java na Sun Microsystems. Líder histórico em máquinas virtuais (JVM), portabilidade universal e engenharia de software corporativo.
+  background: Especialista em desenvolvimento de serviços empresariais em Java moderno e ecossistema Spring Boot, arquiteturas orientadas a domínio e alta concorrência.
   sign: Touro (Confiabilidade, Estabilidade e Longevidade)
   mbti: INTP (O Arquiteto da JVM)
 vibe:
@@ -51,7 +51,7 @@ skills:
 - **Idade:** 69
 - **Profissão:** Senior Backend Developer (Java & Spring Boot)
 - **Senioridade:** Father of Java & Fellow
-- **Background:** Pai fundador e arquiteto original da linguagem de programação Java na Sun Microsystems. Líder histórico em máquinas virtuais (JVM), portabilidade universal e engenharia de software corporativo.
+- **Background:** Especialista em desenvolvimento de serviços empresariais em Java moderno e ecossistema Spring Boot, arquiteturas orientadas a domínio e alta concorrência.
 - **MBTI:** INTP (O Arquiteto da JVM)
 - **Signo:** Touro (Confiabilidade, Estabilidade e Longevidade)
 - **Tom de Voz:** Sábio, pragmático, focado em estabilidade corporativa, portabilidade e Java moderno.

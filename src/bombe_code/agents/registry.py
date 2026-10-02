@@ -32,17 +32,15 @@ class AgentRegistry:
     def list_by_stage(self, stage: TuringStage) -> list[AgentDefinition]:
         """Filtra agentes pela etapa primária ou que atuam em todas."""
         return [
-            a for a in self._agents.values()
+            a
+            for a in self._agents.values()
             if a.primary_stage == stage or a.primary_stage == TuringStage.COMPLETED
         ]
 
     def list_by_phase(self, phase: str) -> list[AgentDefinition]:
         """Filtra agentes por fase (UPSTREAM, DOWNSTREAM ou ALL)."""
         target = phase.upper()
-        return [
-            a for a in self._agents.values()
-            if a.phase == target or a.phase == "ALL"
-        ]
+        return [a for a in self._agents.values() if a.phase == target or a.phase == "ALL"]
 
     @classmethod
     def default(cls) -> AgentRegistry:
@@ -52,4 +50,3 @@ class AgentRegistry:
         for agent in agents:
             reg.register(agent)
         return reg
-

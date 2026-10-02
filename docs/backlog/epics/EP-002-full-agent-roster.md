@@ -2,7 +2,7 @@
 
 > **Status:** Aberto / Planejado  
 > **Dependência:** ONDA 3 (Sistema Base de Agentes & Skills On-Demand)  
-> **Composição:** 1 Maestro Universal + 12 Pioneiros Brasileiros de TI + 10 Referências Mundiais (Total: 23 Agentes)  
+> **Composição:** 23 Agentes Oficiais (12 do Brasil, 6 dos Estados Unidos, 3 do Reino Unido, 1 do Canadá e 1 Maestro Universal)  
 
 ---
 
@@ -13,7 +13,7 @@ O Bombe Core original contemplava mais de 20 especialistas para cobrir cada cama
 - **Arquiteto da Jornada do Usuário:** Reintegração de `@alan` para mapear de ponta a ponta entry points, navegação e telas faltantes.
 - **Engenharia de Testes Automatizados (QA de Automação):** `@aniche` atuando especificamente na arquitetura e implementação de testes unitários, integração e E2E reais.
 - **Dupla Brasileira de Segurança de Aplicação (AppSec & Criptografia):** A segurança de aplicação não fica diluída. Criamos duas cadeiras técnicas soberanas para AppSec defensivo e ofensivo: `@barreto` (Criptografia, STRIDE, Auth) e `@diego` (Auditoria Ofensiva, OWASP, Pentest).
-- **Maioria de Pioneiros Brasileiros:** 12 especialistas brasileiros de destaque global contra 10 mundiais (+ Turing como maestro neutro).
+- **Maioria de Pioneiros Brasileiros:** 12 especialistas brasileiros contra 10 pioneiros internacionais dos Estados Unidos, Reino Unido e Canadá (+ Turing como maestro neutro).
 
 ---
 
@@ -22,41 +22,41 @@ O Bombe Core original contemplava mais de 20 especialistas para cobrir cada cama
 ```mermaid
 flowchart TD
     subgraph ORQUESTRAÇÃO
-        TURING["@turing (Universal)<br>Maestro do Runtime"]
+        TURING["@turing<br>Maestro do Runtime"]
     end
 
     subgraph UPSTREAM["FASE 1: UPSTREAM (Concepção & Planejamento)"]
         direction TB
-        MEIRA["@meira (BR)<br>Viabilidade & Inovação"]
-        GRACE["@grace (Mundial)<br>Product Manager & PRD"]
-        ALAN["@alan (Mundial)<br>User Journey & Navigation"]
-        NORMAN["@norman (Mundial)<br>UI/UX & Heurísticas"]
-        IERU["@ieru (BR)<br>Arquiteto de Software (Lua)"]
-        CODD["@codd (Mundial)<br>DB Relacional (SQL)"]
-        CLAUDIA["@claudia (BR)<br>DB NoSQL, Vetores & Grafos"]
-        CAROLI["@caroli (BR)<br>Agile Master (Lean Inception)"]
-        BARRETO_UP["@barreto (BR)<br>Threat Modeling & Cripto"]
+        MEIRA["@meira<br>Viabilidade & Inovação"]
+        GRACE["@grace<br>Product Manager & PRD"]
+        ALAN["@alan<br>User Journey & Navigation"]
+        NORMAN["@norman<br>UI/UX & Heurísticas"]
+        IERU["@ieru<br>Arquiteto de Software"]
+        CODD["@codd<br>DB Relacional (SQL)"]
+        CLAUDIA["@claudia<br>DB NoSQL & Vetores"]
+        CAROLI["@caroli<br>Agile Master (Lean Inception)"]
+        BARRETO_UP["@barreto<br>Threat Modeling & Cripto"]
     end
 
     subgraph DOWNSTREAM["FASE 2: DOWNSTREAM (Construção, Segurança & Validação)"]
         direction TB
         subgraph DEV_STACKS["Desenvolvimento por Stack"]
-            VALIM["@valim (BR)<br>Backend Elixir / Concorrência"]
-            BARBARA["@barbara (Mundial)<br>Backend Python & Go"]
-            SCOTT["@scott (Mundial)<br>Backend .NET / C#"]
-            RYAN["@ryan (Mundial)<br>Backend Node.js & TypeScript"]
-            JAMES["@james (Mundial)<br>Backend Java & Spring Boot"]
-            ADA["@ada (Mundial)<br>Frontend React/Tailwind/Flutter"]
+            VALIM["@valim<br>Backend Elixir & Concorrência"]
+            BARBARA["@barbara<br>Backend Python & Go"]
+            SCOTT["@scott<br>Backend .NET & C#"]
+            RYAN["@ryan<br>Backend Node.js & TypeScript"]
+            JAMES["@james<br>Backend Java & Spring Boot"]
+            ADA["@ada<br>Frontend React/Tailwind/Flutter"]
         end
 
         subgraph SECURITY_QUALITY["Segurança, Qualidade & SRE"]
-            BOB["@unclebob (Mundial)<br>Tech Lead & Selo do Cycle"]
-            ARANHA["@diego (BR)<br>AppSec, OWASP & Pentest"]
-            ANICHE["@aniche (BR)<br>QA de Automação & Testes E2E"]
-            EDITH["@edith (BR)<br>Contract Validator & Selo Final"]
-            DEMI["@demi (BR)<br>SRE, Infraestrutura & Redes"]
-            NELSON["@nelson (BR)<br>Prompt Engineer & AI Context"]
-            NINA["@nina (BR)<br>Gov, FinOps & Ética em IA"]
+            BOB["@unclebob<br>Tech Lead & Selo do Cycle"]
+            ARANHA["@diego<br>AppSec, OWASP & Pentest"]
+            ANICHE["@aniche<br>QA de Automação & Testes E2E"]
+            EDITH["@edith<br>Contract Validator & Selo Final"]
+            DEMI["@demi<br>SRE, Infraestrutura & Redes"]
+            NELSON["@nelson<br>Prompt Engineer & AI Context"]
+            NINA["@nina<br>Gov, FinOps & Ética em IA"]
         end
     end
 
@@ -66,41 +66,33 @@ flowchart TD
 
 ---
 
-## 3. Catálogo Oficial dos Especialistas
+## 3. Catálogo Oficial dos Agentes por Especialidade
 
-### A. Pioneiros Brasileiros de TI (12 Agentes)
-
-| Handle | Pioneiro Homenageado | Papel no Bombe Code | Fase / Etapa | Especialidade Técnica |
-| :--- | :--- | :--- | :--- | :--- |
-| **@meira** | **Silvio Meira** | Analista de Viabilidade & Inovação | UPSTREAM / `DISCUSS` | Fase Zero, viabilidade de negócio, fatiamento de mercado (CESAR/Porto Digital). |
-| **@ieru** | **Roberto Ierusalimschy** | Arquiteto de Software | UPSTREAM / `PLAN` | Arquitetura de sistemas, modularidade, design de linguagens e ADRs (Criador de Lua). |
-| **@barreto** | **Paulo Barreto** | Principal Security Architect & Cripto | UPSTREAM / `PLAN` | Threat Modeling (STRIDE), criptografia pós-quântica, JWT/OAuth2, proteção de dados sensíveis (Cocriador das curvas BLS/BN e cifra Whirlpool - ISO/IEC). |
-| **@claudia** | **Claudia Bauzer Medeiros** | Database Architect (NoSQL & Vetores) | UPSTREAM / `PLAN` | Schemas NoSQL, Redis, Vector Stores, grafos e dados científicos (ACM SIGMOD, SBC). |
-| **@caroli** | **Paulo Caroli** | Agile Master & Flow Architect | UPSTREAM / `PLAN` | Quebra de Épicos e `ai-stories` com critérios INVEST e DoR (Lean Inception). |
-| **@valim** | **José Valim** | Backend Lead (Elixir / Functional) | DOWNSTREAM / `EXECUTE` | Lógica concorrente, sistemas distribuídos, TDD estrito e core functional (Criador de Elixir). |
-| **@diego** | **Diego Aranha** | AppSec & Offensive Security Auditor | DOWNSTREAM / `EXECUTE` | Auditoria ofensiva de código, OWASP Top 10, caça a falhas de injeção, Pentest e blindagem contra CVEs (Pesquisador global de segurança de software e auditor de urnas). |
-| **@aniche** | **Maurício Aniche** | Test Architect & QA de Automação | DOWNSTREAM / `EXECUTE` | Arquitetura de testes, unit, integration e suites E2E reais sem mocks falsos (Adyen/TU Delft). |
-| **@demi** | **Demi Getschko** | SRE, Infraestrutura & Redes | DOWNSTREAM / `EXECUTE` | Docker, redes, deploy seguro, resiliência e alta disponibilidade (Pai da Internet no Brasil, Hall of Fame). |
-| **@nelson** | **Nelson Mattos** | Prompt Engineer & AI Context | UPSTREAM / `PLAN` | Engenharia de prompts e contextos com PDW 3.5 (Ex-VP de Engenharia Google e IBM Fellow). |
-| **@nina** | **Nina Silva** | Gov, FinOps & AI Ethics Auditor | DOWNSTREAM / `VALIDATE` | Auditoria de custos de tokens, compliance ético, integridade e governança (Top 100 ONU/MIPAD). |
-| **@edith** | **Edith Ranzini** | Contract Validator & QA Lead | DOWNSTREAM / `VALIDATE` | Auditoria PRD vs. Entregável, validação sem fakes e concessão do **Selo Final da ONDA** (Patinho Feio - USP). |
-
----
-
-### B. Referências Mundiais (10 Agentes)
-
-| Handle | Pioneiro Homenageado | Papel no Bombe Code | Fase / Etapa | Especialidade Técnica |
-| :--- | :--- | :--- | :--- | :--- |
-| **@grace** | **Grace Hopper** | Product Manager & Strategy Lead | UPSTREAM / `DISCUSS` | PRD estruturado, RICE, visão de produto e MVP Operacional (Pioneira dos compiladores). |
-| **@alan** | **Alan Cooper** | User Journey & Navigation Architect | UPSTREAM / `PLAN` | Mapeamento da jornada ponta a ponta, entry points, navegação e detecção de telas faltantes. |
-| **@norman** | **Don Norman** | UI/UX Designer & Design System | UPSTREAM / `PLAN` | Heurísticas de usabilidade, design emocional e especificações estruturais de telas. |
-| **@codd** | **Edgar F. Codd** | Database Architect (Relacional) | UPSTREAM / `PLAN` | Schemas relacionais (Postgres/MySQL/SQLite), normalização, integridade e índices. |
-| **@barbara** | **Barbara Liskov** | Senior Backend Developer (Python/Go) | DOWNSTREAM / `EXECUTE` | APIs em Python (FastAPI/Pydantic) e Go (Gin/Goroutines) com tipagem estrita (Princípio de Liskov). |
-| **@scott** | **Scott Guthrie** | Senior Backend Developer (.NET/C#) | DOWNSTREAM / `EXECUTE` | APIs em C# (.NET 8+, Minimal APIs, EF Core, DI Lifetimes) (Criador do ASP.NET). |
-| **@ryan** | **Ryan Dahl** | Senior Backend Developer (Node/TS) | DOWNSTREAM / `EXECUTE` | APIs assíncronas em TypeScript, Fastify, Express, Bun e Node.js (Criador do Node e Deno). |
-| **@james** | **James Gosling** | Senior Backend Developer (Java/Spring) | DOWNSTREAM / `EXECUTE` | APIs em Java 21+, Spring Boot 3.x, Virtual Threads e JPA (Pai da linguagem Java). |
-| **@ada** | **Ada Lovelace** | Frontend Engineer (Web/Mobile) | DOWNSTREAM / `EXECUTE` | Interface com Construction Integrada (React, Tailwind, Flutter) (1ª programadora da história). |
-| **@unclebob** | **Robert C. Martin** | Tech Lead & Architectural Reviewer | DOWNSTREAM / `EXECUTE` | Code review cirúrgico, Clean Code, SOLID e concessão do **Selo do Tech Lead** no Cycle. |
+| Handle | Agente | País | Papel Técnico | Etapa Primária | Escopo de Atuação |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **@turing** | Alan Turing | Reino Unido | Sovereign Orchestrator | Todas | Orquestração da ONDA, máquina de estados e fiscalização de gates. |
+| **@meira** | Silvio Meira | Brasil | Viabilidade & Inovação | `DISCUSS` | Validação de ideia, análise de mercado e fatiamento estratégico. |
+| **@grace** | Grace Hopper | Estados Unidos | Product Manager & PRD | `DISCUSS` | Escopo de produto, priorização RICE, personas e elaboração do PRD. |
+| **@alan** | Alan Cooper | Estados Unidos | User Journey Architect | `PLAN` | Mapeamento de entry points, fluxos de navegação e telas faltantes. |
+| **@norman** | Don Norman | Estados Unidos | UI/UX Designer | `PLAN` | Heurísticas de usabilidade, design emocional e especificações visuais. |
+| **@ieru** | Roberto Ierusalimschy | Brasil | Arquiteto de Software | `PLAN` | Arquitetura modular, hexagonal, contratos de API e ADRs. |
+| **@codd** | Edgar F. Codd | Reino Unido | Database Architect (SQL) | `PLAN` | Schemas relacionais, normalização de dados, índices e migrações. |
+| **@claudia** | Claudia Bauzer Medeiros | Brasil | Database Architect (NoSQL) | `PLAN` | Caching distribuído (Redis), vector stores e dados não-relacionais. |
+| **@barreto** | Paulo Barreto | Brasil | Security Architect & Cripto | `PLAN` | Threat Modeling (STRIDE), criptografia, JWT/OAuth2 e dados sensíveis. |
+| **@caroli** | Paulo Caroli | Brasil | Agile Master & Flow | `PLAN` | Lean Inception, quebra de épicos e stories verticais com DoR. |
+| **@nelson** | Nelson Mattos | Brasil | Prompt & AI Context | `PLAN` | Engenharia de prompts sob PDW 4.0 e grounding contextual. |
+| **@valim** | José Valim | Brasil | Backend Lead (Elixir) | `EXECUTE` | Lógica concorrente, TDD estrito e resiliência de processos. |
+| **@barbara** | Barbara Liskov | Estados Unidos | Backend Lead (Python/Go) | `EXECUTE` | APIs em FastAPI/Pydantic e Go/Gin com tipagem estrita. |
+| **@scott** | Scott Guthrie | Estados Unidos | Backend Lead (.NET/C#) | `EXECUTE` | APIs em ASP.NET Core 8+, Minimal APIs, C# e EF Core. |
+| **@ryan** | Ryan Dahl | Estados Unidos | Backend Lead (Node/TS) | `EXECUTE` | APIs assíncronas em Fastify, Express, Bun e TypeScript. |
+| **@james** | James Gosling | Canadá | Backend Lead (Java) | `EXECUTE` | APIs em Java 21+, Spring Boot 3 e Virtual Threads. |
+| **@ada** | Ada Lovelace | Reino Unido | Frontend Engineer | `EXECUTE` | Interfaces visuais (React/Tailwind/Flutter) conectadas à API real. |
+| **@unclebob** | Robert C. Martin | Estados Unidos | Tech Lead & Reviewer | `EXECUTE` | Code review cirúrgico, Clean Code, SOLID e Selo do Cycle. |
+| **@diego** | Diego Aranha | Brasil | AppSec & Offensive Auditor | `EXECUTE` | Auditoria OWASP Top 10, sanitização de inputs e pentest em rotas. |
+| **@aniche** | Maurício Aniche | Brasil | QA & Test Architect | `EXECUTE` | Pirâmide de testes, automação de integração e testes E2E reais. |
+| **@demi** | Demi Getschko | Brasil | SRE, Infra & Redes | `EXECUTE` | Dockerfiles, docker-compose, CI/CD, deploys e healthchecks. |
+| **@edith** | Edith Ranzini | Brasil | Contract Validator & QA | `VALIDATE` | Auditoria PRD vs. Entregável e Selo de Homologação Final da ONDA. |
+| **@nina** | Nina Silva | Brasil | Gov & FinOps Auditor | `VALIDATE` | Auditoria de custos de tokens, compliance e governança ética de IA. |
 
 ---
 

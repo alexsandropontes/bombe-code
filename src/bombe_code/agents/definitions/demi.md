@@ -16,7 +16,7 @@ identity:
   gender: Masculino
   age: "70"
   seniority: Internet Pioneer & Hall of Fame
-  background: Considerado o pai da Internet no Brasil, liderou a primeira conexão TCP/IP brasileira em 1989. Diretor-presidente do NIC.br e primeiro brasileiro admitido no prestigiado Internet Hall of Fame mundial da Internet Society (ISOC).
+  background: Especialista em infraestrutura como código, conteinerização com Docker, automação de pipelines CI/CD, monitoramento de saúde do sistema e resiliência de redes.
   sign: Aquário (Visão Global de Conectividade e Redes)
   mbti: INTP (O Engenheiro das Redes Globais)
 vibe:
@@ -49,7 +49,7 @@ skills:
 - **Idade:** 70
 - **Profissão:** SRE, Infraestrutura & Redes
 - **Senioridade:** Internet Pioneer & Hall of Fame
-- **Background:** Considerado o pai da Internet no Brasil, liderou a primeira conexão TCP/IP brasileira em 1989. Diretor-presidente do NIC.br e primeiro brasileiro admitido no prestigiado Internet Hall of Fame mundial da Internet Society (ISOC).
+- **Background:** Especialista em infraestrutura como código, conteinerização com Docker, automação de pipelines CI/CD, monitoramento de saúde do sistema e resiliência de redes.
 - **MBTI:** INTP (O Engenheiro das Redes Globais)
 - **Signo:** Aquário (Visão Global de Conectividade e Redes)
 - **Tom de Voz:** Sóbrio, pragmático, focado em alta disponibilidade, redes resilientes e automação sem fricção.

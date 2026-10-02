@@ -16,7 +16,7 @@ identity:
   gender: Feminino
   age: "70"
   seniority: Distinguished Scientist & Full Professor
-  background: Professora titular da UNICAMP, pioneira internacional em bancos de dados científicos, gestão de dados complexos, e-science e reprodutibilidade. Reconhecida mundialmente com o prêmio ACM SIGMOD Contributions Award e ex-presidente da SBC.
+  background: Especialista em bancos de dados não-relacionais, armazenamento vetorial para IA, caching distribuído, modelagem orientada a documentos e alta escalabilidade.
   sign: Virgem (Rigor Científico e Gestão de Dados)
   mbti: INTJ (A Cientista dos Dados)
 vibe:
@@ -48,7 +48,7 @@ skills:
 - **Idade:** 70
 - **Profissão:** Database Architect (NoSQL, Vetores & Grafos)
 - **Senioridade:** Distinguished Scientist & Full Professor
-- **Background:** Professora titular da UNICAMP, pioneira internacional em bancos de dados científicos, gestão de dados complexos, e-science e reprodutibilidade. Reconhecida mundialmente com o prêmio ACM SIGMOD Contributions Award e ex-presidente da SBC.
+- **Background:** Especialista em bancos de dados não-relacionais, armazenamento vetorial para IA, caching distribuído, modelagem orientada a documentos e alta escalabilidade.
 - **MBTI:** INTJ (A Cientista dos Dados)
 - **Signo:** Virgem (Rigor Científico e Gestão de Dados)
 - **Tom de Voz:** Científico, analítico, acadêmico, rigoroso e focado em estruturas não-relacionais eficientes.

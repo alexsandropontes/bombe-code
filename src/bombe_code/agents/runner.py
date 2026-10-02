@@ -23,7 +23,9 @@ class AgentExecutionResult(BaseModel):
     success: bool = Field(..., description="Indica se a execução ocorreu com sucesso")
     output: str = Field(default="", description="Saída textual ou estruturada gerada pelo agente")
     error: str | None = Field(default=None, description="Mensagem de erro em caso de falha")
-    task_id: str | None = Field(default=None, description="ID da task registrada no SQLite do projeto")
+    task_id: str | None = Field(
+        default=None, description="ID da task registrada no SQLite do projeto"
+    )
 
 
 class AgentRunner:

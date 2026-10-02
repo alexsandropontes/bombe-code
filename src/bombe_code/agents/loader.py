@@ -28,6 +28,58 @@ BRAZILIAN_HANDLES = {
     "nina",
 }
 
+COUNTRY_MAP = {
+    "turing": "Reino Unido",
+    "meira": "Brasil",
+    "grace": "Estados Unidos",
+    "alan": "Estados Unidos",
+    "norman": "Estados Unidos",
+    "ieru": "Brasil",
+    "codd": "Reino Unido",
+    "claudia": "Brasil",
+    "barreto": "Brasil",
+    "caroli": "Brasil",
+    "nelson": "Brasil",
+    "valim": "Brasil",
+    "barbara": "Estados Unidos",
+    "scott": "Estados Unidos",
+    "ryan": "Estados Unidos",
+    "james": "Canadá",
+    "ada": "Reino Unido",
+    "unclebob": "Estados Unidos",
+    "diego": "Brasil",
+    "aniche": "Brasil",
+    "demi": "Brasil",
+    "edith": "Brasil",
+    "nina": "Brasil",
+}
+
+HOMAGE_MAP = {
+    "turing": "Alan Turing - Pioneiro da computação teórica, inteligência artificial e máquina universal de estados (Reino Unido).",
+    "meira": "Silvio Meira - Pioneiro do ecossistema de software brasileiro, cofundador do CESAR e do Porto Digital (Brasil).",
+    "grace": "Grace Hopper - Pioneira da programação de computadores, inventora dos primeiros compiladores e precursora do COBOL (Estados Unidos).",
+    "alan": "Alan Cooper - Criador do Visual Basic, pioneiro do Goal-Directed Design e pai das Personas (Estados Unidos).",
+    "norman": "Don Norman - Cientista cognitivo, cofundador do Nielsen Norman Group e pioneiro do Design Centrado no Usuário (Estados Unidos).",
+    "ieru": "Roberto Ierusalimschy - Cientista da computação e professor da PUC-Rio, criador da linguagem de programação Lua (Brasil).",
+    "codd": "Edgar F. Codd - Cientista da computação na IBM, inventor do modelo relacional e das 12 regras de Codd (Reino Unido).",
+    "claudia": "Claudia Bauzer Medeiros - Professora titular da UNICAMP, pioneira em bancos de dados científicos e premiada pela ACM SIGMOD (Brasil).",
+    "barreto": "Paulo Barreto - Criptógrafo, coautor das curvas elípticas BLS e BN e da função hash Whirlpool (Brasil).",
+    "caroli": "Paulo Caroli - Criador do método Lean Inception e autoridade em facilitação ágil e fatiamento de MVP (Brasil).",
+    "nelson": "Nelson Mattos - Cientista da computação brasileiro, ex-VP de Engenharia do Google e ex-IBM Fellow em sistemas de informação e IA (Brasil).",
+    "valim": "José Valim - Criador da linguagem de programação Elixir sobre a BEAM e ex-membro do core team do Ruby on Rails (Brasil).",
+    "barbara": "Barbara Liskov - Cientista pioneira do MIT, criadora do Princípio de Substituição de Liskov e vencedora do Prêmio Turing (Estados Unidos).",
+    "scott": "Scott Guthrie - Criador original do ASP.NET e líder histórico do ecossistema .NET na Microsoft (Estados Unidos).",
+    "ryan": "Ryan Dahl - Criador do Node.js e do runtime Deno, pioneiro em I/O assíncrono em servidores (Estados Unidos).",
+    "james": "James Gosling - Criador e arquiteto original da linguagem de programação Java na Sun Microsystems (Canadá).",
+    "ada": "Ada Lovelace - Matemática britânica pioneira, reconhecida historicamente como a primeira programadora da computação (Reino Unido).",
+    "unclebob": "Robert C. Martin - Autor seminal de Clean Code e Clean Architecture e criador dos princípios SOLID (Estados Unidos).",
+    "diego": "Diego Aranha - Pesquisador brasileiro de segurança e criptografia aplicada, líder de auditorias públicas independentes (Brasil).",
+    "aniche": "Maurício Aniche - Cientista da computação brasileiro, autor do livro Effective Software Testing e líder técnico em testes (Brasil).",
+    "demi": "Demi Getschko - Pioneiro da Internet no Brasil, diretor-presidente do NIC.br e membro do Internet Hall of Fame (Brasil).",
+    "edith": "Edith Ranzini - Engenheira pioneira da USP, líder na engenharia do computador Patinho Feio (Brasil).",
+    "nina": "Nina Silva - Executiva de tecnologia e governança, cofundadora do Movimento Black Money e eleita Top 100 MIPAD pela ONU (Brasil).",
+}
+
 STAGE_MAP = {
     "turing": TuringStage.COMPLETED,
     "meira": TuringStage.DISCUSS,
@@ -191,12 +243,18 @@ def load_agent_from_file(file_path: Path) -> AgentDefinition | None:
 
         skills = fm.get("skills", [])
 
+        country = COUNTRY_MAP.get(
+            slug, "Brasil" if origin == AgentOrigin.BRAZIL else "Estados Unidos"
+        )
+        historical_homage = HOMAGE_MAP.get(slug, background)
+
         return AgentDefinition(
             handle=handle,
             name=name,
             role=role,
+            country=country,
             origin=origin,
-            historical_homage=background,
+            historical_homage=historical_homage,
             primary_stage=primary_stage,
             phase=phase,
             required_inputs=req_inputs,

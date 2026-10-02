@@ -125,3 +125,25 @@ def test_pdw_35_compliance_in_prompts():
         if not agent.is_universal:
             assert len(agent.required_inputs) > 0
             assert len(agent.expected_outputs) > 0
+
+
+def test_agent_countries_and_clean_prompts():
+    registry = AgentRegistry.default()
+    valid_countries = {"Brasil", "Estados Unidos", "Reino Unido", "Canadá"}
+
+    for agent in registry.list_all():
+        assert agent.country in valid_countries
+
+    # Verifica que o Arquiteto Geral @ieru não tem poluição de Lua no prompt de sistema
+    ieru = registry.get("@ieru")
+    assert ieru is not None
+    assert "Lua" not in ieru.system_prompt
+    assert "Arquiteto de Software" in ieru.role
+
+    # Nenhum prompt deve conter termos banidos ou histórias biográficas desnecessárias
+    forbidden_tokens = ["Patinho Feio", "Enigma", "Babbage", "COBOL", "mundial", "Mundial"]
+    for agent in registry.list_all():
+        for tok in forbidden_tokens:
+            assert tok not in agent.system_prompt, (
+                f"Token proibido '{tok}' encontrado no prompt de {agent.handle}"
+            )
