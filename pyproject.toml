@@ -12,6 +12,7 @@ dependencies = [
     "uvicorn>=0.30",
     "textual>=0.70",
     "typer>=0.12",
+    "pydantic-ai>=0.0.18",
 ]
 
 [project.optional-dependencies]
