@@ -11,6 +11,7 @@
 .qwen/
 .bombeconfig
 .bombe-workflow/
+.bombe-code/
 
 # Entrypoints / rules gerados pelo sync do framework
 CLAUDE.md
