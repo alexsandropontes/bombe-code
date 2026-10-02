@@ -36,7 +36,18 @@ def test_cli_project_config_and_detect(tmp_path: Path):
     assert "python" in result_config.output
 
 
-def test_cli_mode_rca_simplify_task_report(tmp_path: Path):
+def test_cli_mode_rca_simplify_task_report(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    from bombe_code.agents.runner import AgentExecutionResult, AgentRunner
+
+    def _mock_run(self, prompt: str, **kwargs):
+        return AgentExecutionResult(
+            agent_handle=self.agent.handle,
+            success=True,
+            output=f"Mocked output for {prompt[:20]}",
+        )
+
+    monkeypatch.setattr(AgentRunner, "run", _mock_run)
+
     # 1. Mode
     res_mode = runner.invoke(app, ["mode", "manual", "--project-dir", str(tmp_path)])
     assert res_mode.exit_code == 0
@@ -58,6 +69,7 @@ def test_cli_mode_rca_simplify_task_report(tmp_path: Path):
 
     # 4. Task
     res_task = runner.invoke(app, ["task", "Revisar segurança", "--project-dir", str(tmp_path)])
+
     assert res_task.exit_code == 0
     assert "Task executada" in res_task.output
 

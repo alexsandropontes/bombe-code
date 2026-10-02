@@ -51,11 +51,17 @@ class BombeClient:
             return resp.json()
 
     async def send_prompt(
-        self, session_id: str, text: str, model: str | None = None
+        self,
+        session_id: str,
+        text: str,
+        model: str | None = None,
+        stage: str | None = None,
     ) -> dict[str, Any]:
         payload: dict[str, Any] = {"text": text}
         if model:
             payload["model"] = model
+        if stage:
+            payload["stage"] = stage
         # A inferência de LLM (especialmente local ou raciocínio extenso) pode demorar minutos.
         # Usa timeout estendido para não abortar enquanto o stream de eventos está ativo.
         async with httpx.AsyncClient(
@@ -64,6 +70,25 @@ class BombeClient:
             resp = await client.post(f"/api/session/{session_id}/prompt", json=payload)
             resp.raise_for_status()
             return resp.json()
+
+    async def set_stage(self, session_id: str, stage: str) -> dict[str, Any]:
+        async with httpx.AsyncClient(
+            base_url=self.base_url, auth=self.auth, timeout=self.timeout
+        ) as client:
+            resp = await client.post(
+                f"/api/session/{session_id}/stage", json={"stage": stage}
+            )
+            resp.raise_for_status()
+            return resp.json()
+
+    async def get_stage(self, session_id: str) -> dict[str, Any]:
+        async with httpx.AsyncClient(
+            base_url=self.base_url, auth=self.auth, timeout=self.timeout
+        ) as client:
+            resp = await client.get(f"/api/session/{session_id}/stage")
+            resp.raise_for_status()
+            return resp.json()
+
 
     async def set_model(self, session_id: str, model: str) -> dict[str, Any]:
         async with httpx.AsyncClient(

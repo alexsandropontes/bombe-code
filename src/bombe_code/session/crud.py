@@ -7,9 +7,21 @@ from .models import Message, Part, Session
 
 
 def create_session(title: str = "", directory: str = "", **kwargs) -> Session:
+    if "stage" not in kwargs:
+        try:
+            from ..storage.project_db import ProjectDatabase
+
+            db = ProjectDatabase(directory or ".")
+            saved = db.load_wave_state()
+            if saved and saved.get("state"):
+                kwargs["stage"] = str(saved["state"]).upper()
+        except Exception:  # noqa: BLE001, S110
+            pass
+
     session = Session(title=title, directory=directory, **kwargs)
     SessionStore().save_session(session.model_dump())
     return session
+
 
 
 def save_session(session: Session) -> None:

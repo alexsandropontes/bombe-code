@@ -160,7 +160,9 @@ class PromptInput(Input):
         Binding("up", "history_prev", "Histórico Anterior", show=False),
         Binding("down", "history_next", "Histórico Próximo", show=False),
         Binding("tab", "complete", "Autocompletar", show=False),
+        Binding("shift+tab", "toggle_vibe_mode", "Alternar Modo VIBE/TDD", show=False),
     ]
+
 
     def __init__(self, project_dir: str = ".", **kwargs: Any) -> None:
         self.project_dir = os.path.abspath(project_dir)
@@ -245,8 +247,32 @@ class PromptInput(Input):
         if self._suggestion:
             self.value = self._suggestion
             self.cursor_position = len(self.value)
+            return
+
+        # Sem autocomplete aplicável: o Tab atua ciclando a etapa da ONDA exclusivamente no modo TDD
+        try:
+            app = self.app
+            # No modo VIBE, o Tab não cicla etapas (só existe VIBE, navegado via Shift+Tab)
+            if getattr(app, "mode", "TDD") == "VIBE":
+                return
+            if hasattr(app, "action_cycle_stage"):
+                app.action_cycle_stage()
+        except (AttributeError, RuntimeError):  # pragma: no cover
+            pass
+
+    def action_toggle_vibe_mode(self) -> None:
+        """Alterna entre Modo VIBE e Modo TDD via Shift+Tab."""
+        try:
+            app = self.app
+            if hasattr(app, "action_toggle_vibe_mode"):
+                app.action_toggle_vibe_mode()
+        except (AttributeError, RuntimeError):  # pragma: no cover
+            pass
+
+
 
     def action_history_prev(self) -> None:
+
         if not self.history:
             return
         if self._history_index == -1:

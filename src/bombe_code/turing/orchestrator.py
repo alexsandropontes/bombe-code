@@ -113,8 +113,30 @@ class WaveOrchestrator:
         wave_id: str,
         autonomy_mode: str = "AUTO",
         engineering_mode: str = "tdd-code",
+        force: bool = False,
     ) -> dict[str, Any]:
         """Inicializa formalmente uma nova ONDA, resetando checkpoints para a etapa DISCUSS."""
+        saved = self.db.load_wave_state()
+        if (
+            not force
+            and saved
+            and saved.get("state") not in (WaveState.COMPLETED.value, "COMPLETED")
+            and saved.get("wave_id") != wave_id
+        ):
+            current_wave = saved.get("wave_id", "atual")
+            current_stage = saved.get("state", "DISCUSS")
+            return {
+                "success": False,
+                "error": "wave_in_progress",
+                "current_wave": current_wave,
+                "current_stage": current_stage,
+                "message": (
+                    f"⚠️ A {current_wave} ainda está em andamento (etapa: {current_stage}) e possui pendências ativas. "
+                    f"Finalize-a com '/wave end' ou use '--force' ('/wave start {wave_id} --force') para sobrescrever e iniciar uma nova onda."
+                ),
+            }
+
+
         try:
             autonomy = AutonomyMode(autonomy_mode.upper())
         except ValueError:
@@ -124,6 +146,7 @@ class WaveOrchestrator:
             eng = EngineeringMode(engineering_mode.lower())
         except ValueError:
             eng = EngineeringMode.TDD_CODE
+
 
         self.state_machine = TuringStateMachine(
             wave_id=wave_id,

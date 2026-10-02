@@ -69,7 +69,8 @@ def _prepare_turn(
     abort,
     project_instructions: str | None,
 ):
-    system = build_system_prompt(session.agent or "build", project_instructions)
+    stage = getattr(session, "stage", "DISCUSS") or "DISCUSS"
+    system = build_system_prompt(session.agent or "build", project_instructions, stage=stage)
     disabled = permissions.disabled_tools() if permissions is not None else set()
     tools_meta = [
         {"id": t.id, "description": t.description, "schema": t.json_schema()}
@@ -78,6 +79,7 @@ def _prepare_turn(
     ctx = ToolContext(
         session_id=session.id,
         agent=session.agent or "build",
+        stage=stage,
         project_dir=session.directory,
         messages=messages,
         ask=ask,
@@ -85,6 +87,7 @@ def _prepare_turn(
         abort=abort,
     )
     return system, tools_meta, ctx
+
 
 
 def _handle_event(event, processor, recent_signatures, ask, ctx, registry) -> str | None:

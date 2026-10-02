@@ -22,12 +22,15 @@ class Session(BaseModel):
     parent_id: str | None = None
     title: str = ""
     directory: str = ""
+    stage: str = "VIBE"
     agent: str | None = None
+
     model: str | None = None
     tokens: int = 0
     cost: float = 0.0
     summary: str | None = None
     created_at: str = Field(default_factory=_now)
+
 
 
 class Message(BaseModel):

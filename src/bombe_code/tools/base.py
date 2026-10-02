@@ -38,12 +38,15 @@ class ToolContext:
     session_id: str = ""
     message_id: str = ""
     agent: str = "build"
+    stage: str = "VIBE"
     project_dir: str = ""
+
     messages: list = field(default_factory=list)
     ask: AskFn = field(default_factory=lambda: _default_ask)
     run_subtask: SubtaskFn = field(default_factory=lambda: _default_subtask)
     metadata: Callable[[], dict] = field(default_factory=lambda: dict)
     abort: Callable[[], bool] = field(default_factory=lambda: _default_abort)
+
 
 
 @dataclass

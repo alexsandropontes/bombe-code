@@ -24,11 +24,17 @@ def _session_or_404(session_id: str):
 class SessionBody(BaseModel):
     title: str = ""
     directory: str = ""
+    stage: str | None = None
 
 
 class PromptBody(BaseModel):
     text: str
     model: str | None = None
+    stage: str | None = None
+
+
+class StageBody(BaseModel):
+    stage: str
 
 
 class CompactBody(BaseModel):
@@ -41,6 +47,7 @@ class ModelBody(BaseModel):
 
 class AgentBody(BaseModel):
     agent: str
+
 
 
 class PermissionReplyBody(BaseModel):
@@ -61,7 +68,10 @@ def build_session_router(deps: ServerDeps) -> APIRouter:
     @router.post("/api/session")
     def create_session(body: SessionBody):
         directory = body.directory or deps.project_dir
-        session = crud.create_session(title=body.title, directory=directory)
+        kwargs = {}
+        if body.stage:
+            kwargs["stage"] = body.stage.upper()
+        session = crud.create_session(title=body.title, directory=directory, **kwargs)
         return session.model_dump()
 
     @router.get("/api/session")
@@ -83,9 +93,13 @@ def build_session_router(deps: ServerDeps) -> APIRouter:
         session = _session_or_404(session_id)
         if body.model:
             session.model = body.model
+        if body.stage:
+            session.stage = body.stage.upper()
+        if body.model or body.stage:
             crud.save_session(session)
 
         interrupt = deps.interrupts.setdefault(session_id, threading.Event())
+
         interrupt.clear()
         deps.running.add(session_id)
         deps.bus.publish({"type": "prompt.started", "session_id": session_id})
@@ -225,4 +239,34 @@ def build_session_router(deps: ServerDeps) -> APIRouter:
             "agent": session.agent,
         }
 
+    @router.get("/api/session/{session_id}/stage")
+    def get_stage(session_id: str):
+        return {"stage": _session_or_404(session_id).stage}
+
+    @router.post("/api/session/{session_id}/stage")
+    def set_stage(session_id: str, body: StageBody):
+        session = _session_or_404(session_id)
+        session.stage = body.stage.upper()
+        crud.save_session(session)
+        # Sincroniza também no banco de dados local do projeto (.bombe-code/state.db)
+        try:
+            from ...storage.project_db import ProjectDatabase
+
+            db = ProjectDatabase(session.directory or deps.project_dir)
+            saved = db.load_wave_state() or {}
+            wave_id = saved.get("wave_id", "ONDA-001")
+            autonomy = saved.get("autonomy_mode", "AUTO")
+            eng = saved.get("engineering_mode", "tdd-code")
+            db.save_wave_state(
+                wave_id=wave_id,
+                state=session.stage,
+                autonomy_mode=autonomy,
+                engineering_mode=eng,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("Falha ao sincronizar stage no state.db: %s", exc)
+
+        return session.model_dump()
+
     return router
+

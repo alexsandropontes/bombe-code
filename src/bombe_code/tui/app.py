@@ -63,7 +63,8 @@ class BombeTuiApp(App):
     """
 
     BINDINGS: ClassVar[list[Binding]] = [
-        Binding("tab", "cycle_stage", "Alternar Etapa", show=True),
+        Binding("shift+tab", "toggle_vibe_mode", "Alternar VIBE/TDD", show=True),
+        Binding("tab", "cycle_stage", "Alternar Etapa (TDD)", show=True),
         Binding("ctrl+c", "interrupt", "Interromper Turno", show=True),
         Binding("escape", "interrupt", "Interromper", show=False),
         Binding("ctrl+p", "command_palette", "Paleta de Comandos", show=True),
@@ -90,12 +91,36 @@ class BombeTuiApp(App):
         self.model_name = model or "padrão"
         self.agent_name = agent or "padrão"
         self.project_dir = project_dir
+        self.mode: str = "TDD"
         self.wave_station: str = "DISCUSS"
+        self._last_tdd_stage: str = "DISCUSS"
+        self._load_current_stage_from_db()
         self._current_assistant_widget: PartWidget | None = None
         self._current_assistant_text: str = ""
         self._thinking_widget: Static | None = None
         self._sse_task: asyncio.Task | None = None
         self._is_active_turn: bool = False
+
+    def _load_current_stage_from_db(self) -> None:
+        """Carrega a etapa atual da ONDA persistida no banco SQLite local (.bombe-code/state.db)."""
+        try:
+            from ..storage.project_db import ProjectDatabase
+
+            db = ProjectDatabase(self.project_dir)
+            saved = db.load_wave_state()
+            if saved and saved.get("state"):
+                raw_state = str(saved["state"]).upper()
+                if raw_state == "VIBE":
+                    self.mode = "VIBE"
+                    self.wave_station = "VIBE"
+                elif raw_state in self.WAVE_STAGES or raw_state == "COMPLETED":
+                    self.mode = "TDD"
+                    self.wave_station = raw_state
+                    if raw_state in self.WAVE_STAGES:
+                        self._last_tdd_stage = raw_state
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("Não foi possível carregar estado da onda no boot da TUI: %s", exc)
+
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
@@ -121,11 +146,130 @@ class BombeTuiApp(App):
         except NoMatches:
             pass
 
-    def action_cycle_stage(self) -> None:
-        """Alterna ciclicamente entre as 4 etapas da ONDA: Discuss, Plan, Execute, Validate."""
-        idx = (self.WAVE_STAGES.index(self.wave_station) + 1) % len(self.WAVE_STAGES)
-        self.wave_station = self.WAVE_STAGES[idx]
+    def action_toggle_vibe_mode(self) -> None:
+        """Alterna soberanamente entre Modo TDD e Modo VIBE via Shift+Tab."""
+        old_mode = self.mode
+        if self.mode == "VIBE":
+            self.mode = "TDD"
+            self.wave_station = self._last_tdd_stage or "DISCUSS"
+        else:
+            self._last_tdd_stage = self.wave_station if self.wave_station in self.WAVE_STAGES else "DISCUSS"
+            self.mode = "VIBE"
+            self.wave_station = "VIBE"
+
         self.update_status()
+
+        # 1. Persiste no banco SQLite local do projeto
+        try:
+            from ..storage.project_db import ProjectDatabase
+
+            db = ProjectDatabase(self.project_dir)
+            saved = db.load_wave_state() or {}
+            wave_id = saved.get("wave_id", "ONDA-001")
+            autonomy = saved.get("autonomy_mode", "AUTO")
+            eng = "vibe-code" if self.mode == "VIBE" else "tdd-code"
+            db.save_wave_state(
+                wave_id=wave_id,
+                state=self.wave_station,
+                autonomy_mode=autonomy,
+                engineering_mode=eng,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Falha ao salvar modo VIBE/TDD no SQLite: %s", exc)
+
+        # 2. Notifica o backend HTTP via API
+        if self.session_id:
+            asyncio.create_task(self._sync_stage_to_server(self.wave_station))
+
+        # 3. Notifica visualmente no chat
+        self._notify_mode_switch(old_mode, self.mode)
+
+    def action_cycle_stage(self) -> None:
+        """Alterna ciclicamente entre as 4 etapas da ONDA (apenas em modo TDD)."""
+        if self.mode == "VIBE":
+            # No modo VIBE não existem sub-etapas; o Tab não cicla
+            return
+
+        old_stage = self.wave_station
+        if self.wave_station in self.WAVE_STAGES:
+            idx = (self.WAVE_STAGES.index(self.wave_station) + 1) % len(self.WAVE_STAGES)
+            self.wave_station = self.WAVE_STAGES[idx]
+        else:
+            self.wave_station = self.WAVE_STAGES[0]
+
+        self._last_tdd_stage = self.wave_station
+        self.update_status()
+
+        # 1. Persiste no banco SQLite local do projeto
+        try:
+            from ..storage.project_db import ProjectDatabase
+
+            db = ProjectDatabase(self.project_dir)
+            saved = db.load_wave_state() or {}
+            wave_id = saved.get("wave_id", "ONDA-001")
+            autonomy = saved.get("autonomy_mode", "AUTO")
+            eng = saved.get("engineering_mode", "tdd-code")
+            db.save_wave_state(
+                wave_id=wave_id,
+                state=self.wave_station,
+                autonomy_mode=autonomy,
+                engineering_mode=eng,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Falha ao salvar wave_state no SQLite: %s", exc)
+
+        # 2. Notifica o backend HTTP via API
+        if self.session_id:
+            asyncio.create_task(self._sync_stage_to_server(self.wave_station))
+
+        # 3. Notifica visualmente o usuário no chat
+        self._notify_stage_switch(old_stage, self.wave_station)
+
+    async def _sync_stage_to_server(self, stage: str) -> None:
+        try:
+            await self.client.set_stage(self.session_id, stage)
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("Falha ao sincronizar stage com servidor: %s", exc)
+
+    def _notify_mode_switch(self, old_mode: str, new_mode: str) -> None:
+        try:
+            chat = self.query_one("#chat-view", ChatView)
+            if new_mode == "VIBE":
+                msg = (
+                    "\n🔥 [bold #ff0000]MODO VIBE ATIVADO (Shift+Tab):[/] "
+                    "[dim]Modo livre ativado. Sem amarras formais ou travas de etapa: a LLM atende suas ordens com agilidade total.[/dim]"
+                )
+            else:
+                msg = (
+                    f"\n🛡️ [{TOKENS['primary']} bold]MODO TDD ATIVADO (Shift+Tab):[/] "
+                    f"[dim]Retomando governança formal da ONDA na etapa [bold]{self.wave_station}[/bold]. Pressione Tab para alternar etapas.[/dim]"
+                )
+            chat.mount(Static(msg))
+            chat.scroll_end(animate=False)
+        except Exception:  # noqa: BLE001, S110
+            pass
+
+    def _notify_stage_switch(self, old_stage: str, new_stage: str) -> None:
+        stage_guides = {
+            "DISCUSS": "Concepção & Escopo — Escrita de código bloqueada; permitido briefings em docs/",
+            "PLAN": "Arquitetura & Stories — Escrita de código bloqueada; permitido docs/stories/",
+            "EXECUTE": "Construção TDD — Escrita totalmente liberada em src/, tests/ e docs/",
+            "VALIDATE": "Qualidade & E2E — Restrito a relatórios em docs/reports/ e testes",
+            "COMPLETED": "Onda Concluída — Pronto para nova onda em DISCUSS",
+        }
+        guide = stage_guides.get(new_stage, "")
+        try:
+            chat = self.query_one("#chat-view", ChatView)
+            msg = (
+                f"\n⚡ [{TOKENS['primary']} bold]Etapa alternada (Tab):[/] "
+                f"[{TOKENS['secondary']} bold]{old_stage}[/] ➔ [{TOKENS['accent']} bold]{new_stage}[/]\n"
+                f"[{TOKENS['text_muted']}]{guide}[/]"
+            )
+            chat.mount(Static(msg))
+            chat.scroll_end(animate=False)
+        except Exception:  # noqa: BLE001, S110
+            pass
+
 
     def action_cycle_station(self) -> None:
         self.action_cycle_stage()
@@ -133,10 +277,16 @@ class BombeTuiApp(App):
     def _status_text(self) -> str:
         s_id = self.session_id or "conectando..."
         state = "ativo" if self._is_active_turn else "ocioso"
+        if self.mode == "VIBE":
+            mode_badge = "[bold #ff0000]VIBE[/]"
+        else:
+            mode_badge = f"[{TOKENS['primary']} bold]TDD ({self.wave_station})[/]"
+
         return (
-            f"Etapa: [{TOKENS['primary']} bold]{self.wave_station}[/] | "
+            f"Modo: {mode_badge} | "
             f"Sessão: {s_id} | Modelo: {self.model_name} | Agente: {self.agent_name} | Status: {state}"
         )
+
 
     def update_status(self) -> None:
         try:
@@ -152,7 +302,12 @@ class BombeTuiApp(App):
                     title="TUI Session", directory=self.project_dir
                 )
                 self.session_id = session_data["id"]
+                if session_data.get("stage"):
+                    s_stage = str(session_data["stage"]).upper()
+                    if s_stage in self.WAVE_STAGES or s_stage == "COMPLETED":
+                        self.wave_station = s_stage
                 self.update_status()
+
                 try:
                     sidebar = self.query_one("#sidebar", Sidebar)
                     sidebar.session_id = self.session_id
@@ -243,7 +398,10 @@ class BombeTuiApp(App):
     async def _run_prompt_worker(self, text: str) -> None:
         try:
             model_to_send = self.model_name if self.model_name != "padrão" else None
-            await self.client.send_prompt(self.session_id, text, model=model_to_send)
+            await self.client.send_prompt(
+                self.session_id, text, model=model_to_send, stage=self.wave_station
+            )
+
         except (OSError, RuntimeError, httpx.HTTPError) as exc:
             chat = self.query_one("#chat-view", ChatView)
             if isinstance(exc, httpx.TimeoutException):

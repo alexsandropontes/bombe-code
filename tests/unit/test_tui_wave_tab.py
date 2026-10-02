@@ -7,9 +7,9 @@ from unittest.mock import MagicMock
 from bombe_code.tui.app import BombeTuiApp
 
 
-def test_tui_initial_wave_station_and_cycle():
+def test_tui_initial_wave_station_and_cycle(tmp_path):
     mock_client = MagicMock()
-    app = BombeTuiApp(client=mock_client)
+    app = BombeTuiApp(client=mock_client, project_dir=str(tmp_path))
 
     assert app.wave_station == "DISCUSS"
 
@@ -30,9 +30,10 @@ def test_tui_initial_wave_station_and_cycle():
     assert app.wave_station == "DISCUSS"
 
 
-def test_status_text_includes_wave_station():
+def test_status_text_includes_wave_station(tmp_path):
     mock_client = MagicMock()
-    app = BombeTuiApp(client=mock_client)
+    app = BombeTuiApp(client=mock_client, project_dir=str(tmp_path))
     app.wave_station = "EXECUTE"
     status = app._status_text()
     assert "EXECUTE" in status
+

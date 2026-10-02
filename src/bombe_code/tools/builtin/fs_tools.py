@@ -8,6 +8,7 @@ from pathlib import Path
 from pydantic import BaseModel
 
 from ...permissions.shell_scan import is_external
+from ...permissions.stage_guard import validate_stage_permission
 from ..base import ToolContext, ToolDef
 
 
@@ -68,6 +69,11 @@ def _write(args: dict, ctx: ToolContext) -> str:
     denied = _check_external(str(target), ctx)
     if denied:
         return denied
+    allowed, stage_reason = validate_stage_permission(
+        getattr(ctx, "stage", "DISCUSS"), "write", str(target), ctx.project_dir
+    )
+    if not allowed:
+        return stage_reason or "Erro: operacao bloqueada pelas regras da etapa atual"
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(args["content"], encoding="utf-8")
     from ...formatters.runner import format_code_file
@@ -81,8 +87,14 @@ def _edit(args: dict, ctx: ToolContext) -> str:
     denied = _check_external(str(target), ctx)
     if denied:
         return denied
+    allowed, stage_reason = validate_stage_permission(
+        getattr(ctx, "stage", "DISCUSS"), "edit", str(target), ctx.project_dir
+    )
+    if not allowed:
+        return stage_reason or "Erro: operacao bloqueada pelas regras da etapa atual"
     if not target.is_file():
         return f"Erro: arquivo nao encontrado: {target}"
+
     text = target.read_text(encoding="utf-8")
     old = args["old_string"]
     count = text.count(old)
@@ -201,8 +213,17 @@ def _apply_unified(lines: list[str], diff: str) -> list[str]:
 
 def _apply_patch(args: dict, ctx: ToolContext) -> str:
     target = Path(args["path"])
+    denied = _check_external(str(target), ctx)
+    if denied:
+        return denied
+    allowed, stage_reason = validate_stage_permission(
+        getattr(ctx, "stage", "DISCUSS"), "patch", str(target), ctx.project_dir
+    )
+    if not allowed:
+        return stage_reason or "Erro: operacao bloqueada pelas regras da etapa atual"
     if not target.is_file():
         return f"Erro: arquivo nao encontrado: {target}"
+
     lines = target.read_text(encoding="utf-8").splitlines()
     try:
         updated = _apply_unified(lines, args["diff"])

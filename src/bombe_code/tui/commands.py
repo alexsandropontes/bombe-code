@@ -760,12 +760,40 @@ async def handle_slash_command(app: BombeTuiApp, raw_text: str) -> bool:
             return True
 
         if subcmd == "start":
-            wave_id = subarg or "ONDA-004"
-            res = orch.start_wave(wave_id)
-            await chat.mount(
-                Static(f"[{TOKENS['success']}]✓ {res['message']}[/{TOKENS['success']}]")
-            )
+            tokens = [p for p in subparts[1:] if p.strip()]
+            force = "--force" in tokens
+            clean_tokens = [t for t in tokens if t != "--force"]
+
+            autonomy = "AUTO"
+            wave_id = "ONDA-004"
+            for t in clean_tokens:
+                t_lower = t.lower()
+                if t_lower in ("auto", "semi", "semi-auto", "semi_auto", "manual"):
+                    autonomy = "SEMI_AUTO" if "semi" in t_lower else t_lower.upper()
+                elif t.upper().startswith("ONDA-") or not wave_id:
+                    wave_id = t.upper()
+                else:
+                    wave_id = t
+
+            res = orch.start_wave(wave_id=wave_id, autonomy_mode=autonomy, force=force)
+            if res.get("success"):
+                app.mode = "TDD"
+                app.wave_station = "DISCUSS"
+                app.update_status()
+                await chat.mount(
+                    Static(
+                        f"[{TOKENS['success']} bold]✓ {res['message']}[/{TOKENS['success']} bold]\n"
+                        f"[dim]Modo de autonomia: {autonomy} | Etapa inicial: DISCUSS (Pressione Tab para navegar etapas ou Shift+Tab para VIBE)[/dim]"
+                    )
+                )
+            else:
+                await chat.mount(
+                    Static(
+                        f"[{TOKENS['warning']} bold]{res.get('message', 'Erro ao iniciar onda')}[/{TOKENS['warning']} bold]"
+                    )
+                )
             return True
+
 
         if subcmd == "discuss":
             topic = subarg or "Evolução do Sistema"
