@@ -2,7 +2,6 @@
 TDD Estrito: RED -> GREEN -> REFACTOR.
 """
 
-
 from bombe_code.agents.models import AgentDefinition, AgentOrigin
 from bombe_code.agents.registry import AgentRegistry
 from bombe_code.turing.state_machine import TuringStage

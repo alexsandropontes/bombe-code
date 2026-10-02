@@ -10,7 +10,9 @@ pytestmark = pytest.mark.integration
 
 
 def test_desktop_app_window_spec():
-    app = DesktopApp(url="http://127.0.0.1:4096", title="Bombe Code Desktop", width=1280, height=800)
+    app = DesktopApp(
+        url="http://127.0.0.1:4096", title="Bombe Code Desktop", width=1280, height=800
+    )
     spec = app.get_window_spec()
 
     assert spec["url"] == "http://127.0.0.1:4096"
@@ -32,4 +34,5 @@ def test_desktop_app_headless_detection(monkeypatch: pytest.MonkeyPatch):
 
 def sys_is_darwin():
     import sys
+
     return sys.platform == "darwin"

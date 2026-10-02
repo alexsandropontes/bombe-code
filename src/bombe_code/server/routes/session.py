@@ -97,7 +97,9 @@ def build_session_router(deps: ServerDeps) -> APIRouter:
 
                     adapter = resolve_provider_adapter(model_to_use)
                 except (RuntimeError, ValueError, OSError, KeyError) as exc:
-                    logger.warning("Falha ao resolver adaptador para %s: %s; usando padrão", model_to_use, exc)
+                    logger.warning(
+                        "Falha ao resolver adaptador para %s: %s; usando padrão", model_to_use, exc
+                    )
                     adapter = deps.adapter
             else:
                 adapter = deps.adapter
@@ -108,16 +110,12 @@ def build_session_router(deps: ServerDeps) -> APIRouter:
                 adapter=adapter,
                 registry=deps.registry,
                 permissions=ask,
-                on_event=lambda event: deps.bus.publish(
-                    {**event, "session_id": session_id}
-                ),
+                on_event=lambda event: deps.bus.publish({**event, "session_id": session_id}),
                 abort=interrupt.is_set,
             )
         finally:
             deps.running.discard(session_id)
-        deps.bus.publish(
-            {"type": "prompt.finished", "session_id": session_id, "text": text}
-        )
+        deps.bus.publish({"type": "prompt.finished", "session_id": session_id, "text": text})
         return {"status": "completed", "text": text}
 
     @router.post("/api/session/{session_id}/wait")

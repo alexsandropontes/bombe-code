@@ -82,7 +82,10 @@ def _skill(args: dict, ctx: ToolContext) -> str:
 
 
 INVALID_TOOL = ToolDef(
-    id="invalid", description="Retorna feedback de tool call invalida", parameters=InvalidArgs, execute=_invalid
+    id="invalid",
+    description="Retorna feedback de tool call invalida",
+    parameters=InvalidArgs,
+    execute=_invalid,
 )
 QUESTION_TOOL = ToolDef(
     id="question", description="Faz pergunta ao usuario", parameters=QuestionArgs, execute=_question
@@ -91,8 +94,14 @@ TASK_TOOL = ToolDef(
     id="task", description="Delega para subtask/subagente", parameters=TaskArgs, execute=_task
 )
 TODOWRITE_TOOL = ToolDef(
-    id="todowrite", description="Persiste lista de todos", parameters=TodowriteArgs, execute=_todowrite
+    id="todowrite",
+    description="Persiste lista de todos",
+    parameters=TodowriteArgs,
+    execute=_todowrite,
 )
 SKILL_TOOL = ToolDef(
-    id="skill", description="Carrega skill markdown do projeto", parameters=SkillArgs, execute=_skill
+    id="skill",
+    description="Carrega skill markdown do projeto",
+    parameters=SkillArgs,
+    execute=_skill,
 )

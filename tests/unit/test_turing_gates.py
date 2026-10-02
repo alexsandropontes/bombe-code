@@ -15,7 +15,10 @@ from bombe_code.turing.gates import (
 
 def test_template_gate_passes_when_file_and_sections_present(tmp_path: Path):
     doc = tmp_path / "PRD.md"
-    doc.write_text("# PRD\n\n## 1. Visão Geral\nConteúdo substantivo do projeto.\n\n## 2. Requisitos\nLista de regras.", encoding="utf-8")
+    doc.write_text(
+        "# PRD\n\n## 1. Visão Geral\nConteúdo substantivo do projeto.\n\n## 2. Requisitos\nLista de regras.",
+        encoding="utf-8",
+    )
 
     gate = TemplateGate()
     eval_res = gate.evaluate(
@@ -58,7 +61,9 @@ def test_template_gate_fails_when_section_missing(tmp_path: Path):
 
 def test_seal_gate_tech_lead_approval():
     gate = SealGate()
-    content_approved = "# Story ST-001\n\nImplementação feita.\n\n[SELO TECH LEAD: APROVADO]\nData: 2026-10-01"
+    content_approved = (
+        "# Story ST-001\n\nImplementação feita.\n\n[SELO TECH LEAD: APROVADO]\nData: 2026-10-01"
+    )
     eval_res = gate.evaluate(content_approved, SealType.TECH_LEAD)
 
     assert eval_res.status == GateStatus.APPROVED

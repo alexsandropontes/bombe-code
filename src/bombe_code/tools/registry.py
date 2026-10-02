@@ -32,9 +32,7 @@ class ToolRegistry:
     def list(self) -> list[ToolDef]:
         return list(self._tools.values())
 
-    def tools_for_model(
-        self, model: str, disabled: Collection[str] = ()
-    ) -> list[ToolDef]:
+    def tools_for_model(self, model: str, disabled: Collection[str] = ()) -> list[ToolDef]:
         blocked = set(disabled)
         tools = [t for t in self._tools.values() if t.id not in blocked]
         if "gpt" in model.lower():

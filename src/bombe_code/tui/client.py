@@ -16,7 +16,9 @@ class BombeClient:
         self.timeout = timeout
 
     async def get_health(self) -> dict[str, Any]:
-        async with httpx.AsyncClient(base_url=self.base_url, auth=self.auth, timeout=self.timeout) as client:
+        async with httpx.AsyncClient(
+            base_url=self.base_url, auth=self.auth, timeout=self.timeout
+        ) as client:
             resp = await client.get("/api/health")
             resp.raise_for_status()
             return resp.json()
@@ -25,19 +27,25 @@ class BombeClient:
         payload: dict[str, Any] = {"title": title}
         if directory:
             payload["directory"] = directory
-        async with httpx.AsyncClient(base_url=self.base_url, auth=self.auth, timeout=self.timeout) as client:
+        async with httpx.AsyncClient(
+            base_url=self.base_url, auth=self.auth, timeout=self.timeout
+        ) as client:
             resp = await client.post("/api/session", json=payload)
             resp.raise_for_status()
             return resp.json()
 
     async def list_sessions(self) -> list[dict[str, Any]]:
-        async with httpx.AsyncClient(base_url=self.base_url, auth=self.auth, timeout=self.timeout) as client:
+        async with httpx.AsyncClient(
+            base_url=self.base_url, auth=self.auth, timeout=self.timeout
+        ) as client:
             resp = await client.get("/api/session")
             resp.raise_for_status()
             return resp.json()
 
     async def get_history(self, session_id: str) -> list[dict[str, Any]]:
-        async with httpx.AsyncClient(base_url=self.base_url, auth=self.auth, timeout=self.timeout) as client:
+        async with httpx.AsyncClient(
+            base_url=self.base_url, auth=self.auth, timeout=self.timeout
+        ) as client:
             resp = await client.get(f"/api/session/{session_id}/history")
             resp.raise_for_status()
             return resp.json()
@@ -50,37 +58,51 @@ class BombeClient:
             payload["model"] = model
         # A inferência de LLM (especialmente local ou raciocínio extenso) pode demorar minutos.
         # Usa timeout estendido para não abortar enquanto o stream de eventos está ativo.
-        async with httpx.AsyncClient(base_url=self.base_url, auth=self.auth, timeout=600.0) as client:
+        async with httpx.AsyncClient(
+            base_url=self.base_url, auth=self.auth, timeout=600.0
+        ) as client:
             resp = await client.post(f"/api/session/{session_id}/prompt", json=payload)
             resp.raise_for_status()
             return resp.json()
 
     async def set_model(self, session_id: str, model: str) -> dict[str, Any]:
-        async with httpx.AsyncClient(base_url=self.base_url, auth=self.auth, timeout=self.timeout) as client:
+        async with httpx.AsyncClient(
+            base_url=self.base_url, auth=self.auth, timeout=self.timeout
+        ) as client:
             resp = await client.post(f"/api/session/{session_id}/model", json={"model": model})
             resp.raise_for_status()
             return resp.json()
 
     async def get_model(self, session_id: str) -> dict[str, Any]:
-        async with httpx.AsyncClient(base_url=self.base_url, auth=self.auth, timeout=self.timeout) as client:
+        async with httpx.AsyncClient(
+            base_url=self.base_url, auth=self.auth, timeout=self.timeout
+        ) as client:
             resp = await client.get(f"/api/session/{session_id}/model")
             resp.raise_for_status()
             return resp.json()
 
     async def send_compact(self, session_id: str, summary: str = "") -> dict[str, Any]:
-        async with httpx.AsyncClient(base_url=self.base_url, auth=self.auth, timeout=self.timeout) as client:
-            resp = await client.post(f"/api/session/{session_id}/compact", json={"summary": summary})
+        async with httpx.AsyncClient(
+            base_url=self.base_url, auth=self.auth, timeout=self.timeout
+        ) as client:
+            resp = await client.post(
+                f"/api/session/{session_id}/compact", json={"summary": summary}
+            )
             resp.raise_for_status()
             return resp.json()
 
     async def send_revert(self, session_id: str, message_id: str) -> dict[str, Any]:
-        async with httpx.AsyncClient(base_url=self.base_url, auth=self.auth, timeout=self.timeout) as client:
+        async with httpx.AsyncClient(
+            base_url=self.base_url, auth=self.auth, timeout=self.timeout
+        ) as client:
             resp = await client.post(f"/api/session/{session_id}/revert/{message_id}")
             resp.raise_for_status()
             return resp.json()
 
     async def interrupt(self, session_id: str) -> dict[str, Any]:
-        async with httpx.AsyncClient(base_url=self.base_url, auth=self.auth, timeout=self.timeout) as client:
+        async with httpx.AsyncClient(
+            base_url=self.base_url, auth=self.auth, timeout=self.timeout
+        ) as client:
             resp = await client.post(f"/api/session/{session_id}/interrupt")
             resp.raise_for_status()
             return resp.json()
@@ -88,7 +110,9 @@ class BombeClient:
     async def reply_permission(
         self, session_id: str, permission: str, details: str, decision: str
     ) -> dict[str, Any]:
-        async with httpx.AsyncClient(base_url=self.base_url, auth=self.auth, timeout=self.timeout) as client:
+        async with httpx.AsyncClient(
+            base_url=self.base_url, auth=self.auth, timeout=self.timeout
+        ) as client:
             resp = await client.post(
                 f"/api/session/{session_id}/permission/reply",
                 json={"permission": permission, "details": details, "decision": decision},
@@ -97,7 +121,9 @@ class BombeClient:
             return resp.json()
 
     async def reply_question(self, session_id: str, question: str, answer: str) -> dict[str, Any]:
-        async with httpx.AsyncClient(base_url=self.base_url, auth=self.auth, timeout=self.timeout) as client:
+        async with httpx.AsyncClient(
+            base_url=self.base_url, auth=self.auth, timeout=self.timeout
+        ) as client:
             resp = await client.post(
                 f"/api/session/{session_id}/question/reply",
                 json={"question": question, "answer": answer},
@@ -115,7 +141,9 @@ class BombeClient:
         async with (
             httpx.AsyncClient(base_url=self.base_url, auth=self.auth, timeout=None) as client,
             client.stream(
-                "GET", f"/api/session/{session_id}/event?last_event_id={last_event_id}", headers=headers
+                "GET",
+                f"/api/session/{session_id}/event?last_event_id={last_event_id}",
+                headers=headers,
             ) as response,
         ):
             response.raise_for_status()

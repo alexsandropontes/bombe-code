@@ -86,9 +86,7 @@ def test_storage_cria_e_recupera_sessao_com_mensagens(tmp_path: Path):
 
     # Act
     session = store.create_session(title="sessao teste", directory=str(tmp_path))
-    store.save_message(
-        session["id"], {"id": "msg_1", "role": "user", "session_id": session["id"]}
-    )
+    store.save_message(session["id"], {"id": "msg_1", "role": "user", "session_id": session["id"]})
     store.save_part(
         session["id"],
         {"id": "prt_1", "message_id": "msg_1", "type": "text", "text": "ola"},

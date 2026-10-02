@@ -44,34 +44,49 @@ def format_code_file(file_path: str | Path, cwd: str = ".") -> bool:
         if formatter == "ruff":
             # Tenta ruff direto ou via uv
             if shutil.which("ruff"):
-                res = subprocess.run(["ruff", "format", resolved_file], cwd=cwd, capture_output=True, check=False)
+                res = subprocess.run(
+                    ["ruff", "format", resolved_file], cwd=cwd, capture_output=True, check=False
+                )
                 return res.returncode == 0
             if shutil.which("uv"):
                 res = subprocess.run(
-                    ["uv", "run", "ruff", "format", resolved_file], cwd=cwd, capture_output=True, check=False
+                    ["uv", "run", "ruff", "format", resolved_file],
+                    cwd=cwd,
+                    capture_output=True,
+                    check=False,
                 )
                 return res.returncode == 0
 
         elif formatter == "prettier":
             if shutil.which("prettier"):
                 res = subprocess.run(
-                    ["prettier", "--write", resolved_file], cwd=cwd, capture_output=True, check=False
+                    ["prettier", "--write", resolved_file],
+                    cwd=cwd,
+                    capture_output=True,
+                    check=False,
                 )
                 return res.returncode == 0
             if shutil.which("npx"):
                 res = subprocess.run(
-                    ["npx", "prettier", "--write", resolved_file], cwd=cwd, capture_output=True, check=False
+                    ["npx", "prettier", "--write", resolved_file],
+                    cwd=cwd,
+                    capture_output=True,
+                    check=False,
                 )
                 return res.returncode == 0
 
         elif formatter == "gofmt":
             if shutil.which("gofmt"):
-                res = subprocess.run(["gofmt", "-w", resolved_file], cwd=cwd, capture_output=True, check=False)
+                res = subprocess.run(
+                    ["gofmt", "-w", resolved_file], cwd=cwd, capture_output=True, check=False
+                )
                 return res.returncode == 0
 
         elif formatter == "rustfmt":
             if shutil.which("rustfmt"):
-                res = subprocess.run(["rustfmt", resolved_file], cwd=cwd, capture_output=True, check=False)
+                res = subprocess.run(
+                    ["rustfmt", resolved_file], cwd=cwd, capture_output=True, check=False
+                )
                 return res.returncode == 0
 
     except (OSError, subprocess.SubprocessError):

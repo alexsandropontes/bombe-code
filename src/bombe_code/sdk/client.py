@@ -25,19 +25,25 @@ class BombeSDK:
         self.timeout = timeout
 
     async def create_session(self, title: str = "") -> SessionModel:
-        async with httpx.AsyncClient(base_url=self.base_url, auth=self.auth, timeout=self.timeout) as client:
+        async with httpx.AsyncClient(
+            base_url=self.base_url, auth=self.auth, timeout=self.timeout
+        ) as client:
             resp = await client.post("/api/session", json={"title": title})
             resp.raise_for_status()
             return SessionModel.model_validate(resp.json())
 
     async def list_sessions(self) -> list[SessionModel]:
-        async with httpx.AsyncClient(base_url=self.base_url, auth=self.auth, timeout=self.timeout) as client:
+        async with httpx.AsyncClient(
+            base_url=self.base_url, auth=self.auth, timeout=self.timeout
+        ) as client:
             resp = await client.get("/api/session")
             resp.raise_for_status()
             return [SessionModel.model_validate(s) for s in resp.json()]
 
     async def send_prompt(self, session_id: str, text: str) -> PromptResult:
-        async with httpx.AsyncClient(base_url=self.base_url, auth=self.auth, timeout=self.timeout) as client:
+        async with httpx.AsyncClient(
+            base_url=self.base_url, auth=self.auth, timeout=self.timeout
+        ) as client:
             resp = await client.post(f"/api/session/{session_id}/prompt", json={"text": text})
             resp.raise_for_status()
             return PromptResult.model_validate(resp.json())
@@ -52,7 +58,9 @@ class BombeSDK:
         async with (
             httpx.AsyncClient(base_url=self.base_url, auth=self.auth, timeout=None) as client,
             client.stream(
-                "GET", f"/api/session/{session_id}/event?last_event_id={last_event_id}", headers=headers
+                "GET",
+                f"/api/session/{session_id}/event?last_event_id={last_event_id}",
+                headers=headers,
             ) as response,
         ):
             response.raise_for_status()

@@ -144,15 +144,15 @@ class PromptInput(Input):
     DEFAULT_CSS = f"""
     PromptInput {{
         dock: bottom;
-        background: {TOKENS['surface']};
-        color: {TOKENS['text']};
-        border: tall {TOKENS['primary']};
+        background: {TOKENS["surface"]};
+        color: {TOKENS["text"]};
+        border: tall {TOKENS["primary"]};
         padding: 0 1;
         margin: 1;
         height: 3;
     }}
     PromptInput:focus {{
-        border: tall {TOKENS['secondary']};
+        border: tall {TOKENS["secondary"]};
     }}
     """
 

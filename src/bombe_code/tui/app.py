@@ -34,15 +34,15 @@ class BombeTuiApp(App):
 
     CSS = f"""
     Screen {{
-        background: {TOKENS['bg']};
-        color: {TOKENS['text']};
+        background: {TOKENS["bg"]};
+        color: {TOKENS["text"]};
     }}
 
     #status-bar {{
         dock: top;
         height: 1;
-        background: {TOKENS['surface_alt']};
-        color: {TOKENS['text_muted']};
+        background: {TOKENS["surface_alt"]};
+        color: {TOKENS["text_muted"]};
         padding: 0 1;
     }}
 
@@ -148,19 +148,25 @@ class BombeTuiApp(App):
     async def on_mount(self) -> None:
         if not self.session_id:
             try:
-                session_data = await self.client.create_session(title="TUI Session", directory=self.project_dir)
+                session_data = await self.client.create_session(
+                    title="TUI Session", directory=self.project_dir
+                )
                 self.session_id = session_data["id"]
                 self.update_status()
                 try:
                     sidebar = self.query_one("#sidebar", Sidebar)
                     sidebar.session_id = self.session_id
-                    sidebar.update_metrics(title=session_data.get("title"), directory=self.project_dir)
+                    sidebar.update_metrics(
+                        title=session_data.get("title"), directory=self.project_dir
+                    )
                 except NoMatches:
                     pass
             except (OSError, RuntimeError) as exc:
                 chat = self.query_one("#chat-view", ChatView)
                 await chat.mount(
-                    Static(f"[{TOKENS['error']}]Erro ao conectar ao servidor: {exc}[/{TOKENS['error']}]")
+                    Static(
+                        f"[{TOKENS['error']}]Erro ao conectar ao servidor: {exc}[/{TOKENS['error']}]"
+                    )
                 )
                 return
 
@@ -183,7 +189,11 @@ class BombeTuiApp(App):
             history = await self.client.get_history(self.session_id)
             for msg in history:
                 role = msg.get("role", "user")
-                prefix = f"[{TOKENS['primary']} bold]Você:[/{TOKENS['primary']} bold]\n" if role == "user" else f"[{TOKENS['secondary']} bold]Agente:[/{TOKENS['secondary']} bold]\n"
+                prefix = (
+                    f"[{TOKENS['primary']} bold]Você:[/{TOKENS['primary']} bold]\n"
+                    if role == "user"
+                    else f"[{TOKENS['secondary']} bold]Agente:[/{TOKENS['secondary']} bold]\n"
+                )
                 await chat.mount(Static(prefix))
                 for part in msg.get("parts", []):
                     await chat.mount(PartWidget(part))
@@ -220,7 +230,9 @@ class BombeTuiApp(App):
                 )
             return
 
-        await chat.mount(Static(f"\n[{TOKENS['primary']} bold]Você:[/{TOKENS['primary']} bold] {text}"))
+        await chat.mount(
+            Static(f"\n[{TOKENS['primary']} bold]Você:[/{TOKENS['primary']} bold] {text}")
+        )
         self._is_active_turn = True
         self.update_status()
 
@@ -238,7 +250,9 @@ class BombeTuiApp(App):
                 err_msg = f"Tempo limite de resposta esgotado ({type(exc).__name__}). O modelo pode estar sobrecarregado ou gerando uma resposta longa."
             else:
                 err_msg = str(exc).strip() or type(exc).__name__
-            await chat.mount(Static(f"[{TOKENS['error']}]Erro ao enviar prompt: {err_msg}[/{TOKENS['error']}]"))
+            await chat.mount(
+                Static(f"[{TOKENS['error']}]Erro ao enviar prompt: {err_msg}[/{TOKENS['error']}]")
+            )
         finally:
             self._is_active_turn = False
             self.update_status()
@@ -249,7 +263,9 @@ class BombeTuiApp(App):
         last_id = 0
         while True:
             try:
-                async for event in self.client.stream_events(self.session_id, last_event_id=last_id):
+                async for event in self.client.stream_events(
+                    self.session_id, last_event_id=last_id
+                ):
                     ev_id = event.get("_event_id")
                     if ev_id:
                         last_id = ev_id
@@ -272,7 +288,9 @@ class BombeTuiApp(App):
                 await self._thinking_widget.remove()
                 self._thinking_widget = None
             self.update_status()
-            await chat.mount(Static(f"\n[{TOKENS['secondary']} bold]Agente:[/{TOKENS['secondary']} bold]"))
+            await chat.mount(
+                Static(f"\n[{TOKENS['secondary']} bold]Agente:[/{TOKENS['secondary']} bold]")
+            )
             self._thinking_widget = Static(
                 f"[{TOKENS['text_muted']} italic]⏳ Processando contexto e aguardando tokens do modelo...[/{TOKENS['text_muted']} italic]"
             )
@@ -285,7 +303,9 @@ class BombeTuiApp(App):
             delta = event.get("text", "")
             self._current_assistant_text += delta
             if self._current_assistant_widget is None:
-                self._current_assistant_widget = PartWidget({"type": "text", "text": self._current_assistant_text})
+                self._current_assistant_widget = PartWidget(
+                    {"type": "text", "text": self._current_assistant_text}
+                )
                 await chat.mount(self._current_assistant_widget)
             else:
                 self._current_assistant_widget.update_text(self._current_assistant_text)
@@ -364,7 +384,11 @@ class BombeTuiApp(App):
             try:
                 await self.client.interrupt(self.session_id)
                 chat = self.query_one("#chat-view", ChatView)
-                await chat.mount(Static(f"[{TOKENS['warning']}]Turno interrompido pelo usuário.[/{TOKENS['warning']}]"))
+                await chat.mount(
+                    Static(
+                        f"[{TOKENS['warning']}]Turno interrompido pelo usuário.[/{TOKENS['warning']}]"
+                    )
+                )
             except (OSError, RuntimeError) as exc:
                 logger.warning("Erro ao interromper turno: %s", exc)
             finally:
@@ -373,6 +397,7 @@ class BombeTuiApp(App):
 
     def action_command_palette(self) -> None:
         """Abre a paleta de comandos modal."""
+
         def _on_command(cmd: str | None) -> None:
             if not cmd:
                 return
@@ -411,8 +436,5 @@ class BombeTuiApp(App):
             return
 
         panel = format_error_panel(self._exception, err_file)
-        self._exit_renderables.append(
-            Segments(self.console.render(panel, self.console.options))
-        )
+        self._exit_renderables.append(Segments(self.console.render(panel, self.console.options)))
         self._close_messages_no_wait()
-

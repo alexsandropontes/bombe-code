@@ -38,7 +38,9 @@ def _check_basic_auth(authorization: str | None, password: str) -> None:
 
 
 def create_app(adapter, permissions=None, project_dir: str = ".") -> FastAPI:
-    app = FastAPI(title="bombe-code", version="0.1.0", docs_url=None, redoc_url=None, openapi_url=None)
+    app = FastAPI(
+        title="bombe-code", version="0.1.0", docs_url=None, redoc_url=None, openapi_url=None
+    )
     app.add_middleware(
         CORSMiddleware,
         allow_origin_regex=r"^http://(127\.0\.0\.1|localhost)(:\d+)?$",

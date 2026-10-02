@@ -15,7 +15,8 @@ pytestmark = pytest.mark.integration
 def test_mcp_stdio_client_and_tools_registration(tmp_path: Path):
     # Cria um servidor MCP stdio fake em python usando stdin/stdout JSON-RPC
     server_script = tmp_path / "mock_mcp_server.py"
-    server_script.write_text("""
+    server_script.write_text(
+        """
 import sys, json
 
 for line in sys.stdin:
@@ -42,7 +43,9 @@ for line in sys.stdin:
         res = {"jsonrpc": "2.0", "id": msg_id, "error": {"code": -32601, "message": "Method not found"}}
     sys.stdout.write(json.dumps(res) + "\\n")
     sys.stdout.flush()
-""", encoding="utf-8")
+""",
+        encoding="utf-8",
+    )
 
     client = MCPClient(command=sys.executable, args=[str(server_script)])
     client.start()
@@ -63,7 +66,10 @@ for line in sys.stdin:
 
         # Executa tool
         from bombe_code.tools.base import ToolContext
-        ctx = ToolContext(session_id="ses_1", agent="build", project_dir=".", messages=[], ask=lambda *a: "allow")
+
+        ctx = ToolContext(
+            session_id="ses_1", agent="build", project_dir=".", messages=[], ask=lambda *a: "allow"
+        )
         out = registry.execute("mcp_echo", {"msg": "bombe"}, ctx)
         assert "echo: bombe" in out
     finally:

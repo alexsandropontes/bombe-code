@@ -10,11 +10,17 @@ from bombe_code.worktree.manager import WorktreeInfo, WorktreeManager
 
 def _init_git_repo(path: Path) -> None:
     subprocess.run(["git", "init"], cwd=path, check=True, capture_output=True)
-    subprocess.run(["git", "config", "user.name", "Test"], cwd=path, check=True, capture_output=True)
-    subprocess.run(["git", "config", "user.email", "test@test.com"], cwd=path, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "config", "user.name", "Test"], cwd=path, check=True, capture_output=True
+    )
+    subprocess.run(
+        ["git", "config", "user.email", "test@test.com"], cwd=path, check=True, capture_output=True
+    )
     (path / "README.md").write_text("# Test Repo\n", encoding="utf-8")
     subprocess.run(["git", "add", "."], cwd=path, check=True, capture_output=True)
-    subprocess.run(["git", "commit", "-m", "Initial commit"], cwd=path, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "commit", "-m", "Initial commit"], cwd=path, check=True, capture_output=True
+    )
 
 
 def test_worktree_lifecycle_real_git(tmp_path: Path):

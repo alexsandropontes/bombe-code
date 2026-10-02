@@ -66,7 +66,9 @@ class TemplateGate:
 
         words = [w for w in content.split() if len(w) > 2]
         if len(words) < min_words:
-            issues.append(f"Densidade insuficiente ({len(words)} palavras substantivas, mínimo: {min_words})")
+            issues.append(
+                f"Densidade insuficiente ({len(words)} palavras substantivas, mínimo: {min_words})"
+            )
 
         content_lower = content.lower()
         for sec in required_sections:

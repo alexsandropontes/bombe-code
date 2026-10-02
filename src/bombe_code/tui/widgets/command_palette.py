@@ -27,8 +27,8 @@ class CommandPalette(ModalScreen[str | None]):
         width: 70;
         height: auto;
         max-height: 20;
-        border: thick {TOKENS['primary']};
-        background: {TOKENS['surface']};
+        border: thick {TOKENS["primary"]};
+        background: {TOKENS["surface"]};
         padding: 1;
     }}
 
@@ -51,10 +51,15 @@ class CommandPalette(ModalScreen[str | None]):
 
     def compose(self) -> ComposeResult:
         with Vertical(id="palette-container"):
-            yield Input(placeholder="Digite um comando (ex: help, clear, theme)...", id="palette-input")
+            yield Input(
+                placeholder="Digite um comando (ex: help, clear, theme)...", id="palette-input"
+            )
             with ListView(id="palette-list"):
                 for cmd in self.COMMANDS:
-                    yield ListItem(Static(f"[bold]{cmd['name']}[/bold] - {cmd['desc']}"), id=f"cmd-{cmd['name']}")
+                    yield ListItem(
+                        Static(f"[bold]{cmd['name']}[/bold] - {cmd['desc']}"),
+                        id=f"cmd-{cmd['name']}",
+                    )
 
     def on_input_changed(self, event: Input.Changed) -> None:
         """Filtra comandos conforme a digitação sem recriar nós."""

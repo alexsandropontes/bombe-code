@@ -22,14 +22,14 @@ class HelpDialog(ModalScreen[None]):
     #help-container {{
         width: 80;
         height: 85%;
-        border: thick {TOKENS['primary']};
-        background: {TOKENS['surface']};
+        border: thick {TOKENS["primary"]};
+        background: {TOKENS["surface"]};
         padding: 1 2;
     }}
 
     #help-title {{
         text-style: bold;
-        color: {TOKENS['primary']};
+        color: {TOKENS["primary"]};
         margin-bottom: 1;
     }}
 
@@ -39,7 +39,7 @@ class HelpDialog(ModalScreen[None]):
     }}
 
     #help-content {{
-        color: {TOKENS['text']};
+        color: {TOKENS["text"]};
         margin-bottom: 1;
     }}
 

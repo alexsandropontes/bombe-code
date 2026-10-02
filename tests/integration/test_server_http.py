@@ -71,9 +71,7 @@ def live_server(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     assert port is not None, "uvicorn nao subiu"
 
     password = (
-        (tmp_path / "state" / "bombe-code" / "server-auth")
-        .read_text(encoding="utf-8")
-        .strip()
+        (tmp_path / "state" / "bombe-code" / "server-auth").read_text(encoding="utf-8").strip()
     )
     auth = ("bombe", password)
     base = f"http://127.0.0.1:{port}"
@@ -145,9 +143,7 @@ def test_ca1_prompt_gera_eventos_sse_em_ordem(live_server):
     session = httpx.post(f"{base}/api/session", auth=auth, json={"title": "s1"}).json()
     sid = session["id"]
 
-    resp = httpx.post(
-        f"{base}/api/session/{sid}/prompt", auth=auth, json={"text": "oi"}
-    )
+    resp = httpx.post(f"{base}/api/session/{sid}/prompt", auth=auth, json={"text": "oi"})
     assert resp.status_code == 200
     assert resp.json()["text"] == "Oi servidor"
 
@@ -176,9 +172,7 @@ def test_ca3_resume_com_last_event_id_sem_perda(live_server):
     base, auth, _ = live_server
     session = httpx.post(f"{base}/api/session", auth=auth, json={"title": "s2"}).json()
     sid = session["id"]
-    httpx.post(
-        f"{base}/api/session/{sid}/prompt", auth=auth, json={"text": "oi"}
-    )
+    httpx.post(f"{base}/api/session/{sid}/prompt", auth=auth, json={"text": "oi"})
 
     # primeiro fluxo: lê tudo
     first: list[str] = []

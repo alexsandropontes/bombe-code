@@ -76,6 +76,21 @@ COMMAND_HELP_CATALOG: list[dict[str, str]] = [
         "name": "/wave <start|status|discuss|plan|cycle|execute|validate|end>",
         "desc": "Orquestração soberana da ONDA e fluxo de entrega",
     },
+    {
+        "name": "/project <config|detect>",
+        "desc": "Configuração do projeto e autodeteção de stack (.bombeconfig)",
+    },
+    {
+        "name": "/mode <auto|semi-auto|manual|tdd|vibe>",
+        "desc": "Alternar modo de autonomia ou engenharia",
+    },
+    {"name": "/rca <incidente>", "desc": "Análise de Causa Raiz determinística com @unclebob"},
+    {
+        "name": "/simplify <alvo>",
+        "desc": "Auditoria de simplificação de código com @ieru e @unclebob",
+    },
+    {"name": "/task <descrição>", "desc": "Executar tarefa técnica pontual avulsa"},
+    {"name": "/report [status]", "desc": "Gerar relatório consolidado de governança e projeto"},
     {"name": "/exit", "desc": "Sair da aplicação com segurança (aliases: /quit, /q)"},
 ]
 
@@ -842,6 +857,152 @@ async def handle_slash_command(app: BombeTuiApp, raw_text: str) -> bool:
         await chat.mount(
             Static(
                 f"[{TOKENS['warning']}]Subcomando do /wave desconhecido: '{subcmd}'. Use: start, status, discuss, plan, cycle, execute, validate, end.[/{TOKENS['warning']}]"
+            )
+        )
+        return True
+
+    # Comandos de Projeto e Governança Operacional (ST-019 a ST-022)
+    if cmd == "project":
+        from bombe_code.config.project_config import ProjectConfigManager
+
+        mgr = ProjectConfigManager(app.project_dir)
+        sub = arg.strip().lower()
+        if sub == "detect":
+            cfg = mgr.detect_stack()
+            mgr.save(cfg)
+            await chat.mount(
+                Static(
+                    f"[{TOKENS['success']}]✓ Stack autodetectada:\n"
+                    f"• Backend: {cfg.backend_language} ({cfg.backend_path})\n"
+                    f"• Frontend: {cfg.frontend_stack} ({cfg.frontend_path})[/{TOKENS['success']}]"
+                )
+            )
+            return True
+
+        cfg = mgr.load()
+        await chat.mount(
+            Static(
+                f"[{TOKENS['primary']} bold]Configuração do Projeto ({cfg.name}):[/{TOKENS['primary']} bold]\n"
+                f"• Tipo: {cfg.type}\n"
+                f"• Backend: {cfg.backend_language}\n"
+                f"• Frontend: {cfg.frontend_stack}\n"
+                f"• Modo de Engenharia: {cfg.mode}\n"
+                f"• Autonomia: {cfg.autonomy}"
+            )
+        )
+        return True
+
+    if cmd == "mode":
+        if not arg:
+            await chat.mount(
+                Static(
+                    f"[{TOKENS['warning']}]Uso: /mode <auto|semi-auto|manual|tdd|vibe>[/{TOKENS['warning']}]"
+                )
+            )
+            return True
+        from bombe_code.turing.orchestrator import WaveOrchestrator
+
+        orch = WaveOrchestrator(project_dir=app.project_dir)
+        res = orch.set_mode(arg)
+        if res.get("success"):
+            await chat.mount(
+                Static(
+                    f"[{TOKENS['success']}]✓ {res['message']} "
+                    f"(Autonomia: {res['autonomy_mode']}, Engenharia: {res['engineering_mode']})[/{TOKENS['success']}]"
+                )
+            )
+        else:
+            await chat.mount(
+                Static(f"[{TOKENS['warning']}]{res.get('error')}[/{TOKENS['warning']}]")
+            )
+        return True
+
+    if cmd == "rca":
+        if not arg:
+            await chat.mount(
+                Static(
+                    f"[{TOKENS['warning']}]Uso: /rca <descrição do incidente>[/{TOKENS['warning']}]"
+                )
+            )
+            return True
+        from bombe_code.turing.orchestrator import WaveOrchestrator
+
+        orch = WaveOrchestrator(project_dir=app.project_dir)
+        await chat.mount(
+            Static(
+                f"[{TOKENS['secondary']} bold]Conduzindo RCA com @unclebob para: {arg}...[/{TOKENS['secondary']} bold]"
+            )
+        )
+        res = await anyio.to_thread.run_sync(orch.run_rca, arg)
+        await chat.mount(
+            Static(
+                f"[{TOKENS['primary']} bold]Relatório RCA ({res.get('agent')}):[/{TOKENS['primary']} bold]\n{res.get('report')}"
+            )
+        )
+        return True
+
+    if cmd == "simplify":
+        if not arg:
+            await chat.mount(
+                Static(
+                    f"[{TOKENS['warning']}]Uso: /simplify <caminho do arquivo ou módulo>[/{TOKENS['warning']}]"
+                )
+            )
+            return True
+        from bombe_code.turing.orchestrator import WaveOrchestrator
+
+        orch = WaveOrchestrator(project_dir=app.project_dir)
+        await chat.mount(
+            Static(
+                f"[{TOKENS['secondary']} bold]Iniciando auditoria de simplificação com @ieru e @unclebob em: {arg}...[/{TOKENS['secondary']} bold]"
+            )
+        )
+        res = await anyio.to_thread.run_sync(orch.run_simplify, arg)
+        await chat.mount(
+            Static(
+                f"[{TOKENS['primary']} bold]Parecer de Simplificação ({res.get('agent')}):[/{TOKENS['primary']} bold]\n{res.get('output')}"
+            )
+        )
+        return True
+
+    if cmd == "task":
+        if not arg:
+            await chat.mount(
+                Static(
+                    f"[{TOKENS['warning']}]Uso: /task <descrição da tarefa>[/{TOKENS['warning']}]"
+                )
+            )
+            return True
+        from bombe_code.turing.orchestrator import WaveOrchestrator
+
+        orch = WaveOrchestrator(project_dir=app.project_dir)
+        await chat.mount(
+            Static(
+                f"[{TOKENS['secondary']} bold]Executando tarefa avulsa: {arg}...[/{TOKENS['secondary']} bold]"
+            )
+        )
+        res = await anyio.to_thread.run_sync(orch.run_task, arg)
+        await chat.mount(
+            Static(
+                f"[{TOKENS['success']}]✓ Tarefa concluída por {res.get('agent')}:[/{TOKENS['success']}]\n{res.get('output')}"
+            )
+        )
+        return True
+
+    if cmd == "report":
+        from bombe_code.turing.orchestrator import WaveOrchestrator
+
+        orch = WaveOrchestrator(project_dir=app.project_dir)
+        rep = orch.generate_status_report()
+        summary = rep["tasks_summary"]
+        cfg = rep["config"]
+        await chat.mount(
+            Static(
+                f"[{TOKENS['primary']} bold]Relatório Consolidado de Governança — ONDA {rep['wave_id']}:[/{TOKENS['primary']} bold]\n"
+                f"• Estágio: {rep['stage']}\n"
+                f"• Modos: Autonomia={rep['autonomy_mode']}, Engenharia={rep['engineering_mode']}\n"
+                f"• Projeto: {cfg.get('name')} ({cfg.get('backend_language')}/{cfg.get('frontend_stack')})\n"
+                f"• Tasks Registradas: {summary.get('total')}"
             )
         )
         return True

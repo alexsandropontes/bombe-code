@@ -35,11 +35,13 @@ def _get_git_modified_files(repo_dir: str | Path = ".") -> list[dict[str, Any]]:
                     add = int(parts[0]) if parts[0].isdigit() else 0
                     dels = int(parts[1]) if parts[1].isdigit() else 0
                     filepath = parts[2]
-                    items.append({
-                        "file": filepath,
-                        "additions": add,
-                        "deletions": dels,
-                    })
+                    items.append(
+                        {
+                            "file": filepath,
+                            "additions": add,
+                            "deletions": dels,
+                        }
+                    )
         # Arquivos não rastreados (usa -uall para inspecionar arquivos reais e ignorar raízes de diretórios)
         st = subprocess.run(
             ["git", "status", "--porcelain", "-uall"],
@@ -70,8 +72,8 @@ class Sidebar(VerticalScroll):
     Sidebar {{
         width: 40;
         height: 100%;
-        background: {TOKENS['surface']};
-        border-left: solid {TOKENS['border']};
+        background: {TOKENS["surface"]};
+        border-left: solid {TOKENS["border"]};
         padding: 1 1;
         scrollbar-gutter: stable;
     }}
@@ -83,28 +85,28 @@ class Sidebar(VerticalScroll):
     .sidebar-section {{
         margin-bottom: 1;
         padding-bottom: 1;
-        border-bottom: solid {TOKENS['surface_alt']};
+        border-bottom: solid {TOKENS["surface_alt"]};
     }}
 
     .sidebar-title {{
-        color: {TOKENS['primary']};
+        color: {TOKENS["primary"]};
         text-style: bold;
     }}
 
     .sidebar-muted {{
-        color: {TOKENS['text_muted']};
+        color: {TOKENS["text_muted"]};
     }}
 
     .sidebar-text {{
-        color: {TOKENS['text']};
+        color: {TOKENS["text"]};
     }}
 
     .diff-add {{
-        color: {TOKENS['success']};
+        color: {TOKENS["success"]};
     }}
 
     .diff-del {{
-        color: {TOKENS['error']};
+        color: {TOKENS["error"]};
     }}
     """
 
@@ -169,7 +171,10 @@ class Sidebar(VerticalScroll):
         dir_name = os.path.basename(self.directory) or self.directory
         t.append(f" {dir_name}\n", style=f"bold {TOKENS['text']}")
         t.append(f" {self.directory}\n", style=f"{TOKENS['text_muted']}")
-        t.append(f" Sessão: {self.session_id[:16] if self.session_id else 'iniciando'}\n", style=f"{TOKENS['text_muted']}")
+        t.append(
+            f" Sessão: {self.session_id[:16] if self.session_id else 'iniciando'}\n",
+            style=f"{TOKENS['text_muted']}",
+        )
         t.append("─" * 36 + "\n", style=TOKENS["surface_alt"])
 
         # 2. Context & Token Usage
@@ -200,7 +205,9 @@ class Sidebar(VerticalScroll):
                     t.append(f"-{item['deletions']}", style=f"{TOKENS['error']}")
                 t.append("\n")
             if len(files) > 8:
-                t.append(f" ... e mais {len(files) - 8} arquivos\n", style=f"{TOKENS['text_muted']}")
+                t.append(
+                    f" ... e mais {len(files) - 8} arquivos\n", style=f"{TOKENS['text_muted']}"
+                )
         t.append("─" * 36 + "\n", style=TOKENS["surface_alt"])
 
         # 4. Integrações

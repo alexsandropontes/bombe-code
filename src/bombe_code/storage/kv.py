@@ -24,9 +24,7 @@ def file_lock(path: Path) -> Iterator[None]:
 def write_json(path: Path, data: Any) -> None:
     with file_lock(path):
         tmp_path = path.with_name(path.name + ".tmp")
-        tmp_path.write_text(
-            json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
-        )
+        tmp_path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
         os.replace(tmp_path, path)
 
 

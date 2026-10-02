@@ -8,7 +8,12 @@ from bombe_code.tui.widgets.sidebar import Sidebar, _get_git_modified_files
 
 
 def test_sidebar_initial_metrics(tmp_path: Path):
-    sidebar = Sidebar(project_dir=str(tmp_path), session_id="ses_12345", session_title="Test Project", model="gpt-4o")
+    sidebar = Sidebar(
+        project_dir=str(tmp_path),
+        session_id="ses_12345",
+        session_title="Test Project",
+        model="gpt-4o",
+    )
     assert sidebar.session_id == "ses_12345"
     assert sidebar.session_title == "Test Project"
     assert sidebar.model_name == "gpt-4o"
@@ -40,6 +45,7 @@ def test_sidebar_renders_untracked_directories_properly(tmp_path: Path, monkeypa
             returncode = 0
             stdout = "?? docs/\n?? src/app.py\n?? tests/unit/test_foo.py\n?? pyproject.toml\n"
             stderr = ""
+
         return FakeRes()
 
     monkeypatch.setattr(subprocess, "run", fake_run)
@@ -60,5 +66,3 @@ def test_sidebar_renders_untracked_directories_properly(tmp_path: Path, monkeypa
     assert "• src/app.py" in rendered_text
     assert "• unit/test_foo.py" in rendered_text
     assert "• pyproject.toml" in rendered_text
-
-

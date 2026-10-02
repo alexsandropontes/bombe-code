@@ -60,7 +60,9 @@ class PartWidget(Static):
             elif state == "error":
                 badge = f"[{TOKENS['error']}]✗ {tool_name} (erro)[/{TOKENS['error']}]"
             else:
-                badge = f"[{TOKENS['text_muted']}]⏳ {tool_name} (pendente)[/{TOKENS['text_muted']}]"
+                badge = (
+                    f"[{TOKENS['text_muted']}]⏳ {tool_name} (pendente)[/{TOKENS['text_muted']}]"
+                )
 
             body = Text()
             body.append_text(Text.from_markup(badge))
@@ -87,7 +89,10 @@ class PartWidget(Static):
             file_name = self.part_data.get("file_name", "imagem")
             mime = self.part_data.get("mime_type", "image")
             return Panel(
-                Text(f"📷 [Anexo de Imagem: {file_name} ({mime})]", style=f"bold {TOKENS['secondary']}"),
+                Text(
+                    f"📷 [Anexo de Imagem: {file_name} ({mime})]",
+                    style=f"bold {TOKENS['secondary']}",
+                ),
                 title="Imagem",
                 border_style=TOKENS["border"],
             )
@@ -100,8 +105,8 @@ class ChatView(VerticalScroll):
 
     DEFAULT_CSS = f"""
     ChatView {{
-        background: {TOKENS['bg']};
-        color: {TOKENS['text']};
+        background: {TOKENS["bg"]};
+        color: {TOKENS["text"]};
         padding: 1;
         overflow-y: scroll;
     }}

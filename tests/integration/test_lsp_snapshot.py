@@ -15,7 +15,9 @@ def test_snapshot_create_diff_and_revert(tmp_path: Path):
     # Inicializa repo git temporário
     subprocess.run(["git", "init"], cwd=str(tmp_path), check=True, capture_output=True)
     subprocess.run(["git", "config", "user.name", "Test"], cwd=str(tmp_path), check=True)
-    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=str(tmp_path), check=True)
+    subprocess.run(
+        ["git", "config", "user.email", "test@example.com"], cwd=str(tmp_path), check=True
+    )
 
     test_file = tmp_path / "hello.txt"
     test_file.write_text("v1 inicial\n", encoding="utf-8")

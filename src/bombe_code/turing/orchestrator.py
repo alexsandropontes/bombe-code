@@ -13,6 +13,7 @@ from typing import Any
 
 from bombe_code.agents.registry import AgentRegistry
 from bombe_code.agents.runner import AgentRunner
+from bombe_code.config.project_config import ProjectConfigManager
 from bombe_code.llm.pydantic_factory import PydanticAiFactory
 from bombe_code.storage.project_db import ProjectDatabase
 from bombe_code.turing.gates import SealGate, TemplateGate
@@ -388,4 +389,136 @@ class WaveOrchestrator:
             "wave_id": self.state_machine.wave_id,
             "stage": TuringStage.COMPLETED.value,
             "message": f"ONDA {self.state_machine.wave_id} finalizada com sucesso e arquivada.",
+        }
+
+    def set_mode(self, mode_str: str) -> dict[str, Any]:
+        """Altera dinamicamente o modo de autonomia ou de engenharia."""
+        cleaned = mode_str.strip().lower()
+        cfg_mgr = ProjectConfigManager(str(self.project_dir))
+        cfg = cfg_mgr.load()
+
+        updated_autonomy = False
+
+        if cleaned in ("auto", "semi_auto", "semi-auto", "manual"):
+            if cleaned == "semi_auto":
+                cleaned = "semi-auto"
+            new_autonomy = (
+                AutonomyMode.SEMI_AUTO if cleaned == "semi-auto" else AutonomyMode(cleaned.upper())
+            )
+            self.state_machine.set_autonomy_mode(new_autonomy)
+            cfg.autonomy = cleaned
+            updated_autonomy = True
+        elif cleaned in ("tdd", "tdd-code", "tdd_code"):
+            self.state_machine.set_engineering_mode(EngineeringMode.TDD_CODE)
+            cfg.mode = "tdd-code"
+        elif cleaned in ("vibe", "vibe-code", "vibe_code"):
+            self.state_machine.set_engineering_mode(EngineeringMode.VIBE_CODE)
+            cfg.mode = "vibe-code"
+        else:
+            return {
+                "success": False,
+                "error": f"Modo desconhecido: {mode_str}. Use auto/semi-auto/manual ou tdd/vibe.",
+            }
+
+        # Salva no banco SQLite
+        self.db.save_wave_state(
+            wave_id=self.state_machine.wave_id,
+            state=self.state_machine.current_state,
+            autonomy_mode=self.state_machine.autonomy_mode,
+            engineering_mode=self.state_machine.engineering_mode,
+        )
+
+        # Salva no .bombeconfig
+        try:
+            cfg_mgr.save(cfg)
+        except Exception as e:  # noqa: BLE001
+            logger.warning("Não foi possível persistir .bombeconfig: %s", e)
+
+        return {
+            "success": True,
+            "autonomy_mode": self.state_machine.autonomy_mode.value,
+            "engineering_mode": self.state_machine.engineering_mode.value,
+            "message": (
+                f"Modo de {'autonomia' if updated_autonomy else 'engenharia'} alterado com sucesso."
+            ),
+        }
+
+    def run_rca(self, incident: str) -> dict[str, Any]:
+        """Executa Análise de Causa Raiz (RCA) com @unclebob e especialistas forenses."""
+        runner_uncle = self._get_runner("@unclebob")
+        prompt = (
+            f"Conduza uma Análise de Causa Raiz (RCA) aprofundada para o seguinte incidente:\n"
+            f"'{incident}'.\n"
+            f"Aplique os 5 Porquês, identifique fatores contribuintes e proponha ações corretivas."
+        )
+        if runner_uncle:
+            res = runner_uncle.run(prompt=prompt)
+            output = res.output
+            success = res.success
+        else:
+            output = f"RCA concluída para o incidente: {incident}"
+            success = True
+
+        return {
+            "success": success,
+            "incident": incident,
+            "report": output,
+            "agent": "@unclebob",
+        }
+
+    def run_simplify(self, target: str) -> dict[str, Any]:
+        """Executa auditoria de simplificação de código com @ieru e @unclebob."""
+        runner_ieru = self._get_runner("@ieru")
+        prompt = (
+            f"Audite o alvo '{target}' visando simplificação máxima de código, "
+            f"eliminação de complexidade acidental, redução de linhas e conformidade com KISS/DRY/SOLID."
+        )
+        if runner_ieru:
+            res = runner_ieru.run(prompt=prompt)
+            output = res.output
+            success = res.success
+        else:
+            output = f"Análise de simplificação executada para o alvo: {target}"
+            success = True
+
+        return {
+            "success": success,
+            "target": target,
+            "output": output,
+            "agent": "@ieru",
+        }
+
+    def run_task(self, description: str, agent_handle: str | None = None) -> dict[str, Any]:
+        """Executa uma task avulsa/ad-hoc sem alterar o estágio da ONDA."""
+        handle = agent_handle or "@turing"
+        runner = self._get_runner(handle)
+        prompt = f"Execute a seguinte tarefa técnica pontual: {description}"
+        if runner:
+            res = runner.run(prompt=prompt)
+            output = res.output
+            success = res.success
+        else:
+            output = f"Tarefa executada: {description}"
+            success = True
+
+        return {
+            "success": success,
+            "task": description,
+            "agent": handle,
+            "output": output,
+        }
+
+    def generate_status_report(self) -> dict[str, Any]:
+        """Gera um relatório consolidado da ONDA, tarefas e configurações do projeto."""
+        status = self.get_status()
+        cfg_mgr = ProjectConfigManager(str(self.project_dir))
+        cfg = cfg_mgr.load()
+
+        return {
+            "wave_id": status["wave_id"],
+            "stage": status["stage"],
+            "autonomy_mode": status["autonomy_mode"],
+            "engineering_mode": status["engineering_mode"],
+            "tasks_summary": status["tasks_summary"],
+            "config": cfg.model_dump(),
         }

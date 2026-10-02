@@ -69,10 +69,7 @@ def test_gpt_filtra_edit_write_mantem_apply_patch():
 
 def test_desabilitadas_sao_excluidas():
     registry = builtin_registry()
-    ids = {
-        t.id
-        for t in registry.tools_for_model("anthropic/claude", disabled={"shell"})
-    }
+    ids = {t.id for t in registry.tools_for_model("anthropic/claude", disabled={"shell"})}
     assert "shell" not in ids
 
 

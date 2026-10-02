@@ -25,9 +25,7 @@ def _always_allow(permission: str, details: str = "") -> str:
 
 
 def tool_signature(event: dict) -> str:
-    arguments = json.dumps(
-        event.get("arguments", {}), sort_keys=True, separators=(",", ":")
-    )
+    arguments = json.dumps(event.get("arguments", {}), sort_keys=True, separators=(",", ":"))
     return f"{event['name']}:{arguments}"
 
 
@@ -75,9 +73,7 @@ def _prepare_turn(
     disabled = permissions.disabled_tools() if permissions is not None else set()
     tools_meta = [
         {"id": t.id, "description": t.description, "schema": t.json_schema()}
-        for t in registry.tools_for_model(
-            getattr(adapter, "model", ""), disabled=disabled
-        )
+        for t in registry.tools_for_model(getattr(adapter, "model", ""), disabled=disabled)
     ]
     ctx = ToolContext(
         session_id=session.id,
@@ -191,9 +187,7 @@ def run_prompt(
             if abort():
                 aborted = True
                 break
-            premature = _handle_event(
-                event, processor, recent_signatures, ask, ctx, registry
-            )
+            premature = _handle_event(event, processor, recent_signatures, ask, ctx, registry)
             if premature is not None:
                 finish_reason = premature
                 break

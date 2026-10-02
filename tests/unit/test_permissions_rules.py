@@ -21,9 +21,7 @@ def test_ultima_regra_vence():
 
 
 def test_wildcard_no_permission_e_no_pattern():
-    service = PermissionService(
-        rules=[Rule(permission="*", pattern="*", action="deny")]
-    )
+    service = PermissionService(rules=[Rule(permission="*", pattern="*", action="deny")])
     assert service.evaluate("webfetch", "http://x") == "deny"
 
 

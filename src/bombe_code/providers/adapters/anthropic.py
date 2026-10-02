@@ -96,11 +96,14 @@ class AnthropicAdapter:
         return self._iter(payload, headers)
 
     def _iter(self, payload: dict, headers: dict) -> Iterator[dict]:
-        with httpx.Client(timeout=120.0) as client, client.stream(
-            "POST",
-            f"{self.base_url}/v1/messages",
-            json=payload,
-            headers=headers,
-        ) as response:
+        with (
+            httpx.Client(timeout=120.0) as client,
+            client.stream(
+                "POST",
+                f"{self.base_url}/v1/messages",
+                json=payload,
+                headers=headers,
+            ) as response,
+        ):
             response.raise_for_status()
             yield from parse_anthropic_sse(response.iter_lines())

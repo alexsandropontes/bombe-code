@@ -52,5 +52,7 @@ def format_skills_for_prompt(skills: list[SkillManifest]) -> str:
     for s in skills:
         trigs = f" (Gatilhos: {', '.join(s.triggers)})" if s.triggers else ""
         lines.append(f"- **{s.name}**: {s.description}{trigs}")
-    lines.append("\nUse a ferramenta `skill` para ler as instruções detalhadas de uma skill quando necessário.")
+    lines.append(
+        "\nUse a ferramenta `skill` para ler as instruções detalhadas de uma skill quando necessário."
+    )
     return "\n".join(lines)

@@ -29,10 +29,7 @@ def save_message(message: Message) -> None:
 
 
 def load_messages(session_id: str) -> list[Message]:
-    messages = [
-        Message.model_validate(data)
-        for data in SessionStore().list_messages(session_id)
-    ]
+    messages = [Message.model_validate(data) for data in SessionStore().list_messages(session_id)]
     return sorted(messages, key=lambda m: (m.created_at, m.id))
 
 
@@ -42,10 +39,7 @@ def save_part(session_id: str, part: Part) -> None:
 
 def load_parts(session_id: str) -> list[Part]:
     adapter = TypeAdapter(Part)
-    parts = [
-        adapter.validate_python(data)
-        for data in SessionStore().list_parts(session_id)
-    ]
+    parts = [adapter.validate_python(data) for data in SessionStore().list_parts(session_id)]
     return sorted(parts, key=lambda p: (p.created_at, p.id))
 
 

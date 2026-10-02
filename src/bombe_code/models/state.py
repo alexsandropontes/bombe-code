@@ -38,7 +38,9 @@ def add_recent_model(model_name: str) -> None:
         return
     model_name = model_name.strip()
     state = _load_model_state()
-    recents: list[str] = [m for m in state.get("recent", []) if isinstance(m, str) and m != model_name]
+    recents: list[str] = [
+        m for m in state.get("recent", []) if isinstance(m, str) and m != model_name
+    ]
     recents.insert(0, model_name)
     state["recent"] = recents[:MAX_RECENT_MODELS]
     _save_model_state(state)

@@ -10,9 +10,7 @@ def test_prompt_inclui_base_e_nome_do_agente():
 
 
 def test_prompt_inclui_instrucoes_do_projeto_quando_presentes():
-    prompt = build_system_prompt(
-        agent="plan", project_instructions="Sem emojis no codigo."
-    )
+    prompt = build_system_prompt(agent="plan", project_instructions="Sem emojis no codigo.")
     assert "Sem emojis no codigo." in prompt
 
 

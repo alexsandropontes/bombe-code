@@ -83,9 +83,7 @@ class PermissionService:
         }
         return hidden
 
-    def ask(
-        self, permission: str, details: str = "", emit=None
-    ) -> str:
+    def ask(self, permission: str, details: str = "", emit=None) -> str:
         decision = self.evaluate(permission, details)
         if decision == "allow":
             return "allow"

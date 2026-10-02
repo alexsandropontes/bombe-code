@@ -45,8 +45,14 @@ def _websearch(args: dict, ctx: ToolContext) -> str:
 
 
 WEBFETCH_TOOL = ToolDef(
-    id="webfetch", description="Busca conteudo de uma URL", parameters=WebfetchArgs, execute=_webfetch
+    id="webfetch",
+    description="Busca conteudo de uma URL",
+    parameters=WebfetchArgs,
+    execute=_webfetch,
 )
 WEBSEARCH_TOOL = ToolDef(
-    id="websearch", description="Busca web (DuckDuckGo)", parameters=WebsearchArgs, execute=_websearch
+    id="websearch",
+    description="Busca web (DuckDuckGo)",
+    parameters=WebsearchArgs,
+    execute=_websearch,
 )

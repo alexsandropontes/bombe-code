@@ -59,4 +59,3 @@ def test_part_widget_renders_image():
     widget = PartWidget({"type": "image", "file_name": "foto.png", "mime_type": "image/png"})
     rendered = widget.render()
     assert "foto.png" in str(rendered.renderable)
-

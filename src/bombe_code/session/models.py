@@ -97,6 +97,15 @@ class SubtaskPart(PartBase):
 
 
 Part = Annotated[
-    TextPart | ReasoningPart | ToolPart | StepStartPart | StepFinishPart | FilePart | PatchPart | SnapshotPart | CompactionPart | SubtaskPart,
+    TextPart
+    | ReasoningPart
+    | ToolPart
+    | StepStartPart
+    | StepFinishPart
+    | FilePart
+    | PatchPart
+    | SnapshotPart
+    | CompactionPart
+    | SubtaskPart,
     Field(discriminator="type"),
 ]

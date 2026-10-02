@@ -27,19 +27,19 @@ class PermissionDialog(ModalScreen[str]):
     #dialog-container {{
         width: 60;
         height: auto;
-        border: thick {TOKENS['warning']};
-        background: {TOKENS['surface']};
+        border: thick {TOKENS["warning"]};
+        background: {TOKENS["surface"]};
         padding: 1 2;
     }}
 
     #dialog-title {{
         text-style: bold;
-        color: {TOKENS['warning']};
+        color: {TOKENS["warning"]};
         margin-bottom: 1;
     }}
 
     #dialog-details {{
-        color: {TOKENS['text']};
+        color: {TOKENS["text"]};
         margin-bottom: 1;
     }}
 
@@ -89,14 +89,14 @@ class QuestionDialog(ModalScreen[str]):
     #question-container {{
         width: 60;
         height: auto;
-        border: thick {TOKENS['primary']};
-        background: {TOKENS['surface']};
+        border: thick {TOKENS["primary"]};
+        background: {TOKENS["surface"]};
         padding: 1 2;
     }}
 
     #question-label {{
         text-style: bold;
-        color: {TOKENS['primary']};
+        color: {TOKENS["primary"]};
         margin-bottom: 1;
     }}
 
@@ -137,19 +137,19 @@ class ConnectDialog(ModalScreen[tuple[str, str] | None]):
     #connect-container {{
         width: 65;
         height: auto;
-        border: thick {TOKENS['primary']};
-        background: {TOKENS['surface']};
+        border: thick {TOKENS["primary"]};
+        background: {TOKENS["surface"]};
         padding: 1 2;
     }}
 
     #connect-title {{
         text-style: bold;
-        color: {TOKENS['primary']};
+        color: {TOKENS["primary"]};
         margin-bottom: 1;
     }}
 
     #connect-hint {{
-        color: {TOKENS['text_muted']};
+        color: {TOKENS["text_muted"]};
         margin-bottom: 1;
     }}
 
@@ -165,8 +165,14 @@ class ConnectDialog(ModalScreen[tuple[str, str] | None]):
                 "Provedores: openai, anthropic, openrouter, groq, llama.cpp, ollama",
                 id="connect-hint",
             )
-            yield Input(placeholder="Provedor (ex: openai, anthropic, llama.cpp)", id="connect-provider-input")
-            yield Input(placeholder="Chave de API ou URL local (ex: sk-... ou http://127.0.0.1:8080/v1)", id="connect-value-input")
+            yield Input(
+                placeholder="Provedor (ex: openai, anthropic, llama.cpp)",
+                id="connect-provider-input",
+            )
+            yield Input(
+                placeholder="Chave de API ou URL local (ex: sk-... ou http://127.0.0.1:8080/v1)",
+                id="connect-value-input",
+            )
             with Horizontal(id="dialog-buttons"):
                 yield Button("Salvar e Conectar", variant="primary", id="btn-save")
                 yield Button("Cancelar", variant="default", id="btn-cancel")
@@ -204,14 +210,14 @@ class ModelDialog(ModalScreen[str | None]):
     #model-container {{
         width: 78;
         height: 25;
-        border: thick {TOKENS['primary']};
-        background: {TOKENS['surface']};
+        border: thick {TOKENS["primary"]};
+        background: {TOKENS["surface"]};
         padding: 1 2;
     }}
 
     #model-title {{
         text-style: bold;
-        color: {TOKENS['primary']};
+        color: {TOKENS["primary"]};
         margin-bottom: 1;
     }}
 
@@ -221,8 +227,8 @@ class ModelDialog(ModalScreen[str | None]):
 
     #model-option-list {{
         height: 14;
-        border: solid {TOKENS['surface_alt']};
-        background: {TOKENS['surface_alt']};
+        border: solid {TOKENS["surface_alt"]};
+        background: {TOKENS["surface_alt"]};
         margin-bottom: 1;
     }}
 
@@ -256,7 +262,9 @@ class ModelDialog(ModalScreen[str | None]):
     def compose(self) -> ComposeResult:
         with Vertical(id="model-container"):
             yield Label("🧠 Selecionar Modelo (/models)", id="model-title")
-            yield Input(placeholder="Buscar modelo (ex: mimo, qwen, llama, gpt-4o)...", id="model-search")
+            yield Input(
+                placeholder="Buscar modelo (ex: mimo, qwen, llama, gpt-4o)...", id="model-search"
+            )
             yield OptionList(id="model-option-list")
             with Horizontal(id="dialog-buttons"):
                 yield Button("Selecionar", variant="primary", id="btn-select")
@@ -305,10 +313,14 @@ class ModelDialog(ModalScreen[str | None]):
         for model_id, label, category in models_to_show:
             if category != current_category:
                 current_category = category
-                opt_list.add_option(Option(f"── {category} ──", id=f"__cat_{category}__", disabled=True))
+                opt_list.add_option(
+                    Option(f"── {category} ──", id=f"__cat_{category}__", disabled=True)
+                )
                 current_option_idx += 1
 
-            is_active = self.current_model and (self.current_model == model_id or self.current_model in model_id)
+            is_active = self.current_model and (
+                self.current_model == model_id or self.current_model in model_id
+            )
             display_label = f"  • {label} (ativo)" if is_active else f"  • {label}"
             opt_list.add_option(Option(display_label, id=model_id))
 
@@ -318,7 +330,9 @@ class ModelDialog(ModalScreen[str | None]):
                 target_highlight_index = current_option_idx
             current_option_idx += 1
 
-        highlight_to_set = target_highlight_index if target_highlight_index is not None else first_valid_index
+        highlight_to_set = (
+            target_highlight_index if target_highlight_index is not None else first_valid_index
+        )
         if highlight_to_set is not None:
             opt_list.highlighted = highlight_to_set
 
@@ -349,4 +363,3 @@ class ModelDialog(ModalScreen[str | None]):
             self.dismiss(None)
         elif event.button.id == "btn-cancel":
             self.dismiss(None)
-

@@ -28,7 +28,9 @@ class ScriptedAdapter:
     def stream(self, messages, tools, system):
         self.calls.append({"messages": messages, "tools": tools, "system": system})
         if not self.steps:
-            return iter([{"type": "text-delta", "text": "Ok final"}, {"type": "finish", "reason": "stop"}])
+            return iter(
+                [{"type": "text-delta", "text": "Ok final"}, {"type": "finish", "reason": "stop"}]
+            )
         return iter(self.steps.pop(0))
 
 
@@ -70,9 +72,7 @@ def tui_live_server(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     assert port is not None, "uvicorn server failed to start"
 
     password = (
-        (tmp_path / "state" / "bombe-code" / "server-auth")
-        .read_text(encoding="utf-8")
-        .strip()
+        (tmp_path / "state" / "bombe-code" / "server-auth").read_text(encoding="utf-8").strip()
     )
     auth = ("bombe", password)
     base = f"http://127.0.0.1:{port}"
@@ -106,7 +106,11 @@ async def test_tui_app_mount_and_streaming(tui_live_server):
         assert len(part_widgets) >= 1
 
         # Verifica se o texto "Olá da IA TUI" foi renderizado
-        texts = [pw.part_data.get("text", "") for pw in part_widgets if pw.part_data.get("type") == "text"]
+        texts = [
+            pw.part_data.get("text", "")
+            for pw in part_widgets
+            if pw.part_data.get("type") == "text"
+        ]
         assert any("Olá da IA TUI" in t for t in texts)
 
 
@@ -133,13 +137,17 @@ async def test_tui_tool_and_events_rendering(tui_live_server):
     async with app.run_test() as pilot:
         await pilot.pause(0.2)
         # Simula recebimento de evento tool-call
-        await app._handle_event({"type": "tool-call", "tool": "shell", "arguments": {"command": "ls -la"}})
+        await app._handle_event(
+            {"type": "tool-call", "tool": "shell", "arguments": {"command": "ls -la"}}
+        )
         chat = app.query_one("#chat-view", ChatView)
         part_widgets = chat.query(PartWidget)
         assert any(pw.part_data.get("tool") == "shell" for pw in part_widgets)
 
         # Simula recebimento de tool-result
-        await app._handle_event({"type": "tool-result", "tool": "shell", "output": "total 0\n-rw-r--r-- 1 test"})
+        await app._handle_event(
+            {"type": "tool-result", "tool": "shell", "output": "total 0\n-rw-r--r-- 1 test"}
+        )
         part_widgets = chat.query(PartWidget)
         assert any("total 0" in pw.part_data.get("output", "") for pw in part_widgets)
 
@@ -197,4 +205,3 @@ async def test_tui_fatal_error_panel(tui_live_server, tmp_path, monkeypatch):
     from bombe_code.config.paths import get_paths
 
     assert (get_paths().log / "error.log").is_file()
-

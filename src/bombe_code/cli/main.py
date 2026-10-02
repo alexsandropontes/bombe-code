@@ -214,6 +214,132 @@ def wave_end(
     typer.echo(res.get("message", "ONDA finalizada."))
 
 
+project_cli = typer.Typer(
+    name="project", help="Comandos de configuração do projeto (.bombeconfig)."
+)
+app.add_typer(project_cli, name="project")
+
+
+@project_cli.command("detect")
+def project_detect(
+    project_dir: Annotated[str, typer.Option("--project-dir", help="Pasta do projeto")] = ".",
+) -> None:
+    """Autodetecta a stack tecnológica e salva no .bombeconfig."""
+    from bombe_code.config.project_config import ProjectConfigManager
+
+    mgr = ProjectConfigManager(project_dir=project_dir)
+    cfg = mgr.detect_stack()
+    mgr.save(cfg)
+    typer.echo("Stack autodetectada e salva em .bombeconfig:")
+    typer.echo(f"- Backend: {cfg.backend_language} ({cfg.backend_path})")
+    typer.echo(f"- Frontend: {cfg.frontend_stack} ({cfg.frontend_path})")
+
+
+@project_cli.command("config")
+def project_config(
+    project_dir: Annotated[str, typer.Option("--project-dir", help="Pasta do projeto")] = ".",
+) -> None:
+    """Exibe a configuração ativa do projeto."""
+    from bombe_code.config.project_config import ProjectConfigManager
+
+    mgr = ProjectConfigManager(project_dir=project_dir)
+    cfg = mgr.load()
+    typer.echo(f"Configuração do Projeto ({cfg.name}):")
+    typer.echo(f"- Tipo: {cfg.type}")
+    typer.echo(f"- Backend: {cfg.backend_language}")
+    typer.echo(f"- Frontend: {cfg.frontend_stack}")
+    typer.echo(f"- Modo de Engenharia: {cfg.mode}")
+    typer.echo(f"- Autonomia: {cfg.autonomy}")
+
+
+@app.command("mode")
+def set_mode_cmd(
+    mode_str: Annotated[
+        str,
+        typer.Argument(
+            help="Modo de autonomia (auto, semi-auto, manual) ou engenharia (tdd, vibe)"
+        ),
+    ],
+    project_dir: Annotated[str, typer.Option("--project-dir", help="Pasta do projeto")] = ".",
+) -> None:
+    """Alterna modo de autonomia ou modo de engenharia."""
+    from bombe_code.turing.orchestrator import WaveOrchestrator
+
+    orch = WaveOrchestrator(project_dir=project_dir)
+    res = orch.set_mode(mode_str)
+    if res.get("success"):
+        typer.echo(res.get("message", "Modo atualizado com sucesso."))
+    else:
+        typer.echo(f"Erro: {res.get('error')}", err=True)
+
+
+@app.command("rca")
+def rca_cmd(
+    incident: Annotated[
+        str, typer.Argument(help="Descrição do incidente para análise de causa raiz")
+    ],
+    project_dir: Annotated[str, typer.Option("--project-dir", help="Pasta do projeto")] = ".",
+) -> None:
+    """Executa Análise de Causa Raiz determinística com @unclebob."""
+    from bombe_code.turing.orchestrator import WaveOrchestrator
+
+    orch = WaveOrchestrator(project_dir=project_dir)
+    res = orch.run_rca(incident)
+    typer.echo(f"RCA executada por {res.get('agent')}:")
+    typer.echo(res.get("report"))
+
+
+@app.command("simplify")
+def simplify_cmd(
+    target: Annotated[
+        str, typer.Argument(help="Caminho do arquivo ou módulo para auditoria de simplificação")
+    ],
+    project_dir: Annotated[str, typer.Option("--project-dir", help="Pasta do projeto")] = ".",
+) -> None:
+    """Executa auditoria de simplificação de código com @ieru e @unclebob."""
+    from bombe_code.turing.orchestrator import WaveOrchestrator
+
+    orch = WaveOrchestrator(project_dir=project_dir)
+    res = orch.run_simplify(target)
+    typer.echo(f"Simplificação executada por {res.get('agent')}:")
+    typer.echo(res.get("output"))
+
+
+@app.command("task")
+def task_cmd(
+    description: Annotated[str, typer.Argument(help="Descrição da tarefa avulsa")],
+    agent: Annotated[
+        str | None,
+        typer.Option("--agent", "-a", help="Especialista para despachar (ex: @unclebob)"),
+    ] = None,
+    project_dir: Annotated[str, typer.Option("--project-dir", help="Pasta do projeto")] = ".",
+) -> None:
+    """Executa uma tarefa técnica avulsa sem alterar o estágio da ONDA."""
+    from bombe_code.turing.orchestrator import WaveOrchestrator
+
+    orch = WaveOrchestrator(project_dir=project_dir)
+    res = orch.run_task(description, agent_handle=agent)
+    typer.echo(f"Task executada ({res.get('agent')}):")
+    typer.echo(res.get("output"))
+
+
+@app.command("report")
+def report_cmd(
+    project_dir: Annotated[str, typer.Option("--project-dir", help="Pasta do projeto")] = ".",
+) -> None:
+    """Gera um relatório consolidado do projeto e da ONDA ativa."""
+    from bombe_code.turing.orchestrator import WaveOrchestrator
+
+    orch = WaveOrchestrator(project_dir=project_dir)
+    rep = orch.generate_status_report()
+    typer.echo(f"Relatório Consolidado — ONDA {rep['wave_id']} (Estágio: {rep['stage']}):")
+    typer.echo(f"- Modo: Autonomia={rep['autonomy_mode']}, Engenharia={rep['engineering_mode']}")
+    typer.echo(
+        f"- Projeto: {rep['config']['name']} ({rep['config']['backend_language']}/{rep['config']['frontend_stack']})"
+    )
+    typer.echo(f"- Total de Tasks Registradas: {rep['tasks_summary']['total']}")
+
+
 @app.command("version")
 def version() -> None:
     """Exibe a versão instalada do Bombe Code."""

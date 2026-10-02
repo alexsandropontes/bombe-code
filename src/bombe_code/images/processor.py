@@ -37,7 +37,9 @@ def process_image(file_path: str | Path, max_size_mb: float = 10.0) -> ImageAtta
     size = len(raw_bytes)
     max_bytes = int(max_size_mb * 1024 * 1024)
     if size > max_bytes:
-        raise ValueError(f"Imagem excede o limite de {max_size_mb}MB (tamanho: {size / (1024 * 1024):.1f}MB)")
+        raise ValueError(
+            f"Imagem excede o limite de {max_size_mb}MB (tamanho: {size / (1024 * 1024):.1f}MB)"
+        )
 
     ext = path.suffix.lower()
     mime, _ = mimetypes.guess_type(path.name)

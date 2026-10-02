@@ -27,9 +27,7 @@ def test_roundtrip_sessao_mensagens_parts(tmp_path: Path, monkeypatch: pytest.Mo
     assert crud.load_parts(session.id) == [part]
 
 
-def test_tool_part_running_preservado_no_roundtrip(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-):
+def test_tool_part_running_preservado_no_roundtrip(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     # Arrange
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
     session = crud.create_session(title="tool", directory=str(tmp_path))

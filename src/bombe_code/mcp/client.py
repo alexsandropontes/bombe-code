@@ -82,7 +82,9 @@ class MCPClient:
     def call_tool(self, name: str, arguments: dict[str, Any]) -> str:
         result = self._call("tools/call", {"name": name, "arguments": arguments})
         contents = result.get("content", [])
-        texts = [c.get("text", "") for c in contents if isinstance(c, dict) and c.get("type") == "text"]
+        texts = [
+            c.get("text", "") for c in contents if isinstance(c, dict) and c.get("type") == "text"
+        ]
         return "\n".join(texts) if texts else json.dumps(result)
 
 
@@ -104,11 +106,16 @@ def register_mcp_tools(registry: ToolRegistry, client: MCPClient) -> list[str]:
         for prop_name in properties:
             fields[prop_name] = (Any, None)
 
-        param_model = create_model(f"MCPParams_{t_name}", **fields) if fields else create_model(f"MCPParams_{t_name}")
+        param_model = (
+            create_model(f"MCPParams_{t_name}", **fields)
+            if fields
+            else create_model(f"MCPParams_{t_name}")
+        )
 
         def make_executor(name: str):
             def executor(args: dict[str, Any], ctx: ToolContext) -> str:
                 return client.call_tool(name, args)
+
             return executor
 
         tool_def = ToolDef(

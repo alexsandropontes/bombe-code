@@ -19,7 +19,7 @@ class TuringIntentResult:
 
 class TuringIntentClassifier:
     """Classificador local de intenções em Python puro.
-    
+
     Identifica comandos rotineiros de ciclo da ONDA sem fazer requisições a LLM.
     """
 

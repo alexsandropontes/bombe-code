@@ -49,9 +49,7 @@ class SessionStore:
         return self._read_dir(self._base / "info")
 
     def save_message(self, session_id: str, message: dict) -> None:
-        write_json(
-            self._base / "message" / session_id / f"{message['id']}.json", message
-        )
+        write_json(self._base / "message" / session_id / f"{message['id']}.json", message)
 
     def _list(self, kind: str, session_id: str) -> list[dict]:
         return self._read_dir(self._base / kind / session_id)

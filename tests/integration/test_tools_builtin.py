@@ -32,9 +32,7 @@ def test_read_de_arquivo_real(tmp_path: Path):
 def test_write_e_read_roundtrip(tmp_path: Path):
     registry = builtin_registry()
     alvo = tmp_path / "novo" / "arquivo.txt"
-    registry.execute(
-        "write", {"path": str(alvo), "content": "escrito"}, _ctx(tmp_path)
-    )
+    registry.execute("write", {"path": str(alvo), "content": "escrito"}, _ctx(tmp_path))
     out = registry.execute("read", {"path": str(alvo)}, _ctx(tmp_path))
     assert "escrito" in out
 
@@ -83,9 +81,7 @@ def test_grep_retorna_caminho_e_linha(tmp_path: Path):
 
 
 def test_shell_executa_comando_real(tmp_path: Path):
-    out = builtin_registry().execute(
-        "shell", {"command": "echo oi-do-shell"}, _ctx(tmp_path)
-    )
+    out = builtin_registry().execute("shell", {"command": "echo oi-do-shell"}, _ctx(tmp_path))
     assert "oi-do-shell" in out
 
 
@@ -146,18 +142,9 @@ def test_webfetch_http_real_local(tmp_path: Path):
 def test_apply_patch_aplica_diff_unificado(tmp_path: Path):
     alvo = tmp_path / "arq.txt"
     alvo.write_text("linha1\nlinha3\n", encoding="utf-8")
-    diff = (
-        "--- a/arq.txt\n"
-        "+++ b/arq.txt\n"
-        "@@ -1,2 +1,3 @@\n"
-        " linha1\n"
-        "+linha2\n"
-        " linha3\n"
-    )
+    diff = "--- a/arq.txt\n+++ b/arq.txt\n@@ -1,2 +1,3 @@\n linha1\n+linha2\n linha3\n"
     registry = builtin_registry()
-    registry.execute(
-        "apply_patch", {"path": str(alvo), "diff": diff}, _ctx(tmp_path)
-    )
+    registry.execute("apply_patch", {"path": str(alvo), "diff": diff}, _ctx(tmp_path))
     assert alvo.read_text(encoding="utf-8") == "linha1\nlinha2\nlinha3\n"
 
 
@@ -181,7 +168,7 @@ def test_read_fora_do_worktree_dispara_external_directory(tmp_path: Path):
     ctx = ToolContext(
         session_id="ses_teste",
         project_dir=str(proj),
-        ask=lambda permission, details="": (asks.append(permission) or "allow"),
+        ask=lambda permission, details="": asks.append(permission) or "allow",
     )
     out = builtin_registry().execute("read", {"path": str(fora)}, ctx)
     assert "external_directory" in asks

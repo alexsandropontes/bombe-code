@@ -56,9 +56,7 @@ def _anthropic_pair(message: Message, parts: Sequence[Part]) -> list[dict]:
             }
         ]
     if message.role == "user":
-        return [
-            {"role": "user", "content": [{"type": "text", "text": _text_of(parts)}]}
-        ]
+        return [{"role": "user", "content": [{"type": "text", "text": _text_of(parts)}]}]
 
     tools = _tools_of(parts)
     blocks: list[dict] = []

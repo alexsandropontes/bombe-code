@@ -10,16 +10,12 @@ from bombe_code.permissions.rules import PermissionService, Rule, from_saved, sa
 pytestmark = pytest.mark.integration
 
 
-def test_allow_expansao_tilde_nao_pede_permissao(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-):
+def test_allow_expansao_tilde_nao_pede_permissao(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     # Arrange — CA1
     fake_home = tmp_path / "home"
     (fake_home / "docs").mkdir(parents=True)
     monkeypatch.setenv("HOME", str(fake_home))
-    service = PermissionService(
-        rules=[Rule(permission="read", pattern="~/docs/*", action="allow")]
-    )
+    service = PermissionService(rules=[Rule(permission="read", pattern="~/docs/*", action="allow")])
 
     # Act & Assert — imediato, sem ask
     alvo = fake_home / "docs" / "notas.md"
@@ -27,14 +23,10 @@ def test_allow_expansao_tilde_nao_pede_permissao(
     assert service.evaluate("read", str(alvo)) == "allow"
 
 
-def test_always_persiste_e_recarrega_do_disco(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-):
+def test_always_persiste_e_recarrega_do_disco(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     # Arrange — CA2
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
-    service = PermissionService(
-        rules=[Rule(permission="bash", pattern="rm", action="ask")]
-    )
+    service = PermissionService(rules=[Rule(permission="bash", pattern="rm", action="ask")])
     events: list[dict] = []
 
     # Act — responder always em paralelo (ask bloqueia até reply)

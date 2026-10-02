@@ -139,9 +139,7 @@ def test_ca3_doom_loop_exige_permissao_e_nega(tmp_path: Path, monkeypatch: pytes
 
     # Assert — apenas 2 execuções reais; a 3ª foi bloqueada por permissão
     tool_parts = [
-        p
-        for p in crud.load_parts(session.id)
-        if isinstance(p, ToolPart) and p.state == "completed"
+        p for p in crud.load_parts(session.id) if isinstance(p, ToolPart) and p.state == "completed"
     ]
     assert len(tool_parts) == 2
     assert adapter.steps, "nao devia consumir o 4º turno"
@@ -182,9 +180,9 @@ def test_ca4_abort_sem_part_running_orfao(tmp_path: Path, monkeypatch: pytest.Mo
     # Assert
     parts = crud.load_parts(session.id)
     assert any(isinstance(p, TextPart) and p.text == "parcial" for p in parts)
-    assert not any(
-        isinstance(p, ToolPart) and p.state == "running" for p in parts
-    ), "nenhum running orfao apos abort"
+    assert not any(isinstance(p, ToolPart) and p.state == "running" for p in parts), (
+        "nenhum running orfao apos abort"
+    )
 
 
 def test_rn4_retry_em_erro_transitorio(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):

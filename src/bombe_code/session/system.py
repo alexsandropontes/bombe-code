@@ -11,9 +11,7 @@ _AGENT_PREAMBLES = {
 }
 
 
-def build_system_prompt(
-    agent: str, project_instructions: str | None = None
-) -> str:
+def build_system_prompt(agent: str, project_instructions: str | None = None) -> str:
     preamble = _AGENT_PREAMBLES.get(agent, f"You are operating as the '{agent}' agent.")
     parts = [BASE_PROMPT, f"Active agent: {agent}.", preamble]
     if project_instructions:

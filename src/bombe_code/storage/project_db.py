@@ -11,7 +11,7 @@ from typing import Any
 
 class ProjectDatabase:
     """Banco de dados SQLite local isolado em .bombe-code/state.db.
-    
+
     Gerencia checkpoints de estado da ONDA e o Kanban operacional de tasks dos agentes.
     """
 

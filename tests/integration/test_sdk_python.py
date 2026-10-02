@@ -20,10 +20,12 @@ class ScriptedAdapter:
     model = "scripted/sdk"
 
     def stream(self, messages, tools, system):
-        return iter([
-            {"type": "text-delta", "text": "Resposta SDK tipada"},
-            {"type": "finish", "reason": "stop"},
-        ])
+        return iter(
+            [
+                {"type": "text-delta", "text": "Resposta SDK tipada"},
+                {"type": "finish", "reason": "stop"},
+            ]
+        )
 
 
 @pytest.fixture()
@@ -56,9 +58,7 @@ def sdk_live_server(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     assert port is not None
 
     password = (
-        (tmp_path / "state" / "bombe-code" / "server-auth")
-        .read_text(encoding="utf-8")
-        .strip()
+        (tmp_path / "state" / "bombe-code" / "server-auth").read_text(encoding="utf-8").strip()
     )
     base = f"http://127.0.0.1:{port}"
     try:

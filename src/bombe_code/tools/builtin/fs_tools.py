@@ -213,10 +213,21 @@ def _apply_patch(args: dict, ctx: ToolContext) -> str:
 
 
 READ_TOOL = ToolDef(id="read", description="Le um arquivo", parameters=ReadArgs, execute=_read)
-WRITE_TOOL = ToolDef(id="write", description="Escreve um arquivo", parameters=WriteArgs, execute=_write)
-EDIT_TOOL = ToolDef(id="edit", description="Substitui string exata", parameters=EditArgs, execute=_edit)
-GLOB_TOOL = ToolDef(id="glob", description="Lista arquivos por padrao", parameters=GlobArgs, execute=_glob)
-GREP_TOOL = ToolDef(id="grep", description="Busca texto com caminho:linha", parameters=GrepArgs, execute=_grep)
+WRITE_TOOL = ToolDef(
+    id="write", description="Escreve um arquivo", parameters=WriteArgs, execute=_write
+)
+EDIT_TOOL = ToolDef(
+    id="edit", description="Substitui string exata", parameters=EditArgs, execute=_edit
+)
+GLOB_TOOL = ToolDef(
+    id="glob", description="Lista arquivos por padrao", parameters=GlobArgs, execute=_glob
+)
+GREP_TOOL = ToolDef(
+    id="grep", description="Busca texto com caminho:linha", parameters=GrepArgs, execute=_grep
+)
 APPLY_PATCH_TOOL = ToolDef(
-    id="apply_patch", description="Aplica diff unificado", parameters=ApplyPatchArgs, execute=_apply_patch
+    id="apply_patch",
+    description="Aplica diff unificado",
+    parameters=ApplyPatchArgs,
+    execute=_apply_patch,
 )
