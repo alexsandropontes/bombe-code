@@ -12,7 +12,7 @@ O Bombe Core original contemplava mais de 20 especialistas para cobrir cada cama
 - **Especialistas de Backend por Stack:** José Valim não programa em todas as linguagens; temos especialistas dedicados para Python/Go, .NET, Node.js/TypeScript, Java e Elixir.
 - **Arquiteto da Jornada do Usuário:** Reintegração de `@alan` para mapear de ponta a ponta entry points, navegação e telas faltantes.
 - **Engenharia de Testes Automatizados (QA de Automação):** `@aniche` atuando especificamente na arquitetura e implementação de testes unitários, integração e E2E reais.
-- **Dupla Brasileira de Segurança de Aplicação (AppSec & Criptografia):** A segurança de aplicação não fica diluída. Criamos duas cadeiras técnicas soberanas para AppSec defensivo e ofensivo: `@barreto` (Criptografia, STRIDE, Auth) e `@aranha` (Auditoria Ofensiva, OWASP, Pentest).
+- **Dupla Brasileira de Segurança de Aplicação (AppSec & Criptografia):** A segurança de aplicação não fica diluída. Criamos duas cadeiras técnicas soberanas para AppSec defensivo e ofensivo: `@barreto` (Criptografia, STRIDE, Auth) e `@diego` (Auditoria Ofensiva, OWASP, Pentest).
 - **Maioria de Pioneiros Brasileiros:** 12 especialistas brasileiros de destaque global contra 10 mundiais (+ Turing como maestro neutro).
 
 ---
@@ -51,7 +51,7 @@ flowchart TD
 
         subgraph SECURITY_QUALITY["Segurança, Qualidade & SRE"]
             BOB["@unclebob (Mundial)<br>Tech Lead & Selo do Cycle"]
-            ARANHA["@aranha (BR)<br>AppSec, OWASP & Pentest"]
+            ARANHA["@diego (BR)<br>AppSec, OWASP & Pentest"]
             ANICHE["@aniche (BR)<br>QA de Automação & Testes E2E"]
             EDITH["@edith (BR)<br>Contract Validator & Selo Final"]
             DEMI["@demi (BR)<br>SRE, Infraestrutura & Redes"]
@@ -78,7 +78,7 @@ flowchart TD
 | **@claudia** | **Claudia Bauzer Medeiros** | Database Architect (NoSQL & Vetores) | UPSTREAM / `PLAN` | Schemas NoSQL, Redis, Vector Stores, grafos e dados científicos (ACM SIGMOD, SBC). |
 | **@caroli** | **Paulo Caroli** | Agile Master & Flow Architect | UPSTREAM / `PLAN` | Quebra de Épicos e `ai-stories` com critérios INVEST e DoR (Lean Inception). |
 | **@valim** | **José Valim** | Backend Lead (Elixir / Functional) | DOWNSTREAM / `EXECUTE` | Lógica concorrente, sistemas distribuídos, TDD estrito e core functional (Criador de Elixir). |
-| **@aranha** | **Diego Aranha** | AppSec & Offensive Security Auditor | DOWNSTREAM / `EXECUTE` | Auditoria ofensiva de código, OWASP Top 10, caça a falhas de injeção, Pentest e blindagem contra CVEs (Pesquisador global de segurança de software e auditor de urnas). |
+| **@diego** | **Diego Aranha** | AppSec & Offensive Security Auditor | DOWNSTREAM / `EXECUTE` | Auditoria ofensiva de código, OWASP Top 10, caça a falhas de injeção, Pentest e blindagem contra CVEs (Pesquisador global de segurança de software e auditor de urnas). |
 | **@aniche** | **Maurício Aniche** | Test Architect & QA de Automação | DOWNSTREAM / `EXECUTE` | Arquitetura de testes, unit, integration e suites E2E reais sem mocks falsos (Adyen/TU Delft). |
 | **@demi** | **Demi Getschko** | SRE, Infraestrutura & Redes | DOWNSTREAM / `EXECUTE` | Docker, redes, deploy seguro, resiliência e alta disponibilidade (Pai da Internet no Brasil, Hall of Fame). |
 | **@nelson** | **Nelson Mattos** | Prompt Engineer & AI Context | UPSTREAM / `PLAN` | Engenharia de prompts e contextos com PDW 3.5 (Ex-VP de Engenharia Google e IBM Fellow). |
@@ -110,7 +110,7 @@ flowchart TD
    - Incorporar `@barbara` (Python/Go), `@scott` (.NET/C#), `@ryan` (Node/TS) e `@james` (Java/Spring) ao `AgentRegistry`.
 2. **Story ST-011: Reintegração do User Journey Architect (`@alan`)**
    - Definir os contratos de mapeamento de entry points, navegação e telas faltantes em `docs/architecture/journey.md`.
-3. **Story ST-012: Blindagem de Segurança da Aplicação (`@barreto` & `@aranha`)**
+3. **Story ST-012: Blindagem de Segurança da Aplicação (`@barreto` & `@diego`)**
    - Criar os agentes de AppSec defensivo (Threat Modeling/Criptografia) e ofensivo (OWASP/Pentest).
 4. **Story ST-013: Registro dos Especialistas de Qualidade, Infra & Governança**
    - Incorporar `@aniche` (QA de Automação), `@demi` (SRE/Infra), `@claudia` (NoSQL/Vetores), `@nelson` (AI Context) e `@nina` (FinOps/Ética).
