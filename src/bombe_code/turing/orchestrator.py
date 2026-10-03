@@ -10,10 +10,10 @@ import json
 import logging
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 from bombe_code.agents.registry import AgentRegistry
-from bombe_code.agents.runner import AgentRunner
+from bombe_code.agents.runner import AgentExecutionResult, AgentRunner
 from bombe_code.config.project_config import ProjectConfigManager
 from bombe_code.llm.pydantic_factory import PydanticAiFactory
 from bombe_code.storage.project_db import ProjectDatabase
@@ -37,8 +37,8 @@ from bombe_code.turing.upstream_gates import (
     StoryDoRGate,
     ViabilityQualityGate,
 )
-from bombe_code.turing.pbb import AtomicTask
-from bombe_code.turing.upstream_profiler import UpstreamProfile, UpstreamProfiler
+from bombe_code.turing.pbb import AtomicTask, AtomicTaskType
+from bombe_code.turing.upstream_profiler import UpstreamProfiler
 
 logger = logging.getLogger(__name__)
 
@@ -1365,7 +1365,29 @@ class WaveOrchestrator:
                     task.error = err
                     return {"success": False, "story_id": story_id, "error": err}
 
-            # 2. Despacha o agente especialista responsável
+            # 2. Execução determinística de fundação (STORY-0 / FOUNDATION)
+            if task.task_type == AtomicTaskType.FOUNDATION:
+                found_res = self._execute_foundation_task(task, context)
+                if not found_res["success"]:
+                    task.status = "FAILED"
+                    task.error = found_res.get("error")
+                    return {
+                        "success": False,
+                        "story_id": story_id,
+                        "task_id": task.id,
+                        "error": task.error,
+                    }
+                task.status = "COMPLETED"
+                task.output = found_res.get("output")
+                completed_tasks.add(task.id)
+                results.append({
+                    "task_id": task.id,
+                    "agent": task.responsible_agent,
+                    "success": True,
+                })
+                continue
+
+            # 3. Despacha o agente especialista responsável
             runner = self._get_runner(task.responsible_agent)
             if not runner:
                 task.status = "FAILED"
@@ -1410,6 +1432,57 @@ class WaveOrchestrator:
             logger.debug("Falha ao promover card %s para DEV_DONE: %s", story_id, exc)
 
         return {"success": True, "story_id": story_id, "results": results}
+
+    def _execute_foundation_task(
+        self,
+        task: AtomicTask,
+        context: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Executa deterministicamente a fundação de Starter na STORY-0 (ST-045)."""
+        from ..starters.decision import load_starter_decision
+        from ..starters.engine import StarterEngine
+
+        starter_data = load_starter_decision(self.project_dir)
+        starter_id = starter_data.get("starter_id") if starter_data else None
+
+        if not starter_id:
+            for text in (task.title, task.description):
+                if "'" in text:
+                    candidate = text.split("'")[1].strip()
+                    if candidate:
+                        starter_id = candidate
+                        break
+                elif '"' in text:
+                    candidate = text.split('"')[1].strip()
+                    if candidate:
+                        starter_id = candidate
+                        break
+
+        if not starter_id:
+            starter_id = "python-mono"
+
+        engine = StarterEngine()
+        apply_res = engine.apply_starter(
+            starter_id=starter_id,
+            target_dir=str(self.project_dir),
+            force=True,
+        )
+
+        if not apply_res.get("success"):
+            err = apply_res.get("error", "Falha no scaffolding de fundação")
+            runner = self._get_runner("@unclebob")
+            if runner:
+                fix_prompt = f"Falha no scaffolding de fundação do starter '{starter_id}': {err}. Corrija a fundação."
+                res = runner.run(prompt=fix_prompt, context=context)
+                if getattr(res, "success", False):
+                    return {"success": True, "output": f"Recuperado pelo Tech Lead: {res.output}"}
+            return {"success": False, "error": err}
+
+        created = apply_res.get("created_files", [])
+        return {
+            "success": True,
+            "output": f"Starter '{starter_id}' aplicado com sucesso. Arquivos gerados: {len(created)}.",
+        }
 
     def run_execute(
         self,

@@ -92,14 +92,18 @@ class JourneyGate:
 
 
 class ArchitectureGate:
-    """Valida as decisões de arquitetura e tecnologia (@ieru)."""
+    """Valida as decisões de arquitetura e tecnologia (@ieru / @unclebob)."""
 
     REQUIRED_SECTIONS: ClassVar[list[str]] = [
         "Decisões Arquiteturais",
         "Stack",
     ]
 
-    def evaluate(self, content: str) -> dict[str, Any]:
+    def evaluate(
+        self, content: str, project_dir: Any = None
+    ) -> dict[str, Any]:
+        from ..starters.decision import load_starter_decision
+
         normalized = content.lower()
         missing = []
         for sec in self.REQUIRED_SECTIONS:
@@ -112,11 +116,22 @@ class ArchitectureGate:
             if not any(kw in normalized for kw in keywords):
                 missing.append(sec)
 
+        starter_info = None
+        if project_dir:
+            starter_data = load_starter_decision(project_dir)
+            if starter_data:
+                s_id = str(starter_data.get("starter_id", "")).lower()
+                starter_info = starter_data
+                # Checa se o ADR ou documento referencia o starter selecionado
+                if s_id and s_id not in normalized and "starter" not in normalized and "template" not in normalized:
+                    missing.append(f"Referência ao Starter selecionado ({s_id})")
+
         approved = len(missing) == 0
         return {
             "approved": approved,
             "gate": "ArchitectureGate",
             "missing_sections": missing,
+            "starter_info": starter_info,
             "message": (
                 "Arquitetura aprovada com decisões documentadas."
                 if approved
