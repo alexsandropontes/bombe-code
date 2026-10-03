@@ -37,6 +37,7 @@ from bombe_code.turing.upstream_gates import (
     StoryDoRGate,
     ViabilityQualityGate,
 )
+from bombe_code.turing.upstream_profiler import UpstreamProfile, UpstreamProfiler
 
 logger = logging.getLogger(__name__)
 
@@ -496,7 +497,16 @@ class WaveOrchestrator:
             }
 
         results: list[dict[str, Any]] = []
-        print(f"🎯 [DISCUSS] Nível de maturidade da ONDA: {self.delivery_target.value.upper()}", flush=True)
+        profile = UpstreamProfiler.profile(self.project_dir, self.delivery_target)
+        print(
+            f"🎯 [DISCUSS] Nível: {self.delivery_target.value.upper()} | "
+            f"Origem: {profile.origin.value} | Inception: {profile.inception_level.value}",
+            flush=True,
+        )
+
+        ctx = dict(context or {})
+        ctx["upstream_profile"] = profile
+        context = ctx
 
         # 1. Despacha @meira para viabilidade
         ok, pre_err = self.validate_agent_prerequisites("@meira")
@@ -672,6 +682,10 @@ class WaveOrchestrator:
 
         results: list[dict[str, Any]] = []
         outputs: dict[str, str] = {}
+        profile = UpstreamProfiler.profile(self.project_dir, self.delivery_target)
+        ctx = dict(context or {})
+        ctx["upstream_profile"] = profile
+        context = ctx
 
         # -------------------------------------------------------------
         # 1. @alan: Mapeamento de Jornada e Telas
@@ -877,6 +891,9 @@ class WaveOrchestrator:
                 f"Decomponha e gere as ai-stories completas para a demanda da ONDA {self.state_machine.wave_id}.\n"
                 f"Consulte o PRD em 'docs/briefings/PRD.md', a Jornada em 'docs/architecture/journey.md' "
                 f"e a Arquitetura em 'docs/architecture/SYSTEM_ARCHITECTURE.md'.\n"
+                f"Aplique o método PBB (Product Backlog Building) conforme o nível de Inception {profile.inception_level.value}:\n"
+                f"- Granularidade PBB: {profile.pbb_granularity}\n"
+                f"- Diretriz técnica: {profile.technical_debt_tolerance}\n"
                 f"Crie histórias verticais estritamente para o escopo pedido, sem inventar módulos ou cobranças extras.\n"
                 f"É OBRIGATÓRIO incluir:\n"
                 f"# STORY ST-001: Implementação da Funcionalidade\n"
