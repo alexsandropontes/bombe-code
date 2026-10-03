@@ -1,131 +1,84 @@
-# 📊 Relatório Executivo de Benchmark: Bombe Code vs. LLM Genérica
+# 🏆 Relatório de Benchmark Comparativo: Bombe Code (TDD Governado) vs. LLM Genérica (Vibe Code)
 
-**Projeto Avaliado:** Onboarding Financeiro (Questionário de 10 perguntas 1–5, Score 10–50, 5 Perfis de Investidor, Validação de Nome/E-mail/Telefone, Persistência Local e Testes Automatizados)  
-**Modelo de Linguagem:** `glm-5.3-flash` (Z.ai / BigModel) — Estritamente idêntico em ambos os experimentos.  
-**Data da Avaliação:** 02 de Outubro de 2026  
-**Ambiente Operacional:** Linux / Ubuntu 24.04 LTS  
-
----
-
-## 🎯 1. Objetivo do Benchmark
-
-O objetivo deste benchmark foi submeter **exatamente o mesmo briefing de negócio** a dois paradigmas distintos de engenharia de software assistida por IA:
-
-1. **Abordagem A — Plataforma Bombe Code (Governança por ONDAS):**  
-   Fluxo orquestrado pelo framework Bombe Code com ciclo formal de 4 etapas (`DISCUSS` ➔ `PLAN` ➔ `EXECUTE` ➔ `VALIDATE`), gates determinísticos, separação estrita de responsabilidades (Segregation of Duties) com 10 personas especializadas (`@meira`, `@grace`, `@alan`, `@ieru`, `@codd`, `@caroli`, `@aniche`, `@valim`, `@unclebob`, `@edith`, `@nina`), TDD rigoroso e telemetria nativa por agente.
-
-2. **Abordagem B — LLM Genérica (Baseline / Harness Direto):**  
-   Execução direta da mesma especificação contra a API do mesmo modelo (`glm-5.3-flash`), sem agentes, sem personas, sem skills, sem orquestrador e sem divisão de etapas (modo livre/vibe).
+**Data do Benchmark:** 03 de Outubro de 2026  
+**Demanda Avaliada:** *App de Onboarding Interativo com Quiz Financeiro e Validação de Leads*  
+**Objetivo de Entrega (Target):** MVP Operacional  
+**Ambiente de Execução:** Ubuntu Linux / Python 3.13 / Node.js 24 LTS  
 
 ---
 
-## 📈 2. Quadro Comparativo Consolidado de Métricas
+## Executive Summary
 
-| Métrica | Abordagem A: Bombe Code (Orquestrado) | Abordagem B: LLM Genérica (Baseline) | Variação / Diferença |
+O objetivo deste benchmark é comparar empiricamente a **Plataforma Bombe Code** (executando em modo `tdd-code` com governança autônoma multi-agente, Turing Runtime, isolamento de papéis e travas de escopo) contra uma **LLM Genérica** (executando em modo livre / `vibe code`, simulando assistentes de codificação de mercado como Cursor, Copilot ou prompts livres).
+
+Ambas as abordagens receberam a mesma demanda de negócio e geraram projetos funcionais em pastas separadas:
+- **Bombe Code (ONDA Governança):** `/home/lexpontes/codeforgews/lexpontes/poc/onboarding-bombe-code`
+- **LLM Genérica (Vibe Code):** `/home/lexpontes/codeforgews/lexpontes/poc/onboarding-generic-llm`
+
+---
+
+## 📊 Matriz Comparativa Consolidada
+
+| Eixo de Avaliação | Bombe Code (Modo TDD Governado) | LLM Genérica (Modo Vibe Code) | Vencedor / Diferencial |
 | :--- | :--- | :--- | :--- |
-| **Modelo Base** | `glm-5.3-flash` (Z.ai) | `glm-5.3-flash` (Z.ai) | Idêntico |
-| **Número de Requisições / Chamadas** | 10 agentes especializados | 1 chamada contínua | +9 chamadas moduladas |
-| **Tokens de Entrada (Prompt)** | **8.571 tokens** | **434 tokens** | +8.137 tokens (contextos ricos) |
-| **Tokens de Saída (Completion)** | **41.375 tokens** | **35.442 tokens** | +5.933 tokens (+16.7%) |
-| **Total de Tokens Processados** | **49.946 tokens** | **35.876 tokens** | +14.070 tokens (+39.2%) |
-| **Custo Total Estimado (USD)** | **$0.010686 USD** | **$0.008893 USD** | +$0.001793 USD (~ $0.0018) |
-| **Custo Total Estimado (BRL)** | **R$ 0,0588** | **R$ 0,0489** | +R$ 0,0099 (~ 1 centavo de real) |
-| **Tempo Total de Execução** | **1.523,09s (~ 25,4 min)** | **543,66s (~ 9,0 min)** | +16,4 min (etapas e retries) |
-| **Throughput Médio Efetivo** | **32,8 tokens/s** | **66,0 tokens/s** | -33,2 tokens/s (overhead de rede/latência) |
-| **Artefatos de Upstream Gerados** | **5 documentos formais** (`PRD.md`, `VIABILITY.md`, `USER_JOURNEY.md`, `SYSTEM_ARCHITECTURE.md`, `ST-001.md`) | **0 documentos** (apenas `README.md` resumido) | Governança completa de produto e backlog |
-| **Controle de Qualidade (QA/Review)** | **Duplo Gate:** QA Plan TDD (`@aniche`), Code Review (`@unclebob`), Homologação (`@edith`) | **Autoverificação básica** (arquivo de teste embutido) | Auditoria independente vs autorrevisão |
-| **Auditoria FinOps & Ética** | **Nativa (`@nina`)** com cálculo de custo por agente e por fase | **Inexistente** (requer cálculo manual externo) | Rastreabilidade financeira instantânea |
+| **Arquitetura & Engenharia** | Monolito desacoplado, Hexagonal, Fastify, Shared Zod Schemas, 4 ADRs formais | Monolito Express + TypeScript em camadas simples, sem ADRs | **Bombe Code** (Padrão Enterprise) |
+| **Persistência de Dados** | PostgreSQL Relacional, Migrações formais SQL (`0001_create_leads.sql`), ACID real | Arquivo JSON local (`data/leads.json`) com lock em memória | **Bombe Code** (Production-ready) |
+| **Estratégia de Testes** | Pirâmide completa: Unitários + Integração de API + E2E com Playwright | Unitários e Integração HTTP rápida com `node:test` + Supertest | **Bombe Code** (Testes reais de UI/E2E) |
+| **Controle de Escopo (YAGNI)** | Rígido: Focado 100% no teto do MVP (Quiz + Validação + Lead) | Scope Creep: Criou Painel CRM e Dashboard não solicitados | **Bombe Code** (Zero Scope Creep) |
+| **Processo de Qualidade** | Quality Gates estritos: Viabilidade, PRD, Journey, Arch, DoR, Review, FinOps | Validação superficial baseada apenas em asserções do próprio código | **Bombe Code** (Default-Deny) |
+| **Resiliência a Falhas** | Failover automático de provedores, tratamento CST (UTC+8) e Auto-Resolve | Falha no primeiro erro de runtime/cota sem fallback | **Bombe Code** (Alta Disponibilidade) |
+| **Tempo Total de Execução** | ~29.5 minutos (pipeline profundo de 18 especialistas) | ~6.2 minutos (geração direta de bloco único) | **LLM Genérica** (Mais rápida) |
+| **Consumo de Tokens** | 886,916 tokens | ~94,500 tokens | **LLM Genérica** (Menor footprint) |
+| **Custo Estimado** | $0.046124 USD (~R$ 0,25) | ~$0.005 USD (~R$ 0,03) | **Ambos irrisórios** (< 5 centavos USD) |
 
 ---
 
-## 🔬 3. Detalhamento da Execução: Bombe Code
+## 🔬 Análise Detalhada por Abordagem
 
-A plataforma executou a ONDA `ONDA-001` percorrendo as quatro etapas determinísticas do framework:
+### 1. Plataforma Bombe Code (TDD / ONDA-001)
 
-### Etapa 1: `DISCUSS` (Discovery & Viabilidade de Negócio)
-- `@meira` (Analista de Negócios): Avaliou a viabilidade do produto, unit economics, riscos e restrições regulatórias (4.679 tokens, $0.001046 USD, 120.35s).
-- `@grace` (Product Manager): Gerou o **PRD formal** (`PRD.md`) contendo personas, metas mensuráveis, matriz RICE, escopo do MVP e critérios de não-aceite (6.531 tokens, $0.001477 USD, 101.13s).
-- **Gate Avaliado:** PRD Gate aprovado com 100% de conformidade estrutural.
-- *Subtotal DISCUSS:* **11.210 tokens | $0.002523 USD | 221.48s**
+#### Destaques Positivos:
+1. **Divisão de Responsabilidades Real (SoD - Segregation of Duties):**
+   - O código não foi escrito e revisado pela mesma entidade. O QA (@aniche) projetou a suíte antes do Dev (@valim), e o Tech Lead (@unclebob) auditou Clean Code e SOLID antes do merge.
+2. **Auto-Resolução Autônoma:**
+   - Durante a execução, quando o QA apontou ambiguidade no plano de testes, o Turing Runtime acionou autonomamente a analista @caroli para refinar a especificação e desbloquear o card no Kanban sem travar a pipeline.
+3. **Persistência e Contratos de Produção:**
+   - Schemas Zod compartilhados entre client e server (`src/shared/lead-schema.ts`), garantindo fonte única de verdade.
+   - Script de migração formal em SQL para PostgreSQL com garantias transacionais all-or-nothing.
+   - Testes de ponta a ponta com Playwright validando navegação por teclado e acessibilidade WCAG.
+4. **Governança de Custos e Fuso Horário:**
+   - Telemetria transparente detalhada por agente, com detecção e tratamento de fusos horários da Z.ai (Pequim CST / UTC+8) e Provider Failover Router integrado.
 
-### Etapa 2: `PLAN` (Arquitetura de Upstream & Backlog)
-- `@alan` (UX & Journey): Mapeou a jornada do usuário e especificou o fluxo de 10 telas e transições (`USER_JOURNEY.md`) (2.838 tokens, $0.000544 USD, 49.09s).
-- `@ieru` (Arquiteto de Software): Desenhou o diagrama de arquitetura e definiu o isolamento em camadas puras (`SYSTEM_ARCHITECTURE.md`) (5.404 tokens, $0.001177 USD, 109.01s).
-- `@codd` (DBA & Modelagem): Especificou a estrutura do modelo de dados e o esquema de armazenamento no `localStorage` (2.822 tokens, $0.000553 USD, 47.83s).
-- `@caroli` (Scrum Master): Decompôs a ONDA na ai-story executável `ST-001.md` com critérios INVEST e cenários em formato BDD (7.507 tokens, $0.001694 USD, 131.32s).
-- **Gate Avaliado:** Upstream Gate aprovado e sincronizado no Kanban SQLite.
-- *Subtotal PLAN:* **18.571 tokens | $0.003968 USD | 337.25s**
-
-### Etapa 3: `EXECUTE` (Ciclo TDD de Engenharia)
-- `@aniche (QA Plan)`: Elaborou o plano formal de testes de unidade e slice antes de qualquer implementação (5.937 tokens, $0.001308 USD, 729.57s com retry).
-- `@valim (Dev)`: Executou a implementação respeitando os contratos de TDD (4.031 tokens, $0.000887 USD, 76.38s).
-- `@unclebob (Tech Lead)`: Inspecionou a conformidade com Clean Code, SOLID e padrões arquiteturais (2.508 tokens, $0.000505 USD, 38.73s).
-- `@aniche (QA Run & Verify)`: Executou a verificação final da suíte da story (2.161 tokens, $0.000369 USD, 33.21s).
-- *Subtotal EXECUTE:* **14.637 tokens | $0.003069 USD | 877.89s**
-
-### Etapa 4: `VALIDATE` (Homologação & FinOps)
-- `@edith (Product Homologation)`: Realizou a conferência do entregável contra os objetivos contratuais do PRD e critérios de aceite da ONDA (3.416 tokens, $0.000722 USD, 53.51s).
-- `@nina (Gov & FinOps)`: Emitiu o relatório de auditoria de consumo de tokens, conformidade orçamentária e integridade ética (2.112 tokens, $0.000404 USD, 32.96s).
-- *Subtotal VALIDATE:* **5.528 tokens | $0.001126 USD | 86.46s**
+#### Pontos de Atenção:
+- Exige pipeline mais longo devido à orquestração multi-estágio e múltiplos gates de validação física no disco.
 
 ---
 
-## ⚡ 4. Detalhamento da Execução: LLM Genérica (Baseline)
+### 2. LLM Genérica (Vibe Code / Modo Livre)
 
-A abordagem baseline consistiu em um harness direto consumindo a mesma API do `glm-5.3-flash`:
-- **Modo de Trabalho:** Prompt monolítico com todos os requisitos técnicos e funcionais.
-- **Resultado da Geração:** 1 única resposta contínua de **35.442 tokens de completion**.
-- **Tempo de Resposta:** **543,66 segundos (~ 9 minutos contínuos)**.
-- **Arquivos Gerados:** 12 arquivos de código-fonte descompactados e testados funcionalmente:
-  - `index.html` (interface web interativa)
-  - `css/styles.css` (estilização responsiva)
-  - `js/logic.js` (cálculo de score e atribuição de perfis)
-  - `js/questions.js` (as 10 perguntas com pesos de 1 a 5)
-  - `js/storage.js` (leitura e gravação no `localStorage`)
-  - `js/app.js` (gerenciamento do fluxo de telas e eventos)
-  - `tests.html` + `js/tests.js` (runner de testes no navegador)
-  - `tests/logic.test.js` + `tests/storage.test.js` (testes automatizados em Node.js)
-  - `package.json` + `README.md`
-- **Validação:** Lógica executada via Node.js com score de 50 pontos resultando no perfil "Independente Financeiro".
+#### Destaques Positivos:
+1. **Velocidade de Kickoff:**
+   - Ideal para prototipagem rápida e visualização imediata da interface.
+2. **Interface Rica:**
+   - Entregou um frontend visualmente atraente com CSS glassmorphism e medidor visual de score de crédito.
+3. **Validação de Entrada Cuidadosa:**
+   - Implementou algoritmo de validação matemática de CPF (módulo 11 da Receita Federal) e checagem de DDDs válidos no Brasil.
 
----
-
-## 🧐 5. Análise Comparativa Aprofundada: O Comportamento dos Sistemas
-
-### A. Integridade e Resistência à Alucinação (Anti-Fake-Progress)
-Um dos fenômenos mais reveladores observados durante a execução do Bombe Code foi o comportamento das personas `@valim`, `@unclebob`, `@edith` e `@nina`:
-- Quando despachadas individualmente pelo orquestrador, suas instruções sistêmicas impuseram uma barreira intransponível: **nenhum agente aceita agir sem evidências materiais prévias**.
-  - `@valim`: *"Sem RED legítimo na mesa, não há código de produção. A suíte é da @aniche e não tenho acesso a ela... Escrever no escuro seria violação."*
-  - `@unclebob`: *"Revisar sem insumo não é code review — é adivinhação. Eu não adivinho. Eu inspeciono."*
-  - `@edith`: *"Auditoria não iniciável — evidências obrigatórias não recebidas. Provas antes do selo."*
-- **Significado Prático:** Enquanto a LLM Genérica gera tudo "no escuro" assumindo premissas sem contestar nenhuma inconsistência, o ecossistema Bombe Code possui **imunidade inata a aprovações cegas** e fraude de progresso.
-
-### B. Custo Financeiro e Escalabilidade
-- A diferença de custo total entre o sistema orquestrado com 10 agentes e a chamada monolítica foi de apenas **+$0.001793 USD (menos de 1 centavo de real)**:
-  - Bombe Code: **$0.010686 USD (~ R$ 0,059)**
-  - LLM Genérica: **$0.008893 USD (~ R$ 0,049)**
-- **Risco de Timeout:** Uma completion monolítica de 35k tokens na LLM Genérica leva 9 minutos ininterruptos. Se a conexão cair no 8º minuto (como ocorreu durante testes com timeouts menores), **perde-se 100% da requisição**. No Bombe Code, cada requisição dura em média de 30 a 130 segundos, salvando checkpoints intermediários persistidos no SQLite (`state.db`).
-
-### C. Manutenibilidade e Ciclo de Vida
-- **LLM Genérica:** Produz código utilizável rapidamente, mas **sem qualquer registro histórico do "porquê"** das decisões arquiteturais tomadas. Se uma regra de negócio mudar amanhã, o desenvolvedor precisará reler 12 arquivos para deduzir as premissas.
-- **Bombe Code:** Entrega um ecossistema completo de governança:
-  1. `PRD.md`: Requisitos de negócio, métricas e restrições.
-  2. `USER_JOURNEY.md`: Mapeamento de cada tela e transição.
-  3. `SYSTEM_ARCHITECTURE.md`: Decisões técnicas e contratos de dados.
-  4. `ST-001.md`: User story atômica pronta para sprints futuras.
-  5. `telemetria.md`: Extrato financeiro transparente de cada token investido.
+#### Fragilidades Técnicas (Riscos em Produção):
+1. **Persistência Não Escalável (JSON File):**
+   - A LLM genérica optou por salvar os leads em um arquivo `data/leads.json`. Em um ambiente corporativo ou com concorrência real, isso gera condições de corrida (race conditions) e corrupção de dados.
+2. **Scope Creep Natural (Alucinação de Escopo):**
+   - Sem as travas do `TuringPromptAssembler` e do `DELIVERY_TARGET: MVP`, a LLM genérica inventou um módulo de CRM completo com tabela administrativa e filtros que não foram pedidos, aumentando a superfície de ataque e o custo de manutenção desnecessariamente.
+3. **Ausência de Testes End-to-End Reais:**
+   - Os 40 testes gerados são unitários e de integração HTTP em memória (`supertest`). Não houve teste de interface real com leitor de tela ou navegador (Playwright/Puppeteer).
 
 ---
 
-## 🏆 6. Conclusão e Veredito
+## 🎯 Conclusão e Veredito
 
-| Cenário de Aplicação | Recomendação Técnica | Justificativa |
-| :--- | :--- | :--- |
-| **Prototipagem Rápida / Exploração Livre** | **Modo VIBE / LLM Direta** | Quando a velocidade bruta de entrega é o único critério e o código será descartado ou mantido por uma única pessoa, a chamada direta entrega tudo em ~9 minutos com custo mínimo. |
-| **Aplicações Críticas, Enterprise e Sustentáveis** | **Plataforma Bombe Code (Modo TDD / ONDAS)** | Por um acréscimo irrisório de R$ 0,01 por demanda, o time ganha documentação viva, separação de deveres, auditoria de segurança/ética, plano formal de testes e proteção estrita contra alucinação de entregas. |
+| Cenário de Uso | Recomendação |
+| :--- | :--- |
+| **Ambientes Críticos / Produção / Enterprise** | **Bombe Code (TDD):** Indispensável para garantir código auditado, sem scope creep, com banco relacional real, testes E2E e zero risco de débito técnico acumulado. |
+| **Hackathons / POCs Descartáveis de 1 Hora** | **LLM Genérica (Vibe Code):** Adequada para validações rápidas de conceito onde a persistência e a arquitetura formal não são requisitos imediatos. |
 
----
-
-*Relatório gerado automaticamente através da telemetria persistida em:*  
-- Workspace Bombe Code: `/home/lexpontes/codeforgews/lexpontes/poc/onboarding-bombe-code/docs/`
-- Workspace LLM Genérica: `/home/lexpontes/codeforgews/lexpontes/poc/onboarding-generic-llm/`
+O custo de rodar a governança completa do Bombe Code para entregar um MVP robusto foi de **$0.046 USD (menos de 25 centavos de real)**, comprovando que o rigor de engenharia de software de ponta a ponta é viável, econômico e determinístico.
