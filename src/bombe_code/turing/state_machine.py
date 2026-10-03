@@ -35,11 +35,13 @@ class PlanSubStage(str, Enum):
 class WaveType(str, Enum):
     """Classificação ontológica da ONDA."""
 
-    WAVE_ZERO = "WAVE_ZERO"          # Greenfield Lean Inception Macro (estritamente UPSTREAM)
+    WAVE_ZERO = "WAVE_ZERO"  # Greenfield Lean Inception Macro (estritamente UPSTREAM)
     DELIVERY_WAVE = "DELIVERY_WAVE"  # Ondas de Entrega 1..N e Brownfield (PLAN ➔ REFINEMENT ➔ EXECUTE ➔ VALIDATE)
 
 
 class WaveState(str, Enum):
+    DISCOVERY = "DISCOVERY"
+    INCEPTION = "INCEPTION"
     DISCUSS = "DISCUSS"
     PLAN = "PLAN"
     REFINEMENT = "REFINEMENT"
@@ -73,6 +75,7 @@ class TuringStateMachine:
     # Transições padrão para Ondas de Entrega (1..N e Brownfield)
     DELIVERY_TRANSITIONS: ClassVar[dict[WaveState, list[WaveState]]] = {
         WaveState.DISCUSS: [WaveState.PLAN],
+        WaveState.DISCOVERY: [WaveState.PLAN],
         WaveState.PLAN: [WaveState.REFINEMENT, WaveState.EXECUTE, WaveState.DISCUSS],
         WaveState.REFINEMENT: [WaveState.EXECUTE, WaveState.PLAN],
         WaveState.EXECUTE: [WaveState.VALIDATE, WaveState.REFINEMENT, WaveState.PLAN],
@@ -80,10 +83,12 @@ class TuringStateMachine:
         WaveState.COMPLETED: [],
     }
 
-    # Transições exclusivas para Onda Zero (estritamente UPSTREAM)
+    # Transições exclusivas para Onda Zero (estritamente UPSTREAM: DISCOVERY ➔ INCEPTION)
     WAVE_ZERO_TRANSITIONS: ClassVar[dict[WaveState, list[WaveState]]] = {
-        WaveState.DISCUSS: [WaveState.PLAN],
-        WaveState.PLAN: [WaveState.COMPLETED, WaveState.DISCUSS],
+        WaveState.DISCOVERY: [WaveState.INCEPTION, WaveState.PLAN],
+        WaveState.INCEPTION: [WaveState.COMPLETED, WaveState.DISCOVERY],
+        WaveState.DISCUSS: [WaveState.PLAN, WaveState.INCEPTION],
+        WaveState.PLAN: [WaveState.COMPLETED, WaveState.DISCUSS, WaveState.DISCOVERY],
         WaveState.COMPLETED: [],
     }
 
@@ -102,7 +107,14 @@ class TuringStateMachine:
         norm_id = wave_id.upper().strip()
         if wave_type is not None:
             self._wave_type = wave_type
-        elif norm_id in ("ONDA-0", "ONDA-00", "ONDA-000", "WAVE-0", "WAVE-00", "WAVE-000") or norm_id.startswith(("ONDA-000-", "WAVE-000-", "ONDA-0-", "WAVE-0-")):
+        elif norm_id in (
+            "ONDA-0",
+            "ONDA-00",
+            "ONDA-000",
+            "WAVE-0",
+            "WAVE-00",
+            "WAVE-000",
+        ) or norm_id.startswith(("ONDA-000-", "WAVE-000-", "ONDA-0-", "WAVE-0-")):
             self._wave_type = WaveType.WAVE_ZERO
         else:
             self._wave_type = WaveType.DELIVERY_WAVE
@@ -123,7 +135,13 @@ class TuringStateMachine:
     @property
     def current_phase(self) -> WavePhase:
         """Retorna a Fase ativa (UPSTREAM ou DOWNSTREAM)."""
-        if self._current_state in (WaveState.DISCUSS, WaveState.PLAN, WaveState.REFINEMENT):
+        if self._current_state in (
+            WaveState.DISCOVERY,
+            WaveState.INCEPTION,
+            WaveState.DISCUSS,
+            WaveState.PLAN,
+            WaveState.REFINEMENT,
+        ):
             return WavePhase.UPSTREAM
         return WavePhase.DOWNSTREAM
 
@@ -152,10 +170,13 @@ class TuringStateMachine:
 
     def transition_to(self, target_state: WaveState) -> None:
         if not self.can_transition_to(target_state):
-            if self._wave_type == WaveType.WAVE_ZERO and target_state == WaveState.EXECUTE:
+            if self._wave_type == WaveType.WAVE_ZERO and target_state in (
+                WaveState.EXECUTE,
+                WaveState.VALIDATE,
+            ):
                 raise InvalidTransitionError(
-                    f"Transição de PLAN para EXECUTE é terminantemente PROIBIDA na Onda Zero ({self.wave_id}). "
-                    f"A Onda Zero é estritamente UPSTREAM (Lean Inception Macro)."
+                    f"Transição para {target_state.value} é terminantemente PROIBIDA na Onda Zero ({self.wave_id}). "
+                    f"A Onda Zero é estritamente UPSTREAM (Lean Inception Macro: DISCOVERY ➔ INCEPTION)."
                 )
             raise InvalidTransitionError(
                 f"Transição inválida de {self._current_state.value} para {target_state.value} na onda {self.wave_id} (tipo: {self._wave_type.value})."

@@ -138,12 +138,11 @@ def test_prompt_input_tab_delegates_to_cycle_stage(monkeypatch: pytest.MonkeyPat
     mock_app.action_cycle_stage.assert_called_once()
 
 
-
 def test_tui_app_cycle_stage_and_state_db(tmp_path: Path):
     db = ProjectDatabase(str(tmp_path))
     db.save_wave_state(
         wave_id="ONDA-001",
-        state="DISCUSS",
+        state="PLAN",
         autonomy_mode="AUTO",
         engineering_mode="tdd-code",
     )
@@ -153,13 +152,13 @@ def test_tui_app_cycle_stage_and_state_db(tmp_path: Path):
 
     app = BombeTuiApp(client=mock_client, project_dir=str(tmp_path))
     # Deve carregar o estado inicial do banco
-    assert app.wave_station == "DISCUSS"
-
-    # Ciclar para PLAN
-    app.action_cycle_stage()
     assert app.wave_station == "PLAN"
+
+    # Ciclar para REFINEMENT (PBB)
+    app.action_cycle_stage()
+    assert app.wave_station == "REFINEMENT"
     loaded = db.load_wave_state()
-    assert loaded["state"] == "PLAN"
+    assert loaded["state"] == "REFINEMENT"
 
     # Ciclar para EXECUTE
     app.action_cycle_stage()
@@ -173,11 +172,45 @@ def test_tui_app_cycle_stage_and_state_db(tmp_path: Path):
     loaded = db.load_wave_state()
     assert loaded["state"] == "VALIDATE"
 
-    # Ciclar de volta para DISCUSS
+    # Ciclar de volta para PLAN
     app.action_cycle_stage()
-    assert app.wave_station == "DISCUSS"
+    assert app.wave_station == "PLAN"
     loaded = db.load_wave_state()
-    assert loaded["state"] == "DISCUSS"
+    assert loaded["state"] == "PLAN"
+
+
+def test_stage_guard_discovery_inception_refinement():
+    from bombe_code.permissions.stage_guard import (
+        STAGE_DISCOVERY,
+        STAGE_INCEPTION,
+        STAGE_REFINEMENT,
+    )
+
+    # DISCOVERY bloqueia escrita em código e testes, mas permite docs
+    allowed, err = validate_stage_permission(STAGE_DISCOVERY, "write", "src/core/main.py")
+    assert allowed is False
+    assert "DISCOVERY" in err
+
+    allowed, _ = validate_stage_permission(STAGE_DISCOVERY, "write", "docs/briefings/BR-001.md")
+    assert allowed is True
+
+    # INCEPTION bloqueia escrita em código de produção, mas permite docs
+    allowed, err = validate_stage_permission(STAGE_INCEPTION, "write", "src/domain/model.py")
+    assert allowed is False
+    assert "INCEPTION" in err
+
+    allowed, _ = validate_stage_permission(STAGE_INCEPTION, "write", "docs/canvas-mvp.md")
+    assert allowed is True
+
+    # REFINEMENT bloqueia escrita em código de produção, mas permite docs/backlog
+    allowed, err = validate_stage_permission(STAGE_REFINEMENT, "write", "src/api/routes.py")
+    assert allowed is False
+    assert "REFINEMENT" in err
+
+    allowed, _ = validate_stage_permission(
+        STAGE_REFINEMENT, "write", "docs/backlog/stories/ST-001.md"
+    )
+    assert allowed is True
 
 
 def test_stage_guard_vibe_mode_allows_everything():
@@ -223,7 +256,7 @@ def test_tui_app_toggle_vibe_mode_and_red_badge(tmp_path: Path):
 
     app = BombeTuiApp(client=mock_client, project_dir=str(tmp_path))
     assert app.mode == "TDD"
-    assert app.wave_station == "DISCUSS"
+    assert app.wave_station == "DISCOVERY"
 
     # Alterna para VIBE via Shift+Tab
     app.action_toggle_vibe_mode()
@@ -240,7 +273,7 @@ def test_tui_app_toggle_vibe_mode_and_red_badge(tmp_path: Path):
     # Alterna de volta para TDD via Shift+Tab
     app.action_toggle_vibe_mode()
     assert app.mode == "TDD"
-    assert app.wave_station == "DISCUSS"
+    assert app.wave_station == "DISCOVERY"
     status_tdd = app._status_text()
     assert "TDD" in status_tdd
 
@@ -262,4 +295,3 @@ def test_orchestrator_start_wave_incomplete_warning_and_force(tmp_path: Path):
     res3 = orch.start_wave("ONDA-002", force=True)
     assert res3["success"] is True
     assert res3["wave_id"] == "ONDA-002"
-

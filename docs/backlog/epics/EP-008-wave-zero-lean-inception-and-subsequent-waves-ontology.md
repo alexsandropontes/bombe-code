@@ -43,3 +43,4 @@ A esteira de agentes do Bombe Code necessita de uma ontologia rigorosa e clara p
 * **ST-035:** Ontologia de Ondas — `WaveType` (`WAVE_ZERO` vs `DELIVERY_WAVE`), estados permitidos por tipo de onda e transições no `TuringStateMachine`.
 * **ST-036:** Decomposição PBB — Modelo de dados para `AtomicTask` (DB, Contract, Backend TDD, Frontend UI, E2E), vinculadas à Story de problema único.
 * **ST-037:** Despachante de Execução por Task no `WaveOrchestrator` — Execução sequencial e atômica com isolamento de contexto no ciclo TDD.
+* **ST-038:** Ontologia da Navegação TAB na TUI e Estágios Canônicos (Onda Zero: DISCOVERY/INCEPTION vs Entrega: PLAN/REFINEMENT/EXECUTE/VALIDATE).

@@ -6,6 +6,16 @@ BASE_PROMPT = (
 )
 
 _STAGE_INSTRUCTIONS = {
+    "DISCOVERY": (
+        "## ETAPA ATIVA: DISCOVERY (ONDA ZERO)\n"
+        "Você está na etapa DISCOVERY da Onda Zero. Seu foco é descoberta de negócio, viabilidade técnica (@meira), pesquisa de mercado e elaboração do Briefing/PRD em docs/briefings/ e docs/prd/.\n"
+        "É PROIBIDO alterar ou criar arquivos de código em src/ ou testes nesta etapa."
+    ),
+    "INCEPTION": (
+        "## ETAPA ATIVA: INCEPTION (ONDA ZERO)\n"
+        "Você está na etapa INCEPTION da Onda Zero (Lean Inception Macro). Seu foco é conduzir os alinhamentos de visão de produto (@grace, @caroli), mapear jornadas do usuário (@alan), desenhar o Canvas MVP e estruturar o Sequenciador de Ondas em docs/.\n"
+        "É PROIBIDO criar código de produção em src/ nesta etapa."
+    ),
     "DISCUSS": (
         "## ETAPA ATIVA: DISCUSS\n"
         "Você está na etapa DISCUSS da ONDA. Seu foco é alinhamento de escopo, ideação e documentação de PRD/briefing em docs/briefings/.\n"
@@ -14,6 +24,11 @@ _STAGE_INSTRUCTIONS = {
     "PLAN": (
         "## ETAPA ATIVA: PLAN\n"
         "Você está na etapa PLAN da ONDA. Seu foco é arquitetura de software, jornadas de usuário e especificação de ai-stories em docs/stories/.\n"
+        "É PROIBIDO criar código de produção em src/ nesta etapa."
+    ),
+    "REFINEMENT": (
+        "## ETAPA ATIVA: REFINEMENT (ONDAS DE ENTREGA)\n"
+        "Você está na etapa REFINEMENT da Onda de Entrega. Seu foco é o refinamento PBB (Product Backlog Building) liderado por @caroli, decompondo ai-stories em tarefas atômicas especializadas (DATABASE, CONTRACT, BACKEND_TDD, FRONTEND_UI, E2E_INTEGRATION) em docs/backlog/stories/.\n"
         "É PROIBIDO criar código de produção em src/ nesta etapa."
     ),
     "EXECUTE": (
@@ -44,9 +59,7 @@ _AGENT_PREAMBLES = {
 }
 
 
-
 def build_system_prompt(
-
     agent: str,
     project_instructions: str | None = None,
     stage: str = "DISCUSS",
@@ -57,4 +70,3 @@ def build_system_prompt(
     if project_instructions:
         parts.append(project_instructions)
     return "\n\n".join(parts)
-

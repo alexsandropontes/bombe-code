@@ -13,7 +13,10 @@ from __future__ import annotations
 from pathlib import Path
 
 STAGE_DISCUSS = "DISCUSS"
+STAGE_DISCOVERY = "DISCOVERY"
 STAGE_PLAN = "PLAN"
+STAGE_INCEPTION = "INCEPTION"
+STAGE_REFINEMENT = "REFINEMENT"
 STAGE_EXECUTE = "EXECUTE"
 STAGE_VALIDATE = "VALIDATE"
 STAGE_COMPLETED = "COMPLETED"
@@ -21,7 +24,10 @@ STAGE_VIBE = "VIBE"
 
 VALID_STAGES = {
     STAGE_DISCUSS,
+    STAGE_DISCOVERY,
     STAGE_PLAN,
+    STAGE_INCEPTION,
+    STAGE_REFINEMENT,
     STAGE_EXECUTE,
     STAGE_VALIDATE,
     STAGE_COMPLETED,
@@ -109,7 +115,6 @@ def validate_stage_permission(
     if action in {"read", "glob", "grep", "search"}:
         return True, None
 
-
     # Normalização de path relativo ao workspace do projeto
     try:
         p_target = Path(target_path)
@@ -122,27 +127,29 @@ def validate_stage_permission(
 
     rel = rel.replace("\\", "/").lstrip("./")
 
-    # 1. ETAPA DISCUSS
-    if normalized_stage == STAGE_DISCUSS:
+    # 1. ETAPA DISCUSS / DISCOVERY
+    if normalized_stage in {STAGE_DISCUSS, STAGE_DISCOVERY}:
         if is_code_path(rel):
+            stage_name = normalized_stage
             return (
                 False,
                 (
-                    f"⛔ [BLOQUEIO DE ETAPA: DISCUSS] A alteração do arquivo de código '{rel}' é proibida na etapa DISCUSS. "
+                    f"⛔ [BLOQUEIO DE ETAPA: {stage_name}] A alteração do arquivo de código '{rel}' é proibida na etapa {stage_name}. "
                     "Esta etapa é reservada para levantamento de requisitos, discussão de escopo e documentação de briefings em docs/. "
-                    "Pressione a tecla TAB na TUI para avançar para PLAN ou EXECUTE quando o escopo estiver alinhado."
+                    "Pressione a tecla TAB na TUI para avançar para as próximas etapas quando o escopo estiver alinhado."
                 ),
             )
         return True, None
 
-    # 2. ETAPA PLAN
-    if normalized_stage == STAGE_PLAN:
+    # 2. ETAPA PLAN / INCEPTION / REFINEMENT
+    if normalized_stage in {STAGE_PLAN, STAGE_INCEPTION, STAGE_REFINEMENT}:
         if is_production_code_path(rel):
+            stage_name = normalized_stage
             return (
                 False,
                 (
-                    f"⛔ [BLOQUEIO DE ETAPA: PLAN] A criação ou edição de código de produção em '{rel}' é proibida na etapa PLAN. "
-                    "Esta etapa destina-se à arquitetura, jornadas e decomposição de stories em docs/. "
+                    f"⛔ [BLOQUEIO DE ETAPA: {stage_name}] A criação ou edição de código de produção em '{rel}' é proibida na etapa {stage_name}. "
+                    "Esta etapa destina-se à arquitetura, jornadas, decomposição e refinamento de stories em docs/. "
                     "Pressione a tecla TAB na TUI para avançar para a etapa EXECUTE para implementar o código."
                 ),
             )
@@ -170,6 +177,5 @@ def validate_stage_permission(
                 ),
             )
         return True, None
-
 
     return True, None

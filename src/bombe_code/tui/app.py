@@ -73,7 +73,17 @@ class BombeTuiApp(App):
         Binding("ctrl+q", "quit", "Sair", show=True),
     ]
 
-    WAVE_STAGES: ClassVar[list[str]] = ["DISCUSS", "PLAN", "EXECUTE", "VALIDATE"]
+    WAVE_ZERO_STAGES: ClassVar[list[str]] = ["DISCOVERY", "INCEPTION"]
+    DELIVERY_WAVE_STAGES: ClassVar[list[str]] = ["PLAN", "REFINEMENT", "EXECUTE", "VALIDATE"]
+    WAVE_STAGES: ClassVar[list[str]] = [
+        "DISCOVERY",
+        "INCEPTION",
+        "PLAN",
+        "REFINEMENT",
+        "EXECUTE",
+        "VALIDATE",
+        "DISCUSS",
+    ]
     WAVE_STATIONS = WAVE_STAGES
 
     def __init__(
@@ -92,14 +102,40 @@ class BombeTuiApp(App):
         self.agent_name = agent or "padrão"
         self.project_dir = project_dir
         self.mode: str = "TDD"
-        self.wave_station: str = "DISCUSS"
-        self._last_tdd_stage: str = "DISCUSS"
+        self.wave_station: str = "DISCOVERY"
+        self._last_tdd_stage: str = "DISCOVERY"
         self._load_current_stage_from_db()
         self._current_assistant_widget: PartWidget | None = None
         self._current_assistant_text: str = ""
         self._thinking_widget: Static | None = None
         self._sse_task: asyncio.Task | None = None
         self._is_active_turn: bool = False
+
+    def get_current_wave_stages(self) -> list[str]:
+        """Retorna as etapas válidas para o Tab conforme a ontologia da onda ativa (Onda 0 vs Ondas de Entrega)."""
+        try:
+            from ..storage.project_db import ProjectDatabase
+
+            db = ProjectDatabase(self.project_dir)
+            saved = db.load_wave_state()
+            if not saved:
+                # Projeto recém-criado, sem estado persistido -> Onda 0 (Greenfield)
+                return self.WAVE_ZERO_STAGES
+
+            wave_id = str(saved.get("wave_id", "ONDA-000")).upper().strip()
+            if wave_id in (
+                "ONDA-0",
+                "ONDA-00",
+                "ONDA-000",
+                "WAVE-0",
+                "WAVE-00",
+                "WAVE-000",
+            ) or wave_id.startswith(("ONDA-000-", "WAVE-000-", "ONDA-0-", "WAVE-0-")):
+                return self.WAVE_ZERO_STAGES
+        except Exception:  # noqa: BLE001
+            return self.WAVE_ZERO_STAGES
+
+        return self.DELIVERY_WAVE_STAGES
 
     def _load_current_stage_from_db(self) -> None:
         """Carrega a etapa atual da ONDA persistida no banco SQLite local (.bombe-code/state.db)."""
@@ -108,19 +144,28 @@ class BombeTuiApp(App):
 
             db = ProjectDatabase(self.project_dir)
             saved = db.load_wave_state()
+            allowed = self.get_current_wave_stages()
+
             if saved and saved.get("state"):
                 raw_state = str(saved["state"]).upper()
                 if raw_state == "VIBE":
                     self.mode = "VIBE"
                     self.wave_station = "VIBE"
-                elif raw_state in self.WAVE_STAGES or raw_state == "COMPLETED":
+                else:
                     self.mode = "TDD"
+                    # Normalização caso venha de terminologia anterior
+                    if raw_state == "DISCUSS":
+                        raw_state = "DISCOVERY" if "DISCOVERY" in allowed else "PLAN"
+                    elif raw_state not in allowed and raw_state != "COMPLETED":
+                        raw_state = allowed[0]
+
                     self.wave_station = raw_state
-                    if raw_state in self.WAVE_STAGES:
-                        self._last_tdd_stage = raw_state
+                    self._last_tdd_stage = raw_state
+            else:
+                self.wave_station = allowed[0]
+                self._last_tdd_stage = allowed[0]
         except Exception as exc:  # noqa: BLE001
             logger.debug("Não foi possível carregar estado da onda no boot da TUI: %s", exc)
-
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
@@ -149,11 +194,18 @@ class BombeTuiApp(App):
     def action_toggle_vibe_mode(self) -> None:
         """Alterna soberanamente entre Modo TDD e Modo VIBE via Shift+Tab."""
         old_mode = self.mode
+        allowed = self.get_current_wave_stages()
+        default_stage = allowed[0]
+
         if self.mode == "VIBE":
             self.mode = "TDD"
-            self.wave_station = self._last_tdd_stage or "DISCUSS"
+            self.wave_station = (
+                self._last_tdd_stage if self._last_tdd_stage in allowed else default_stage
+            )
         else:
-            self._last_tdd_stage = self.wave_station if self.wave_station in self.WAVE_STAGES else "DISCUSS"
+            self._last_tdd_stage = (
+                self.wave_station if self.wave_station in allowed else default_stage
+            )
             self.mode = "VIBE"
             self.wave_station = "VIBE"
 
@@ -165,7 +217,8 @@ class BombeTuiApp(App):
 
             db = ProjectDatabase(self.project_dir)
             saved = db.load_wave_state() or {}
-            wave_id = saved.get("wave_id", "ONDA-001")
+            default_wave = "ONDA-000" if "DISCOVERY" in allowed else "ONDA-001"
+            wave_id = saved.get("wave_id", default_wave)
             autonomy = saved.get("autonomy_mode", "AUTO")
             eng = "vibe-code" if self.mode == "VIBE" else "tdd-code"
             db.save_wave_state(
@@ -185,17 +238,36 @@ class BombeTuiApp(App):
         self._notify_mode_switch(old_mode, self.mode)
 
     def action_cycle_stage(self) -> None:
-        """Alterna ciclicamente entre as 4 etapas da ONDA (apenas em modo TDD)."""
+        """Alterna ciclicamente entre as etapas da ONDA respeitando a ontologia ativa (apenas em modo TDD)."""
         if self.mode == "VIBE":
             # No modo VIBE não existem sub-etapas; o Tab não cicla
             return
 
+        allowed = self.get_current_wave_stages()
         old_stage = self.wave_station
-        if self.wave_station in self.WAVE_STAGES:
-            idx = (self.WAVE_STAGES.index(self.wave_station) + 1) % len(self.WAVE_STAGES)
-            self.wave_station = self.WAVE_STAGES[idx]
+
+        # Normalizações de compatibilidade/transição
+        normalized = self.wave_station
+        if "DISCOVERY" in allowed:
+            # Estamos na Onda 0 (DISCOVERY ➔ INCEPTION)
+            if normalized in ("DISCUSS", "PLAN", "INCEPTION", "FOUNDATION"):
+                normalized = (
+                    "INCEPTION"
+                    if normalized in ("PLAN", "INCEPTION", "FOUNDATION")
+                    else "DISCOVERY"
+                )
         else:
-            self.wave_station = self.WAVE_STAGES[0]
+            # Estamos nas Ondas Subsequentes (PLAN ➔ REFINEMENT ➔ EXECUTE ➔ VALIDATE)
+            if normalized in ("DISCUSS", "DISCOVERY"):
+                normalized = "PLAN"
+            elif normalized in ("INCEPTION", "FOUNDATION"):
+                normalized = "REFINEMENT"
+
+        if normalized in allowed:
+            idx = (allowed.index(normalized) + 1) % len(allowed)
+            self.wave_station = allowed[idx]
+        else:
+            self.wave_station = allowed[0]
 
         self._last_tdd_stage = self.wave_station
         self.update_status()
@@ -206,7 +278,8 @@ class BombeTuiApp(App):
 
             db = ProjectDatabase(self.project_dir)
             saved = db.load_wave_state() or {}
-            wave_id = saved.get("wave_id", "ONDA-001")
+            default_wave = "ONDA-000" if "DISCOVERY" in allowed else "ONDA-001"
+            wave_id = saved.get("wave_id", default_wave)
             autonomy = saved.get("autonomy_mode", "AUTO")
             eng = saved.get("engineering_mode", "tdd-code")
             db.save_wave_state(
@@ -251,11 +324,15 @@ class BombeTuiApp(App):
 
     def _notify_stage_switch(self, old_stage: str, new_stage: str) -> None:
         stage_guides = {
+            "DISCOVERY": "Descoberta & Viabilidade (Onda 0) — Pesquisa de mercado, briefing e visão de produto em docs/",
+            "INCEPTION": "Lean Inception & Sequenciador (Onda 0) — Canvas MVP, personas, jornadas e fatiamento em docs/",
+            "FOUNDATION": "Lean Inception & Sequenciador (Onda 0) — Canvas MVP, personas, jornadas e fatiamento em docs/",
             "DISCUSS": "Concepção & Escopo — Escrita de código bloqueada; permitido briefings em docs/",
-            "PLAN": "Arquitetura & Stories — Escrita de código bloqueada; permitido docs/stories/",
+            "PLAN": "Planejamento da Onda — Arquitetura técnica, ADRs e contratos da fatia em docs/",
+            "REFINEMENT": "Refinamento PBB — Decomposição em ai-stories e tarefas atômicas em docs/backlog/",
             "EXECUTE": "Construção TDD — Escrita totalmente liberada em src/, tests/ e docs/",
-            "VALIDATE": "Qualidade & E2E — Restrito a relatórios em docs/reports/ e testes",
-            "COMPLETED": "Onda Concluída — Pronto para nova onda em DISCUSS",
+            "VALIDATE": "Qualidade & Validação — Homologação, relatórios em docs/reports/ e testes E2E",
+            "COMPLETED": "Onda Concluída — Pronto para a próxima onda",
         }
         guide = stage_guides.get(new_stage, "")
         try:
@@ -269,7 +346,6 @@ class BombeTuiApp(App):
             chat.scroll_end(animate=False)
         except Exception:  # noqa: BLE001, S110
             pass
-
 
     def action_cycle_station(self) -> None:
         self.action_cycle_stage()
@@ -286,7 +362,6 @@ class BombeTuiApp(App):
             f"Modo: {mode_badge} | "
             f"Sessão: {s_id} | Modelo: {self.model_name} | Agente: {self.agent_name} | Status: {state}"
         )
-
 
     def update_status(self) -> None:
         try:

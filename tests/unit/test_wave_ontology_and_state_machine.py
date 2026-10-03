@@ -1,6 +1,7 @@
 """Testes TDD para a Story ST-035: Ontologia de Ondas (WaveType e State Machine)."""
 
 import pytest
+
 from bombe_code.turing.state_machine import (
     InvalidTransitionError,
     TuringStateMachine,
@@ -61,3 +62,26 @@ def test_delivery_wave_supports_refinement_stage():
     # VALIDATE -> COMPLETED
     sm.transition_to(WaveState.COMPLETED)
     assert sm.current_state == WaveState.COMPLETED
+
+
+def test_wave_zero_discovery_and_inception_transitions():
+    sm = TuringStateMachine(wave_id="ONDA-000", initial_state=WaveState.DISCOVERY)
+    assert sm.wave_type == WaveType.WAVE_ZERO
+    assert sm.current_phase == WavePhase.UPSTREAM
+
+    # DISCOVERY -> INCEPTION
+    assert sm.can_transition_to(WaveState.INCEPTION) is True
+    sm.transition_to(WaveState.INCEPTION)
+    assert sm.current_state == WaveState.INCEPTION
+    assert sm.current_phase == WavePhase.UPSTREAM
+
+    # INCEPTION -> COMPLETED
+    assert sm.can_transition_to(WaveState.COMPLETED) is True
+
+    # Bloqueio estrito de EXECUTE e VALIDATE
+    assert sm.can_transition_to(WaveState.EXECUTE) is False
+    assert sm.can_transition_to(WaveState.VALIDATE) is False
+    with pytest.raises(InvalidTransitionError, match="PROIBID"):
+        sm.transition_to(WaveState.EXECUTE)
+    with pytest.raises(InvalidTransitionError, match="PROIBID"):
+        sm.transition_to(WaveState.VALIDATE)
