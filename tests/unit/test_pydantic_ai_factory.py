@@ -38,3 +38,12 @@ def test_create_agent_defaults_to_string_result():
     agent = factory.create_agent(model_name="test")
     assert isinstance(agent, Agent)
     assert agent.output_type is str
+
+
+def test_create_agent_injects_thinking_disabled_for_zai_glm():
+    factory = PydanticAiFactory()
+    agent = factory.create_agent(model_name="glm-5.3-flash")
+    assert isinstance(agent, Agent)
+    assert agent.model_settings is not None
+    assert agent.model_settings.get("extra_body", {}).get("thinking") == {"type": "disabled"}
+

@@ -93,10 +93,27 @@ class PydanticAiFactory:
         resolved = self.resolve_model(model_name)
         res_type = result_type if result_type is not None else str
 
+        model_settings: dict[str, Any] = {}
+        # Para Z.ai Coding Plan (GLM-5.3), desativa o thinking excessivo em segundo plano para evitar timeouts de dezenas de minutos
+        is_zai = False
+        if isinstance(resolved, OpenAIChatModel):
+            if "glm" in resolved.model_name.lower():
+                is_zai = True
+            elif hasattr(resolved.provider, "openai_client"):
+                base_u = str(getattr(resolved.provider.openai_client, "base_url", ""))
+                if "z.ai" in base_u or "zhipu" in base_u:
+                    is_zai = True
+        elif isinstance(resolved, str) and ("zai" in resolved.lower() or "glm" in resolved.lower()):
+            is_zai = True
+
+        if is_zai:
+            model_settings["extra_body"] = {"thinking": {"type": "disabled"}}
+
         agent = Agent(
             model=resolved,
             output_type=res_type,
             system_prompt=system_prompt,
             tools=tools or [],
+            model_settings=model_settings or None,
         )
         return agent
