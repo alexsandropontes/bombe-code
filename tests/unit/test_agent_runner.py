@@ -118,3 +118,20 @@ def test_agent_runner_execution_failure(skill_registry, mock_factory, tmp_path):
     tasks = db.list_agent_tasks(agent_handle="@meira")
     assert len(tasks) == 1
     assert tasks[0]["status"] == "failed"
+
+
+def test_agent_runner_realtime_telemetry(mock_factory, capsys):
+    agent_registry = AgentRegistry.default()
+    grace = agent_registry.get("@grace")
+
+    runner = AgentRunner(
+        agent=grace,
+        llm_factory=mock_factory,
+    )
+
+    result = runner.run("Execute a tarefa de telemetria")
+    captured = capsys.readouterr()
+    assert "⚡ [@grace] Invocando modelo..." in captured.out
+    assert "✓ [@grace] Resposta recebida" in captured.out
+    assert result.success is True
+

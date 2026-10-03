@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import logging
+import os
 import time
 from typing import Any
+
+os.environ.setdefault("PYDANTIC_AI_NO_BANNER", "1")
 
 from pydantic import BaseModel, Field
 
@@ -93,6 +96,7 @@ class AgentRunner:
                 exec_prompt = f"{prompt}\n\nContexto da Execução:\n{context_str}"
 
             t0 = time.perf_counter()
+            print(f"  ⚡ [{self.agent.handle}] Invocando modelo...", flush=True)
             # Execução: Pydantic AI real usa run_sync, mocks de teste unitário usam run
             is_mock = type(pydantic_agent).__name__.endswith("Mock")
             if (
@@ -109,6 +113,7 @@ class AgentRunner:
                 raw_result = pydantic_agent.run(exec_prompt)
 
             duration_seconds = round(time.perf_counter() - t0, 3)
+            print(f"  ✓ [{self.agent.handle}] Resposta recebida em {duration_seconds:.1f}s.", flush=True)
 
             # Extrai telemetria de tokens e custos do Pydantic AI
             input_tokens = 0
