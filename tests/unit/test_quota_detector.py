@@ -104,3 +104,47 @@ def test_agent_runner_marks_quota_exhausted_as_blocked(tmp_path):
             call("task-429", "blocked", output=result.block_reason),
         ]
     )
+
+
+def test_parse_quota_reset_info_zai_beijing_timezone():
+    from datetime import datetime, timezone
+    from bombe_code.llm.quota_detector import parse_quota_reset_info
+
+    raw_err = (
+        "status_code: 429, model_name: glm-5.3-flash, body: {'code': '1308', "
+        "'message': 'Usage limit reached for 5 hour. Your limit will reset at 2026-10-03 16:02:39'}"
+    )
+
+    # 1. Simula horário ANTES do reset (ex: 07:02:39 UTC, que é 15:02:39 em Beijing CST)
+    t_before = datetime(2026, 10, 3, 7, 2, 39, tzinfo=timezone.utc)
+    info = parse_quota_reset_info(raw_err, current_time=t_before)
+
+    assert info.is_exhausted is True
+    assert info.is_already_reset is False
+    assert info.origin_timezone_name == "Asia/Shanghai (CST UTC+8)"
+    assert info.retry_after_seconds == 3600.0  # exatamente 1 hora
+    assert "Reset previsto em 60m 0s" in info.human_message
+
+    # 2. Simula horário DEPOIS do reset (ex: 10:29:00 UTC, que é 18:29:00 em Beijing CST)
+    t_after = datetime(2026, 10, 3, 10, 29, 0, tzinfo=timezone.utc)
+    info_after = parse_quota_reset_info(raw_err, current_time=t_after)
+
+    assert info_after.is_exhausted is True
+    assert info_after.is_already_reset is True
+    assert info_after.retry_after_seconds <= 0
+    assert "já está liberada" in info_after.human_message
+
+
+def test_parse_quota_reset_info_relative_seconds():
+    from datetime import datetime, timezone
+    from bombe_code.llm.quota_detector import parse_quota_reset_info
+
+    raw_err = "Rate limit reached. Please try again in 45.5s."
+    t_now = datetime(2026, 10, 3, 12, 0, 0, tzinfo=timezone.utc)
+    info = parse_quota_reset_info(raw_err, current_time=t_now)
+
+    assert info.is_exhausted is True
+    assert info.retry_after_seconds == 45.5
+    assert info.is_already_reset is False
+    assert "45s" in info.human_message
+
