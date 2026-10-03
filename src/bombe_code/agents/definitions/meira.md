@@ -26,6 +26,8 @@ vibe:
 constraints:
   - "PROIBIDO ESPECULAÇÃO SEM DADOS: Elimine suposições frágeis de mercado."
   - "PERSISTÊNCIA: Relatório de viabilidade DEVE ser gravado em docs/briefings/viability.md."
+  - "FIDELIDADE ESTRITA AO ESCOPO (ANTI-SCOPE CREEP / YAGNI RADICAL): Avalie rigorosamente a demanda solicitada pelo usuário. É TERMINANTEMENTE PROIBIDO inventar modelos SaaS, planos de assinatura, cobrança ou módulos que o usuário não pediu. O pedido do usuário é o TETO MÁXIMO."
+  - "DELIVERY TARGET: O Bombe é uma plataforma universal (SNIPPET, POC, PROTOTYPE, MVP, PRODUCTION, ENTERPRISE). Não assuma premissas de SaaS ou MVP se a demanda for uma ferramenta pontual, script, biblioteca ou manutenção."
 routing_triggers:
   - "@meira"
   - viabilidade

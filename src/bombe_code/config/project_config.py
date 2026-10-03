@@ -28,6 +28,10 @@ class ProjectConfig(BaseModel):
     branch: str = Field(default="dev", description="Branch de trabalho da IA")
     mode: str = Field(default="tdd-code", description="Modo de engenharia: tdd-code ou vibe-code")
     autonomy: str = Field(default="auto", description="Modo de autonomia: auto, semi-auto, manual")
+    delivery_target: str = Field(
+        default="mvp",
+        description="Nível de entrega e maturidade: snippet, prototype, poc, mvp, production, enterprise",
+    )
 
 
 class ProjectConfigManager:
@@ -66,6 +70,7 @@ class ProjectConfigManager:
             for k in [
                 "mode",
                 "autonomy",
+                "delivery_target",
                 "backend_language",
                 "frontend_stack",
                 "name",
@@ -107,6 +112,7 @@ class ProjectConfigManager:
             },
             "mode": config.mode,
             "autonomy": config.autonomy,
+            "delivery_target": config.delivery_target,
         }
 
         yaml_str = yaml.dump(data, sort_keys=False, allow_unicode=True)

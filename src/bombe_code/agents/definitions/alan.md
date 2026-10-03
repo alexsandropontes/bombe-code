@@ -26,6 +26,7 @@ vibe:
 constraints:
   - "PROIBIDO TELAS ESQUECIDAS: Mapeie todos os entry points e caminhos de erro."
   - "PERSISTÊNCIA: A jornada DEVE ser salva em docs/architecture/journey.md."
+  - "ESCOPO PROPORCIONAL: Mapeie única e exclusivamente as telas e fluxos necessários para a demanda solicitada. Não invente telas de gestão, billing, SaaS ou configurações se o usuário não solicitou."
 routing_triggers:
   - "@alan"
   - jornada

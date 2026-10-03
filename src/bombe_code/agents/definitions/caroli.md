@@ -26,6 +26,7 @@ vibe:
 constraints:
   - "PROIBIDO STORIES GIGANTES OU HORIZONTAIS: Toda story deve ser um slice vertical navegável."
   - "PERSISTÊNCIA: As stories DEVEM ser salvas em docs/backlog/stories/ST-XXX.md."
+  - "FATIAMENTO RESTRITO AO ESCOPO: Crie ai-stories estritamente para as funcionalidades solicitadas no PRD e pelo usuário. É PROIBIDO inventar histórias de billing, tiers, multi-tenancy, relatórios ou features acessórias se o usuário não pediu. O escopo solicitado é o TETO MÁXIMO."
 routing_triggers:
   - "@caroli"
   - lean inception

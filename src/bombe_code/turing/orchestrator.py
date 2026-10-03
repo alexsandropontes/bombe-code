@@ -19,6 +19,7 @@ from bombe_code.llm.pydantic_factory import PydanticAiFactory
 from bombe_code.storage.project_db import ProjectDatabase
 from bombe_code.turing.gates import SealGate, TemplateGate
 from bombe_code.turing.kanban import KanbanCardStatus, KanbanManager
+from bombe_code.turing.prompt_assembler import DeliveryTarget, TuringPromptAssembler
 from bombe_code.turing.review_gate import TuringReviewGate
 from bombe_code.turing.state_machine import (
     AutonomyMode,
@@ -74,6 +75,11 @@ class WaveOrchestrator:
         self.review_gate = review_gate or TuringReviewGate()
         self.kanban = kanban or KanbanManager(project_dir=str(self.project_dir), db=self.db)
         self._gate_evaluations: dict[str, Any] = {}
+        self.config_mgr = ProjectConfigManager(str(self.project_dir))
+        cfg = self.config_mgr.load()
+        raw_target = getattr(cfg, "delivery_target", "mvp")
+        self.delivery_target = DeliveryTarget.from_str(raw_target)
+        self.prompt_assembler = TuringPromptAssembler()
         self.telemetry: dict[str, Any] = {
             "stages": {},
             "total": {
@@ -378,6 +384,23 @@ class WaveOrchestrator:
             extra_tools=self._get_project_fs_tools(),
         )
 
+    def _assemble_prompt(
+        self, agent_handle: str, task_prompt: str, context: dict[str, Any] | None = None
+    ) -> str:
+        """Monta deterministamente o prompt de execução usando o Lego de Prompts."""
+        eng_mode = (
+            self.state_machine.engineering_mode.value
+            if hasattr(self.state_machine.engineering_mode, "value")
+            else str(self.state_machine.engineering_mode)
+        )
+        return self.prompt_assembler.assemble(
+            agent_handle=agent_handle,
+            task_instruction=task_prompt,
+            delivery_target=self.delivery_target,
+            mode=eng_mode,
+            context=context,
+        )
+
     AGENT_REQUIRED_INPUTS: ClassVar[dict[str, list[tuple[str, str]]]] = {
         "@meira": [],
         "@grace": [
@@ -465,6 +488,7 @@ class WaveOrchestrator:
             }
 
         results: list[dict[str, Any]] = []
+        print(f"🎯 [DISCUSS] Nível de maturidade da ONDA: {self.delivery_target.value.upper()}", flush=True)
 
         # 1. Despacha @meira para viabilidade
         ok, pre_err = self.validate_agent_prerequisites("@meira")
@@ -474,10 +498,12 @@ class WaveOrchestrator:
 
         runner_meira = self._get_runner("@meira")
         if runner_meira:
-            meira_prompt = (
-                f"Analise a viabilidade técnica e estratégica para: {topic}.\n"
-                f"Se a viabilidade for positiva para o MVP, declare explicitamente no seu parecer: 'Status: APROVADO' ou 'Veredito: PROSSEGUIR'."
+            raw_prompt = (
+                f"Analise a viabilidade técnica e estratégica para a demanda: '{topic}'.\n"
+                f"Avalie a demanda solicitada sem inventar escopos extras ou módulos adicionais.\n"
+                f"Se a viabilidade for positiva para o nível solicitado ({self.delivery_target.value.upper()}), declare explicitamente: 'Status: APROVADO' ou 'Veredito: PROSSEGUIR'."
             )
+            meira_prompt = self._assemble_prompt("@meira", raw_prompt, context)
             res_meira = runner_meira.run(
                 prompt=meira_prompt,
                 context=context,
@@ -545,18 +571,20 @@ class WaveOrchestrator:
         runner_grace = self._get_runner("@grace")
         grace_output = ""
         if runner_grace:
-            grace_prompt = (
-                f"Elabore o PRD estruturado completo para o tópico: '{topic}'.\n\n"
+            raw_prompt = (
+                f"Elabore o PRD estruturado completo para a demanda: '{topic}'.\n\n"
                 f"Consulte o parecer de viabilidade prévio salvo em 'docs/briefings/VIABILITY.md'.\n"
-                f"É OBRIGATÓRIO incluir as seguintes seções estruturadas:\n"
+                f"É OBRIGATÓRIO focar estritamente na demanda do usuário sem inventar módulos ou modelos não solicitados.\n"
+                f"Inclua as seções:\n"
                 f"# PRD - {topic}\n"
                 f"## Visão Geral\n"
                 f"## Problema\n"
                 f"## Personas\n"
                 f"## Critérios RICE\n"
-                f"## MVP Operacional\n\n"
+                f"## Escopo da Entrega ({self.delivery_target.value.upper()})\n\n"
                 f"Ao concluir com sucesso, declare explicitamente no seu parecer: 'Status: APROVADO'."
             )
+            grace_prompt = self._assemble_prompt("@grace", raw_prompt, context)
             res_grace = runner_grace.run(
                 prompt=grace_prompt,
                 context=context,
@@ -647,11 +675,13 @@ class WaveOrchestrator:
 
         runner_alan = self._get_runner("@alan")
         if runner_alan:
-            alan_prompt = (
-                f"Mapeie a jornada do usuário e telas para a ONDA {self.state_machine.wave_id}.\n"
+            raw_prompt = (
+                f"Mapeie a jornada do usuário e telas para a demanda da ONDA {self.state_machine.wave_id}.\n"
                 f"Consulte o PRD em 'docs/briefings/PRD.md'.\n"
+                f"Mapeie estritamente os fluxos e telas da demanda solicitada, sem inventar telas acessórias ou escopos extras.\n"
                 f"É OBRIGATÓRIO incluir as seções: '## Entry Points', '## Fluxo de Navegação', '## Telas'."
             )
+            alan_prompt = self._assemble_prompt("@alan", raw_prompt, context)
             res_alan = runner_alan.run(prompt=alan_prompt, context=context)
             self._record_telemetry("PLAN", "@alan", res_alan)
             outputs["@alan"] = res_alan.output
@@ -707,11 +737,13 @@ class WaveOrchestrator:
 
         runner_ieru = self._get_runner("@ieru")
         if runner_ieru:
-            ieru_prompt = (
-                f"Defina as decisões técnicas e arquitetura para a ONDA {self.state_machine.wave_id}.\n"
+            raw_prompt = (
+                f"Defina as decisões técnicas e arquitetura para a demanda da ONDA {self.state_machine.wave_id}.\n"
                 f"Consulte o PRD em 'docs/briefings/PRD.md' e a Jornada em 'docs/architecture/journey.md'.\n"
+                f"Projete a arquitetura com YAGNI Radical e proporcional à demanda (sem infraestrutura desnecessária).\n"
                 f"É OBRIGATÓRIO incluir as seções: '## Decisões Arquiteturais', '## Stack'."
             )
+            ieru_prompt = self._assemble_prompt("@ieru", raw_prompt, context)
             res_ieru = runner_ieru.run(prompt=ieru_prompt, context=context)
             self._record_telemetry("PLAN", "@ieru", res_ieru)
             outputs["@ieru"] = res_ieru.output
@@ -772,10 +804,12 @@ class WaveOrchestrator:
 
         runner_codd = self._get_runner("@codd")
         if runner_codd:
-            codd_prompt = (
-                f"Projete a modelagem de dados e esquemas para a ONDA {self.state_machine.wave_id}.\n"
-                f"Consulte o PRD em 'docs/briefings/PRD.md' e a Arquitetura em 'docs/architecture/SYSTEM_ARCHITECTURE.md'."
+            raw_prompt = (
+                f"Projete a modelagem de dados e esquemas para a demanda da ONDA {self.state_machine.wave_id}.\n"
+                f"Consulte o PRD em 'docs/briefings/PRD.md' e a Arquitetura em 'docs/architecture/SYSTEM_ARCHITECTURE.md'.\n"
+                f"Modele apenas as tabelas e dados estritamente necessários para a demanda, sem tabelas de billing ou escopo extra."
             )
+            codd_prompt = self._assemble_prompt("@codd", raw_prompt, context)
             res_codd = runner_codd.run(prompt=codd_prompt, context=context)
             self._record_telemetry("PLAN", "@codd", res_codd)
             outputs["@codd"] = res_codd.output
@@ -831,12 +865,13 @@ class WaveOrchestrator:
 
         runner_caroli = self._get_runner("@caroli")
         if runner_caroli:
-            caroli_prompt = (
-                f"Decomponha e gere as ai-stories completas da ONDA {self.state_machine.wave_id}.\n"
+            raw_prompt = (
+                f"Decomponha e gere as ai-stories completas para a demanda da ONDA {self.state_machine.wave_id}.\n"
                 f"Consulte o PRD em 'docs/briefings/PRD.md', a Jornada em 'docs/architecture/journey.md' "
                 f"e a Arquitetura em 'docs/architecture/SYSTEM_ARCHITECTURE.md'.\n"
+                f"Crie histórias verticais estritamente para o escopo pedido, sem inventar módulos ou cobranças extras.\n"
                 f"É OBRIGATÓRIO incluir:\n"
-                f"# STORY ST-001: Implementação do Módulo\n"
+                f"# STORY ST-001: Implementação da Funcionalidade\n"
                 f"> **Status:** READY\n"
                 f"> **Blocked:** false\n"
                 f"## INVEST\n"
@@ -846,6 +881,7 @@ class WaveOrchestrator:
                 f"- Quando ele submeter a requisição\n"
                 f"- Então o resultado esperado é retornado\n"
             )
+            caroli_prompt = self._assemble_prompt("@caroli", raw_prompt, context)
             res_caroli = runner_caroli.run(prompt=caroli_prompt, context=context)
             self._record_telemetry("PLAN", "@caroli", res_caroli)
             outputs["@caroli"] = res_caroli.output
@@ -1050,11 +1086,12 @@ class WaveOrchestrator:
         runner_aniche = self._get_runner("@aniche")
         test_plan_res = None
         if runner_aniche:
-            aniche_prompt = (
+            raw_aniche_prompt = (
                 f"Elabore o Plano de Testes e escreva a suíte de testes automatizados para a story {target_story}.\n"
                 f"Consulte os requisitos e os cenários BDD no arquivo 'docs/stories/{target_story}.md'.\n"
                 f"Gere e salve os testes de unidade/slice na pasta 'tests/' (ou retorne-a no seu parecer).\n"
             )
+            aniche_prompt = self._assemble_prompt("@aniche", raw_aniche_prompt)
             test_plan_res = runner_aniche.run(prompt=aniche_prompt)
             self._record_telemetry("EXECUTE", "@aniche (QA Plan)", test_plan_res)
 
@@ -1083,11 +1120,12 @@ class WaveOrchestrator:
         runner_dev = self._get_runner("@valim")
         dev_res = None
         if runner_dev:
-            dev_prompt = (
+            raw_dev_prompt = (
                 f"Implemente o código estritamente necessário para fazer a suíte de testes passar para a story {target_story}.\n"
                 f"Consulte os requisitos em 'docs/stories/{target_story}.md' e o plano/testes em 'docs/stories/{target_story}_test_plan.md' (e pasta 'tests/').\n"
                 f"Siga TDD (GREEN) e refatore com Clean Code. Salve os arquivos de código de produção nos caminhos relativos apropriados (ex: 'js/logic.js', 'index.html').\n"
             )
+            dev_prompt = self._assemble_prompt("@valim", raw_dev_prompt)
             dev_res = runner_dev.run(prompt=dev_prompt)
             self._record_telemetry("EXECUTE", "@valim (Dev)", dev_res)
 
@@ -1111,11 +1149,12 @@ class WaveOrchestrator:
         runner_bob = self._get_runner("@unclebob")
         bob_res = None
         if runner_bob:
-            bob_prompt = (
+            raw_bob_prompt = (
                 f"Faça o code review de Clean Code e SOLID para {target_story}.\n"
                 f"Inspecione os arquivos de código implementados pelo Dev ('js/', raiz) e os testes em 'tests/'.\n"
                 f"Se o código e os testes estiverem aprovados, declare explicitamente: 'Review: APROVADO'. Caso contrário, aponte os problemas.\n"
             )
+            bob_prompt = self._assemble_prompt("@unclebob", raw_bob_prompt)
             bob_res = runner_bob.run(prompt=bob_prompt)
             self._record_telemetry("EXECUTE", "@unclebob (Tech Lead Review)", bob_res)
 
@@ -1134,10 +1173,11 @@ class WaveOrchestrator:
         # 4. FASE RUNNER & VERIFICAÇÃO: @aniche executa e valida a suíte de testes da story
         aniche_val_res = None
         if runner_aniche:
-            aniche_val_prompt = (
+            raw_aniche_val_prompt = (
                 f"Execute a suíte de testes da story {target_story} contra os arquivos de código implementados no projeto.\n"
                 f"Inspecione a pasta 'tests/' e 'js/'. Se todos os testes passarem, declare explicitamente: 'Veredito: APROVADO'.\n"
             )
+            aniche_val_prompt = self._assemble_prompt("@aniche", raw_aniche_val_prompt)
             aniche_val_res = runner_aniche.run(prompt=aniche_val_prompt)
             self._record_telemetry("EXECUTE", "@aniche (QA Run & Verify)", aniche_val_res)
 
@@ -1251,7 +1291,8 @@ class WaveOrchestrator:
         runner = self._get_runner(delegated_agent)
         resolution_output = ""
         if runner:
-            res = runner.run(prompt=prompt_context)
+            assembled_context_prompt = self._assemble_prompt(delegated_agent, prompt_context)
+            res = runner.run(prompt=assembled_context_prompt)
             self._record_telemetry("EXECUTE", f"{delegated_agent} (Auto-Resolve)", res)
             resolution_output = res.output
 
@@ -1406,10 +1447,11 @@ class WaveOrchestrator:
         runner_edith = self._get_runner("@edith")
         edith_res = None
         if runner_edith:
-            edith_prompt = (
+            raw_edith_prompt = (
                 "Audite o entregável integrado da ONDA consultando o PRD em 'docs/briefings/PRD.md' e inspecionando os arquivos de código e testes do projeto.\n"
                 "Se aprovado, declare explicitamente: 'Homologação: APROVADO'. Caso contrário, aponte os bloqueios ou faltas.\n"
             )
+            edith_prompt = self._assemble_prompt("@edith", raw_edith_prompt)
             edith_res = runner_edith.run(edith_prompt)
             self._record_telemetry("VALIDATE", "@edith (Product Homologation)", edith_res)
 
@@ -1417,10 +1459,11 @@ class WaveOrchestrator:
         runner_nina = self._get_runner("@nina")
         nina_res = None
         if runner_nina:
-            nina_prompt = (
+            raw_nina_prompt = (
                 "Audite o consumo de tokens, custos e a governança ética da ONDA consultando o relatório em 'docs/telemetria.md'.\n"
                 "Se conforme com os limites e princípios, declare explicitamente: 'Governança: APROVADO'.\n"
             )
+            nina_prompt = self._assemble_prompt("@nina", raw_nina_prompt)
             nina_res = runner_nina.run(nina_prompt)
             self._record_telemetry("VALIDATE", "@nina (Gov & FinOps)", nina_res)
 

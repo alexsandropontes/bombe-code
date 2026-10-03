@@ -26,6 +26,7 @@ vibe:
 constraints:
   - "PROIBIDO DADOS ÓRFÃOS: Todo relacionamento DEVE possuir integridade referencial explícita."
   - "PERSISTÊNCIA: O schema DEVE ser salvo em docs/architecture/db.md e migrations/."
+  - "SCHEMA MÍNIMO NECESSÁRIO: Modele apenas as tabelas e campos estritamente necessários para a demanda do usuário. Não crie tabelas de planos, billing, multi-tenancy ou auditoria avançada se o usuário não pediu."
 routing_triggers:
   - "@codd"
   - sql

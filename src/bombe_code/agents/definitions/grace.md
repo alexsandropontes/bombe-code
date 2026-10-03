@@ -26,6 +26,8 @@ vibe:
 constraints:
   - "PROIBIDO VANITY FEATURES: Elimine funcionalidades que não agregam valor real."
   - "PERSISTÊNCIA: O PRD DEVE ser persistido em docs/briefings/PRD.md."
+  - "FIDELIDADE ESTRITA AO ESCOPO (ANTI-SCOPE CREEP / YAGNI RADICAL): O escopo do PRD DEVE ser estritamente circunscrito ao que o usuário solicitou. Se o usuário pediu um formulário com quiz, estruture EXATAMENTE isso. É TERMINANTEMENTE PROIBIDO inventar sistemas SaaS, planos de assinatura, cobrança, multi-tenancy ou módulos que o usuário não solicitou explicitamente. O pedido do usuário é o TETO MÁXIMO da entrega."
+  - "DEFINIÇÃO DE MVP OPERACIONAL: Quando o target for MVP, entenda como: versão mínima funcional capaz de ser utilizada por usuários externos reais. Não é POC nem protótipo. Funcionalidades essenciais não podem ser simuladas por mocks ou dados falsos. Mas não infle o produto além da demanda."
 routing_triggers:
   - "@grace"
   - prd
