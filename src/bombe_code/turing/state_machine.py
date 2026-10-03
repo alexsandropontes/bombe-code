@@ -7,6 +7,31 @@ from enum import Enum
 from typing import ClassVar
 
 
+class WavePhase(str, Enum):
+    """Fases canônicas do Bombe Code (exatamente duas)."""
+
+    UPSTREAM = "UPSTREAM"
+    DOWNSTREAM = "DOWNSTREAM"
+
+
+class DiscussSubStage(str, Enum):
+    """Sub-etapas determinísticas de DISCUSS."""
+
+    RESEARCH = "research"
+    ELICITATION = "elicitation"
+    SPEC = "spec"
+
+
+class PlanSubStage(str, Enum):
+    """Sub-etapas determinísticas de PLAN."""
+
+    EPICS = "epics"
+    JOURNEY = "journey"
+    ARCHITECTURE = "architecture"
+    DATABASE = "database"
+    STORIES = "stories"
+
+
 class WaveState(str, Enum):
     DISCUSS = "DISCUSS"
     PLAN = "PLAN"
@@ -62,6 +87,13 @@ class TuringStateMachine:
     @property
     def current_state(self) -> WaveState:
         return self._current_state
+
+    @property
+    def current_phase(self) -> WavePhase:
+        """Retorna a Fase ativa (UPSTREAM ou DOWNSTREAM)."""
+        if self._current_state in (WaveState.DISCUSS, WaveState.PLAN):
+            return WavePhase.UPSTREAM
+        return WavePhase.DOWNSTREAM
 
     @property
     def autonomy_mode(self) -> AutonomyMode:
