@@ -1,0 +1,92 @@
+import logging
+from services.message_handler import MessageHandler
+
+logger = logging.getLogger(__name__)
+
+async def handle_webhook(payload: dict, whatsapp_api):
+    """
+    Process incoming webhook payload from WhatsApp Cloud API
+
+    Payload structure:
+    {
+        "object": "whatsapp_business_account",
+        "entry": [{
+            "changes": [{
+                "value": {
+                    "messages": [...],
+                    "contacts": [...]
+                },
+                "field": "messages"
+            }]
+        }]
+    }
+    """
+    try:
+        # Extract messages from payload
+        entries = payload.get("entry", [])
+
+        for entry in entries:
+            changes = entry.get("changes", [])
+
+            for change in changes:
+                value = change.get("value", {})
+
+                # Skip if not a message event
+                if change.get("field") != "messages":
+                    continue
+
+                # Extract messages and contacts
+                messages = value.get("messages", [])
+                contacts = value.get("contacts", [])
+
+                # Create contact lookup
+                contacts_map = {
+                    contact["wa_id"]: contact.get("profile", {})
+                    for contact in contacts
+                }
+
+                # Process each message
+                for message in messages:
+                    await process_message(message, contacts_map, whatsapp_api)
+
+    except Exception as e:
+        logger.error(f"Error handling webhook: {str(e)}", exc_info=True)
+
+async def process_message(message: dict, contacts_map: dict, whatsapp_api):
+    """
+    Process individual message from webhook
+
+    Args:
+        message: Message object from webhook
+        contacts_map: Map of WhatsApp ID to contact info
+        whatsapp_api: WhatsApp Cloud API client
+    """
+    handler = MessageHandler(whatsapp_api)
+
+    # Extract message details
+    from_number = message.get("from")
+    message_id = message.get("id")
+    message_type = message.get("type")
+
+    logger.info(f"Received {message_type} message from {from_number} (ID: {message_id})")
+
+    # Route based on message type
+    if message_type == "text":
+        text_body = message.get("text", {}).get("body", "")
+        await handler.process_text_message(from_number, text_body, message_id)
+
+    elif message_type == "interactive":
+        interactive_data = message.get("interactive", {})
+        await handler.process_interactive_message(from_number, interactive_data, message_id)
+
+    elif message_type in ["image", "audio", "video", "document"]:
+        media_data = message.get(message_type, {})
+        await handler.process_media_message(from_number, message_type, media_data, message_id)
+
+    elif message_type == "button":
+        # Interactive button response
+        interactive_data = message.get("interactive", {})
+        await handler.process_interactive_message(from_number, interactive_data, message_id)
+
+    else:
+        logger.warning(f"Unhandled message type: {message_type}")

@@ -1,0 +1,18 @@
+name: generate-uuid
+description: Gerador de UUID v7 ordenável temporalmente e v4 padrão em C# 13
+category: utils
+type: class
+platform: dotnet
+version: 1.0.0
+author: '@scott'
+tags:
+- uuid
+- guid
+dependencies: []
+invariants:
+- valid guid
+- rfc4122
+exports:
+- UuidGenerator.NewV4
+- UuidGenerator.NewV7
+tests: tests/UuidGeneratorTests.cs

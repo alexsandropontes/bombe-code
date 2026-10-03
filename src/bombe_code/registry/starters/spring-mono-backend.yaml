@@ -1,0 +1,24 @@
+name: spring-mono-backend
+blueprint: spring-mono
+category: Backend
+type: server
+description: Java 21 Spring Boot 3.4 Mono-Tenant (JPA, Flyway, PostgreSQL, Security)
+tech_stack:
+  backend: "Java 21 (Spring Boot 3.4)"
+  database: "PostgreSQL"
+structure:
+  - src/backend/src/main/java/com/forge/mono/Application.java
+  - src/backend/src/main/java/com/forge/mono/domain/
+  - src/backend/src/main/java/com/forge/mono/repository/
+  - src/backend/src/main/java/com/forge/mono/service/
+  - src/backend/src/main/java/com/forge/mono/controller/
+  - src/backend/src/main/java/com/forge/mono/config/
+  - src/backend/src/main/resources/db/migration/
+  - src/backend/src/test/java/com/forge/mono/
+  - src/backend/pom.xml
+  - src/backend/src/main/resources/application.yml
+  - src/backend/.env.example
+  - src/backend/Dockerfile
+required_agents:
+  - James
+  - Turing

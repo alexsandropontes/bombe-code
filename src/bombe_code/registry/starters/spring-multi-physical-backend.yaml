@@ -1,0 +1,23 @@
+name: spring-multi-physical-backend
+blueprint: spring-multi-physical
+category: Backend
+type: server
+description: Java 21 Spring Boot 3.4 Multi-Tenant Físico (Schema por Tenant / Vault Isolation)
+tech_stack:
+  backend: "Java 21 (Spring Boot 3.4)"
+  database: "PostgreSQL"
+structure:
+  - src/backend/src/main/java/com/forge/multiphysical/Application.java
+  - src/backend/src/main/java/com/forge/multiphysical/tenancy/
+  - src/backend/src/main/java/com/forge/multiphysical/config/
+  - src/backend/src/main/java/com/forge/multiphysical/domain/
+  - src/backend/src/main/java/com/forge/multiphysical/repository/
+  - src/backend/src/main/java/com/forge/multiphysical/controller/
+  - src/backend/src/test/java/com/forge/multiphysical/
+  - src/backend/pom.xml
+  - src/backend/src/main/resources/application.yml
+  - src/backend/.env.example
+  - src/backend/Dockerfile
+required_agents:
+  - James
+  - Turing

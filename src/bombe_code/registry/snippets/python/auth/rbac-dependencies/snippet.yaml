@@ -1,0 +1,21 @@
+name: rbac-dependencies
+description: Dependência de injeção FastAPI para verificação declarativa de RBAC
+category: auth
+type: class
+platform: python
+version: 1.0.0
+author: '@barbara'
+tags:
+- rbac
+- fastapi
+- autorizacao
+- roles
+- seguranca
+dependencies: []
+invariants:
+- role checking
+- 403 HTTPException
+- 401 on unauthenticated
+exports:
+- RoleChecker
+tests: tests/test_rbac.py

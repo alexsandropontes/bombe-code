@@ -1,0 +1,20 @@
+name: dotnet-multi-logical
+blueprint: dotnet-react-fullstack
+category: SaaS
+type: fullstack
+description: Fullstack SaaS .NET 10 Multi-Tenant Lógico (Web API + React Portal)
+tech_stack:
+  backend: "Dotnet 10 (C# 13)"
+  frontend: "React 19"
+  database: "PostgreSQL"
+composition:
+  - dotnet-multi-logical-backend
+  - react-portal
+structure:
+  - docs/produto
+  - src/run.ps1
+  - src/run.sh
+required_agents:
+  - Turing
+  - Scott
+  - Ada

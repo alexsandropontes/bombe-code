@@ -1,0 +1,25 @@
+name: dotnet-mono-backend
+blueprint: dotnet-mono
+category: Backend
+type: server
+description: .NET 10 Web API Mono-Tenant (Clean Architecture, JWT, EF Core)
+tech_stack:
+  backend: "Dotnet 10 (C# 13)"
+  database: "PostgreSQL"
+structure:
+  - src/backend/Domain/Common/
+  - src/backend/Domain/Entities/
+  - src/backend/Infrastructure/Data/
+  - src/backend/Infrastructure/Auth/
+  - src/backend/Infrastructure/Middleware/
+  - src/backend/Controllers/
+  - src/backend/WebApi.csproj
+  - src/backend/Program.cs
+  - src/backend/appsettings.json
+  - src/backend/.env.example
+  - src/backend/Dockerfile
+  - tests/WebApi.Tests.csproj
+  - tests/AuthTests.cs
+required_agents:
+  - Scott
+  - Turing

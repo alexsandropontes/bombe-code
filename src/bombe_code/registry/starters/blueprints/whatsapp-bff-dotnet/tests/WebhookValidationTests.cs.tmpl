@@ -1,0 +1,22 @@
+using Forge.WhatsAppBffDotNet.Services;
+using Xunit;
+
+namespace Forge.WhatsAppBffDotNet.Tests;
+
+public class WebhookValidationTests
+{
+    [Fact]
+    public void Test_Signature_Validation_Success()
+    {
+        var validator = new WebhookSignatureValidator();
+        var payload = "{\"object\":\"whatsapp_business_account\"}";
+        var secret = "minha-chave-secreta";
+
+        using var hmac = new System.Security.Cryptography.HMACSHA256(System.Text.Encoding.UTF8.GetBytes(secret));
+        var hash = Convert.ToHexString(hmac.ComputeHash(System.Text.Encoding.UTF8.GetBytes(payload))).ToLowerInvariant();
+        var header = $"sha256={hash}";
+
+        var isValid = validator.ValidateSignature(payload, header, secret);
+        Assert.True(isValid);
+    }
+}

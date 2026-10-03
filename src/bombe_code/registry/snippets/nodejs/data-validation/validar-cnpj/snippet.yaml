@@ -1,0 +1,24 @@
+name: validar-cnpj
+description: Valida CNPJ brasileiro com dígitos verificadores
+category: data-validation
+type: function
+platform: nodejs
+version: 1.0.0
+author: '@barbara'
+tags:
+- cnpj
+- validacao
+- brasil
+- data-quality
+dependencies: []
+tests: tests/validar-cnpj.test.js
+invariants:
+- 14 digits check
+- reject all same digits
+- check digits mod 11
+exports:
+- validar_cnpj
+- ValidarCNPJ
+- validarCNPJ
+- CnpjValidator
+- ValidateCNPJ

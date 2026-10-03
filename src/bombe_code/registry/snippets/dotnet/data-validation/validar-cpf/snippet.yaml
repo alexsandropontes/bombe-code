@@ -1,0 +1,23 @@
+name: validar-cpf
+description: Validador e formatador de CPF brasileiro com verificação de dígitos e
+  rejeição de repetidos
+category: data-validation
+type: class
+platform: dotnet
+version: 1.0.0
+author: '@scott'
+tags:
+- cpf
+- validacao
+- brasil
+- documento
+dependencies: []
+invariants:
+- 11 digits check
+- reject all same digits
+- check digits mod 11
+- sanitize non-digits
+exports:
+- CpfValidator.Validar
+- CpfValidator.Formatar
+tests: tests/CpfValidatorTests.cs

@@ -1,0 +1,85 @@
+package main
+
+// Message represents a WhatsApp message from webhook
+type Message struct {
+	From      string   `json:"from"`
+	ID        string   `json:"id"`
+	Timestamp string   `json:"timestamp"`
+	Type      string   `json:"type"`
+	Text      *Text    `json:"text,omitempty"`
+	Interactive *map[string]interface{} `json:"interactive,omitempty"`
+	Image     *Media   `json:"image,omitempty"`
+	Audio     *Media   `json:"audio,omitempty"`
+	Video     *Media   `json:"video,omitempty"`
+	Document  *Media   `json:"document,omitempty"`
+}
+
+// Text represents text message content
+type Text struct {
+	Body string `json:"body"`
+}
+
+// Media represents media message content
+type Media struct {
+	ID       string `json:"id,omitempty"`
+	Link     string `json:"link,omitempty"`
+	Caption  string `json:"caption,omitempty"`
+	Filename string `json:"filename,omitempty"`
+}
+
+// Contact represents WhatsApp contact information
+type Contact struct {
+	Profile *Profile `json:"profile,omitempty"`
+	WaID    string   `json:"wa_id"`
+}
+
+// Profile represents contact profile
+type Profile struct {
+	Name string `json:"name,omitempty"`
+}
+
+// WebhookPayload represents the complete webhook payload
+type WebhookPayload struct {
+	Object string  `json:"object"`
+	Entry  []Entry `json:"entry"`
+}
+
+// Entry represents a webhook entry
+type Entry struct {
+	ID      string    `json:"id"`
+	Changes []Change  `json:"changes"`
+}
+
+// Change represents a webhook change
+type Change struct {
+	Field string      `json:"field"`
+	Value interface{} `json:"value"`
+}
+
+// Value represents webhook value with messages
+type Value struct {
+	Messages []Message `json:"messages,omitempty"`
+	Contacts []Contact `json:"contacts,omitempty"`
+	Metadata *Metadata `json:"metadata,omitempty"`
+}
+
+// Metadata represents WhatsApp metadata
+type Metadata struct {
+	DisplayPhoneNumber string `json:"display_phone_number"`
+	PhoneNumberID      string `json:"phone_number_id"`
+}
+
+// SendMessageRequest represents request to send a message
+type SendMessageRequest struct {
+	To      string                 `json:"to"`
+	Type    string                 `json:"type"`
+	Content map[string]interface{} `json:"content"`
+}
+
+// SendTemplateRequest represents request to send a template
+type SendTemplateRequest struct {
+	To           string                 `json:"to"`
+	TemplateName string                 `json:"template_name"`
+	LanguageCode string                 `json:"language_code"`
+	Components   []map[string]interface{} `json:"components"`
+}

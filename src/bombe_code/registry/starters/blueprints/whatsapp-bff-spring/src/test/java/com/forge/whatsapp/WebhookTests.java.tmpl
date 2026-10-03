@@ -1,0 +1,15 @@
+package com.forge.whatsapp;
+
+import com.forge.whatsapp.service.SignatureVerifier;
+import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.*;
+
+class WebhookTests {
+
+    @Test
+    void testSignatureVerification() {
+        SignatureVerifier verifier = new SignatureVerifier();
+        assertFalse(verifier.verify(null, null, null));
+        assertFalse(verifier.verify("{}", "invalid_header", "secret"));
+    }
+}

@@ -1,0 +1,18 @@
+from fastapi import FastAPI
+from routes import auth
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+app = FastAPI(title="Forge Python Backend (Logical)")
+
+app.include_router(auth.router, prefix="/auth")
+
+@app.get("/health")
+def health_check():
+    return {"status": "UP", "mode": "logical"}
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("main:app", host="0.0.0.0", port=int(os.getenv("PORT", 8000)), reload=True)

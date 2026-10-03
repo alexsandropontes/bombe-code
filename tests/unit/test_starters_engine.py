@@ -57,3 +57,58 @@ def test_apply_starter_not_found(tmp_path: Path):
     result = engine.apply_starter("starter-inexistente", target_dir=str(tmp_path))
     assert result["success"] is False
     assert "não encontrado" in result["error"]
+
+
+def test_list_all_38_catalog_starters():
+    """Valida se todos os 38 starters do catálogo oficial são descobertos e carregados."""
+    engine = StarterEngine()
+    starters = engine.list_starters()
+    # 38 do catálogo oficial + 4 builtins
+    assert len(starters) >= 38
+
+    ids = {s["id"] for s in starters}
+    # Checa amostras representativas de cada categoria
+    assert "python-mono" in ids
+    assert "python-mono-backend" in ids
+    assert "dotnet-multi-logical" in ids
+    assert "go-multi-physical" in ids
+    assert "spring-mono" in ids
+    assert "react-portal" in ids
+    assert "chatbot-py-streamlit" in ids
+    assert "whatsapp-bff-go" in ids
+
+
+def test_apply_composed_fullstack_starter(tmp_path: Path):
+    """Valida scaffolding de starter fullstack composto (python-mono: backend + react-portal)."""
+    target = tmp_path / "fullstack_app"
+    engine = StarterEngine()
+    res = engine.apply_starter("python-mono", target_dir=str(target), project_name="FullstackApp")
+
+    assert res["success"] is True
+    assert (target / ".bombeconfig").is_file()
+    assert (target / "src" / "backend" / "main.py").is_file()
+    assert (target / "src" / "frontend" / "package.json").is_file()
+    assert (target / "src" / "run.sh").is_file() or (target / "run.sh").is_file()
+
+
+def test_apply_chatbot_starter(tmp_path: Path):
+    """Valida scaffolding de chatbot Streamlit (chatbot-py-streamlit)."""
+    target = tmp_path / "chatbot_app"
+    engine = StarterEngine()
+    res = engine.apply_starter("chatbot-py-streamlit", target_dir=str(target), project_name="MyBot")
+
+    assert res["success"] is True
+    assert (target / ".bombeconfig").is_file()
+    assert (target / "src" / "backend" / "app" / "main.py").is_file() or (target / "backend" / "app" / "main.py").is_file()
+    assert (target / "src" / "frontend" / "app.py").is_file() or (target / "frontend" / "app.py").is_file()
+
+
+def test_apply_backend_blueprint_starter(tmp_path: Path):
+    """Valida scaffolding de backend Go (go-mono-backend)."""
+    target = tmp_path / "go_backend"
+    engine = StarterEngine()
+    res = engine.apply_starter("go-mono-backend", target_dir=str(target), project_name="GoServer")
+
+    assert res["success"] is True
+    assert (target / ".bombeconfig").is_file()
+    assert (target / "src" / "backend" / "main.go").is_file()

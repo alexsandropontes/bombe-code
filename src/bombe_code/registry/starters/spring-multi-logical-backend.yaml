@@ -1,0 +1,24 @@
+name: spring-multi-logical-backend
+blueprint: spring-multi-logical
+category: Backend
+type: server
+description: Java 21 Spring Boot 3.4 Multi-Tenant Lógico (Shared DB, TenantFilter)
+tech_stack:
+  backend: "Java 21 (Spring Boot 3.4)"
+  database: "PostgreSQL"
+structure:
+  - src/backend/src/main/java/com/forge/multilogical/Application.java
+  - src/backend/src/main/java/com/forge/multilogical/tenancy/
+  - src/backend/src/main/java/com/forge/multilogical/domain/
+  - src/backend/src/main/java/com/forge/multilogical/repository/
+  - src/backend/src/main/java/com/forge/multilogical/service/
+  - src/backend/src/main/java/com/forge/multilogical/controller/
+  - src/backend/src/main/resources/db/migration/
+  - src/backend/src/test/java/com/forge/multilogical/
+  - src/backend/pom.xml
+  - src/backend/src/main/resources/application.yml
+  - src/backend/.env.example
+  - src/backend/Dockerfile
+required_agents:
+  - James
+  - Turing

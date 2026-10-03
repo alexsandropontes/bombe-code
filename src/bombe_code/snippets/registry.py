@@ -9,7 +9,11 @@ import logging
 from pathlib import Path
 from typing import Any
 
+import yaml
+
 logger = logging.getLogger(__name__)
+
+DEFAULT_SNIPPETS_DIR = Path(__file__).resolve().parent.parent / "registry" / "snippets"
 
 
 BUILTIN_SNIPPETS: list[dict[str, Any]] = [
@@ -293,10 +297,118 @@ describe("validarCpf", () => {
 
 
 class SnippetRegistry:
-    """Catálogo e gerenciador de blocos de snippets reutilizáveis."""
+    """Catálogo e gerenciador de blocos de snippets reutilizáveis com suporte a catálogo dinâmico."""
 
-    def __init__(self, snippets: list[dict[str, Any]] | None = None) -> None:
-        self.snippets = snippets or BUILTIN_SNIPPETS
+    def __init__(
+        self,
+        snippets: list[dict[str, Any]] | None = None,
+        registry_dir: Path | str | None = None,
+    ) -> None:
+        self.registry_dir = Path(registry_dir).resolve() if registry_dir else DEFAULT_SNIPPETS_DIR
+        self.snippets: list[dict[str, Any]] = []
+
+        if snippets:
+            self.snippets = list(snippets)
+        else:
+            self._load_snippets()
+
+    def _load_snippets(self) -> None:
+        """Carrega todos os snippets do catálogo em disco e combina com built-ins."""
+        seen: set[tuple[str, str]] = set()
+
+        # 1. Carrega snippets do catálogo físico
+        if self.registry_dir.is_dir():
+            for yaml_path in sorted(self.registry_dir.glob("**/*/snippet.yaml")):
+                folder = yaml_path.parent
+                try:
+                    with open(yaml_path, "r", encoding="utf-8") as f:
+                        data = yaml.safe_load(f)
+                    if not data or not isinstance(data, dict):
+                        continue
+
+                    name = data.get("name")
+                    if not name:
+                        continue
+
+                    plat = data.get("platform") or yaml_path.relative_to(self.registry_dir).parts[0]
+                    cat = data.get("category") or yaml_path.relative_to(self.registry_dir).parts[1]
+                    key = (name.lower(), plat.lower())
+
+                    # Localiza arquivo de código
+                    code_files = [
+                        f
+                        for f in folder.iterdir()
+                        if f.is_file()
+                        and f.name not in ("snippet.yaml", "__init__.py")
+                        and not f.name.endswith(".pyc")
+                    ]
+                    test_folder = folder / "tests"
+                    test_files = (
+                        [
+                            f
+                            for f in test_folder.iterdir()
+                            if f.is_file()
+                            and f.name not in ("__init__.py",)
+                            and not f.name.endswith(".pyc")
+                        ]
+                        if test_folder.is_dir()
+                        else []
+                    )
+
+                    code_file = code_files[0] if code_files else None
+                    test_file = test_files[0] if test_files else None
+
+                    code_content = code_file.read_text(encoding="utf-8") if code_file else ""
+                    test_content = test_file.read_text(encoding="utf-8") if test_file else ""
+
+                    # Determina nomes de arquivo para exportação
+                    # Se for snippet.py/js/go, usa nome amigável derivado
+                    code_filename = code_file.name if code_file else "snippet.txt"
+                    if code_filename == "snippet.py":
+                        code_filename = f"{name.replace('-', '_')}.py"
+                    elif code_filename == "snippet.js":
+                        code_filename = f"{name.replace('-', '_')}.js"
+                    elif code_filename == "snippet.go":
+                        code_filename = f"{name.replace('-', '_')}.go"
+                    elif code_filename == "snippet.ts":
+                        code_filename = f"{name.replace('-', '_')}.ts"
+
+                    test_filename = test_file.name if test_file else "test_snippet.txt"
+
+                    entry = {
+                        "name": name,
+                        "platform": plat,
+                        "category": cat,
+                        "description": data.get("description", ""),
+                        "tags": data.get("tags", []) or [],
+                        "filename": code_filename,
+                        "test_filename": test_filename,
+                        "code": code_content,
+                        "tests": test_content,
+                        "dependencies": data.get("dependencies", []) or [],
+                        "invariants": data.get("invariants", []) or [],
+                        "exports": data.get("exports", []) or [],
+                        "folder_path": str(folder),
+                    }
+                    self.snippets.append(entry)
+                    seen.add(key)
+                except (OSError, yaml.YAMLError, ValueError, KeyError) as e:
+                    logger.warning(f"Erro ao carregar snippet em '{yaml_path}': {e}")
+
+        # 2. Adiciona ou sobrescreve com builtins
+        for b in BUILTIN_SNIPPETS:
+            b_key = (b["name"].lower(), b["platform"].lower())
+            if b_key not in seen:
+                self.snippets.append(dict(b))
+                seen.add(b_key)
+            else:
+                # Se o builtin tem filename específico e documentado, preserva para compatibilidade estrita
+                for s in self.snippets:
+                    if (s["name"].lower(), s["platform"].lower()) == b_key:
+                        if "filename" in b:
+                            s["filename"] = b["filename"]
+                        if "test_filename" in b:
+                            s["test_filename"] = b["test_filename"]
 
     def list_snippets(
         self, platform: str | None = None, category: str | None = None

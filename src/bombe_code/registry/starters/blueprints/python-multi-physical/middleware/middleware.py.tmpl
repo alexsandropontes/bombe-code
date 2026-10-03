@@ -1,0 +1,22 @@
+from fastapi import Request, HTTPException
+from sqlalchemy import text
+
+/**
+ * Enterprise Standard: Physical Tenant Switcher
+ * Rule: Forces the search_path to the current tenant's vault.
+ */
+async def tenant_context_middleware(request: Request, call_next):
+    # 1. Extract tenant context from state (populated by auth dependency)
+    tenant_slug = getattr(request.state, "tenant_slug", None)
+
+    if tenant_slug:
+        db = request.state.db
+        try:
+            # 2. Physical Switch
+            schema_name = f"op_{tenant_slug}"
+            db.execute(text(f"SET search_path TO {schema_name}"))
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid tenant context")
+
+    response = await call_next(request)
+    return response

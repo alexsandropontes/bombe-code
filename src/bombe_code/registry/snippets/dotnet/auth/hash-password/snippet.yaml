@@ -1,0 +1,20 @@
+name: hash-password
+description: Hashing de senha seguro via PBKDF2 / SHA-256 com salt aleatório
+category: auth
+type: class
+platform: dotnet
+version: 1.0.0
+author: '@scott'
+tags:
+- hash
+- senha
+- seguranca
+dependencies: []
+invariants:
+- constant time comparison
+- secure salt
+- 100k iterations
+exports:
+- PasswordHasher.HashPassword
+- PasswordHasher.VerifyPassword
+tests: tests/PasswordHasherTests.cs

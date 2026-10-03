@@ -1,0 +1,26 @@
+import { Router } from 'express';
+import { AuthService } from '../services/authService';
+
+const router = Router();
+const authService = new AuthService();
+
+/**
+ * Enterprise Standard: Auth Flow (Logical Isolation)
+ */
+router.post('/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    // Real Login: Validates against single table with tenant context
+    const result = await authService.login(email, password);
+    res.json(result);
+  } catch (err: any) {
+    res.status(401).json({ message: err.message });
+  }
+});
+
+router.post('/discovery', (req, res) => {
+  // Para Isolamento Lógico, o discovery pode retornar um tenant padrão ou slug
+  res.json({ tenant_slug: 'default' });
+});
+
+export default router;

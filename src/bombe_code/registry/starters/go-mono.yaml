@@ -1,0 +1,20 @@
+name: go-mono
+blueprint: go-react-fullstack
+category: SaaS
+type: fullstack
+description: Fullstack SaaS Go (Monotenant)
+tech_stack:
+  backend: "Go 1.24"
+  frontend: "React 19"
+  database: "PostgreSQL"
+composition:
+  - go-mono-backend
+  - react-portal
+structure:
+  - docs/produto
+  - src/run.ps1
+  - src/run.sh
+required_agents:
+  - Turing
+  - Barbara
+  - Ada

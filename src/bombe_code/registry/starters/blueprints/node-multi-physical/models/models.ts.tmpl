@@ -1,0 +1,30 @@
+/**
+ * Enterprise Standard: User Contract
+ * Based on multitenant architecture with physical schema isolation
+ */
+export interface User {
+  id: string;
+  email: string;
+  first_name: string;
+  last_name: string;
+  roles: string[];      // RBAC: ["ADMIN", "USER", "PORTAL_ADMIN"]
+  tenant_slug: string;  // Ex: op_mycompany
+  is_active: boolean;
+  created_at: Date;
+  updated_at: Date;
+}
+
+/**
+ * Enterprise Standard: Global Context (Admin Schema)
+ */
+export interface GlobalUser {
+  email: string;
+  tenant_id: string;
+}
+
+export interface Tenant {
+  id: string;
+  name: string;
+  tenant_slug: string;
+  is_active: boolean;
+}

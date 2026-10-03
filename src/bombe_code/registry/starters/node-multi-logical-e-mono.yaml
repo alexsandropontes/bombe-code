@@ -1,0 +1,20 @@
+name: node-multi-logical-e-mono
+blueprint: node-react-fullstack
+category: SaaS
+type: fullstack
+description: Fullstack SaaS Node.js (Logical Isolation)
+tech_stack:
+  backend: "Node.js (TypeScript)"
+  frontend: "React 19"
+  database: "PostgreSQL"
+composition:
+  - node-multi-logical-e-mono-backend
+  - react-portal
+structure:
+  - docs/produto
+  - src/run.ps1
+  - src/run.sh
+required_agents:
+  - Turing
+  - Barbara
+  - Ada

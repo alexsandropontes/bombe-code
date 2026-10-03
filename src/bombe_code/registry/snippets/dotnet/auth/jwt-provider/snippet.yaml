@@ -1,0 +1,24 @@
+name: jwt-provider
+description: Provedor de tokens JWT em .NET 10 com suporte a claims, expiração e validação
+  segura
+category: auth
+type: class
+platform: dotnet
+version: 1.0.0
+author: '@scott'
+tags:
+- jwt
+- auth
+- token
+- segurança
+- bearer
+dependencies: []
+invariants:
+- signature verification
+- expiry validation
+- constant time handling
+- claims extraction
+exports:
+- JwtTokenService.GenerateToken
+- JwtTokenService.ValidateToken
+tests: tests/JwtTokenServiceTests.cs

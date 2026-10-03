@@ -1,0 +1,27 @@
+using System.Security.Cryptography;
+using System.Text;
+
+namespace Forge.WhatsAppBffDotNet.Services;
+
+public class WebhookSignatureValidator
+{
+    public bool ValidateSignature(string payload, string expectedSignatureHeader, string appSecret)
+    {
+        if (string.IsNullOrWhiteSpace(payload) || string.IsNullOrWhiteSpace(expectedSignatureHeader) || string.IsNullOrWhiteSpace(appSecret))
+            return false;
+
+        if (!expectedSignatureHeader.StartsWith("sha256=", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        var expectedHash = expectedSignatureHeader["sha256=".Length..];
+
+        using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(appSecret));
+        var hashBytes = hmac.ComputeHash(Encoding.UTF8.GetBytes(payload));
+        var computedHash = Convert.ToHexString(hashBytes).ToLowerInvariant();
+
+        return CryptographicOperations.FixedTimeEquals(
+            Encoding.UTF8.GetBytes(computedHash),
+            Encoding.UTF8.GetBytes(expectedHash.ToLowerInvariant())
+        );
+    }
+}

@@ -1,0 +1,19 @@
+name: hash-password
+description: Hashing de senha seguro via PBKDF2 com salt em Java 21
+category: auth
+type: class
+platform: java
+version: 1.0.0
+author: '@james'
+tags:
+- hash
+- senha
+- seguranca
+dependencies: []
+invariants:
+- constant time comparison
+- 100k iterations
+exports:
+- PasswordHasher.hash
+- PasswordHasher.verify
+tests: tests/PasswordHasherTest.java

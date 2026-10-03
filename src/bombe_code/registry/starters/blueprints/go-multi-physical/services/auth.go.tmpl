@@ -1,0 +1,39 @@
+package service
+
+import (
+	"database/sql"
+	"errors"
+	"fmt"
+	"golang.org/x/crypto/bcrypt"
+)
+
+type AuthService struct {
+	DB *sql.DB
+}
+
+func (s *AuthService) Discovery(email string) (string, error) {
+	var slug string
+	query := "SELECT t.tenant_slug FROM admin.global_users gu JOIN admin.tenants t ON gu.tenant_id = t.id WHERE gu.email = $1 AND t.is_active = true"
+	err := s.DB.QueryRow(query, email).Scan(&slug)
+	if err != nil { return "", errors.New("inquilino nao localizado") }
+	return slug, nil
+}
+
+func (s *AuthService) Login(email, password, slug string) (map[string]interface{}, error) {
+	// 1. Context Switch
+	_, err := s.DB.Exec(fmt.Sprintf("SET search_path TO op_%s", slug))
+	if err != nil { return nil, err }
+
+	// 2. Fetch User
+	var id, emailDb, pwdHash string
+	query := "SELECT id, email, password_hash FROM users WHERE email = $1 AND is_active = true"
+	err = s.DB.QueryRow(query, email).Scan(&id, &emailDb, &pwdHash)
+	if err != nil { return nil, errors.New("credenciais invalidas") }
+
+	// 3. Bcrypt Check
+	if err := bcrypt.CompareHashAndPassword([]byte(pwdHash), []byte(password)); err != nil {
+		return nil, errors.New("credenciais invalidas")
+	}
+
+	return map[string]interface{}{"user": id, "token": "REAL_JWT_TOKEN_GO"}, nil
+}

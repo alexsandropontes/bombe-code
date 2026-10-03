@@ -1,0 +1,22 @@
+name: rbac-guard
+description: Filtro de autorização RBAC declarativo para endpoints .NET 10
+category: auth
+type: class
+platform: dotnet
+version: 1.0.0
+author: '@scott'
+tags:
+- rbac
+- autorizacao
+- roles
+- permissoes
+- seguranca
+dependencies: []
+invariants:
+- role checking
+- 403 on forbidden
+- 401 on unauthenticated
+exports:
+- RequireRoleAttribute
+- RbacAuthorizationFilter
+tests: tests/RbacGuardTests.cs

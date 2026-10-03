@@ -1,0 +1,34 @@
+using Microsoft.AspNetCore.Http;
+
+namespace Forge.DotNetMultiLogical.Infrastructure.Tenancy;
+
+public class TenantResolverMiddleware
+{
+    private readonly RequestDelegate _next;
+
+    public TenantResolverMiddleware(RequestDelegate next)
+    {
+        _next = next;
+    }
+
+    public async Task InvokeAsync(HttpContext context, ITenantContext tenantContext)
+    {
+        // 1. Tenta extrair do Header X-Tenant-ID
+        if (context.Request.Headers.TryGetValue("X-Tenant-ID", out var tenantHeader) && !string.IsNullOrWhiteSpace(tenantHeader))
+        {
+            tenantContext.CurrentTenantId = tenantHeader.ToString();
+        }
+        // 2. Fallback: subdomínio (ex: acme.dominio.com -> acme)
+        else
+        {
+            var host = context.Request.Host.Host;
+            var parts = host.Split('.');
+            if (parts.Length > 2 && parts[0] != "www")
+            {
+                tenantContext.CurrentTenantId = parts[0];
+            }
+        }
+
+        await _next(context);
+    }
+}

@@ -1,0 +1,23 @@
+name: validar-email
+description: Valida formato de email conforme RFC 5322
+category: data-validation
+type: function
+platform: python
+version: 1.0.0
+author: '@barbara'
+tags:
+- email
+- validacao
+- formato
+- rfc
+dependencies: []
+tests: tests/test_validar_email.py
+invariants:
+- regex pattern check
+- domain check
+exports:
+- validar_email
+- ValidarEmail
+- validarEmail
+- EmailValidator
+- ValidateEmail

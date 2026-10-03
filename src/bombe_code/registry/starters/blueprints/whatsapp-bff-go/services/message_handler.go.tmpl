@@ -1,0 +1,56 @@
+package main
+
+import (
+	"log"
+)
+
+// MessageHandler handles business logic for incoming messages
+type MessageHandler struct {
+	API *WhatsAppCloudAPI
+}
+
+// NewMessageHandler creates a new message handler
+func NewMessageHandler(api *WhatsAppCloudAPI) *MessageHandler {
+	return &MessageHandler{API: api}
+}
+
+// ProcessTextMessage processes incoming text message
+func (h *MessageHandler) ProcessTextMessage(fromNumber, messageBody, messageID string) error {
+	log.Printf("💬 Processing text message from %s: %s", fromNumber, messageBody)
+
+	// TODO: Implement your business logic here
+	// Example: Echo the message back
+	// h.API.SendMessage(fromNumber, "text", map[string]interface{}{
+	//     "body": fmt.Sprintf("Echo: %s", messageBody),
+	// })
+
+	// Mark message as read
+	_, err := h.API.MarkAsRead(messageID)
+	return err
+}
+
+// ProcessInteractiveMessage processes interactive message
+func (h *MessageHandler) ProcessInteractiveMessage(fromNumber string, interactiveData map[string]interface{}, messageID string) error {
+	log.Printf("🔘 Processing interactive message from %s", fromNumber)
+
+	// TODO: Handle button clicks or list selections
+	// Example: Check for button reply
+	// if buttonReply, ok := interactiveData["button_reply"].(map[string]interface{}); ok {
+	//     buttonID := buttonReply["id"].(string)
+	//     h.handleButtonClick(fromNumber, buttonID)
+	// }
+
+	_, err := h.API.MarkAsRead(messageID)
+	return err
+}
+
+// ProcessMediaMessage processes media message
+func (h *MessageHandler) ProcessMediaMessage(fromNumber, mediaType string, mediaData map[string]interface{}, messageID string) error {
+	log.Printf("📎 Processing %s message from %s", mediaType, fromNumber)
+
+	// TODO: Handle media messages
+	// Example: Download media or process it
+
+	_, err := h.API.MarkAsRead(messageID)
+	return err
+}

@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# Inicia Backend .NET e Frontend React em paralelo
+echo "Iniciando .NET Backend na porta 5000..."
+(cd src/backend && dotnet run) &
+BACKEND_PID=$!
+
+echo "Iniciando React Frontend..."
+(cd src/frontend && npm run dev) &
+FRONTEND_PID=$!
+
+trap "kill $BACKEND_PID $FRONTEND_PID" SIGINT SIGTERM
+wait

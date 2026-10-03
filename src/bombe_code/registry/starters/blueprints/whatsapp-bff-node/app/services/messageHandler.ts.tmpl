@@ -1,0 +1,64 @@
+import { WhatsAppCloudAPI } from './whatsappService';
+
+export class MessageHandler {
+  constructor(private whatsappAPI: WhatsAppCloudAPI) {}
+
+  /**
+   * Process incoming text message
+   */
+  async processTextMessage(
+    fromNumber: string,
+    messageBody: string,
+    messageId: string
+  ): Promise<void> {
+    console.log(`💬 Processing text message from ${fromNumber}: ${messageBody}`);
+
+    // TODO: Implement your business logic here
+    // Example: Echo the message back
+    // await this.whatsappAPI.sendMessage(
+    //   fromNumber,
+    //   'text',
+    //   { body: `Echo: ${messageBody}` }
+    // );
+
+    // Mark message as read
+    await this.whatsappAPI.markAsRead(messageId);
+  }
+
+  /**
+   * Process interactive message (button clicks, list selections)
+   */
+  async processInteractiveMessage(
+    fromNumber: string,
+    interactiveData: Record<string, unknown>,
+    messageId: string
+  ): Promise<void> {
+    console.log(`🔘 Processing interactive message from ${fromNumber}`);
+
+    // TODO: Handle button clicks or list selections
+    // Example: Check for button reply
+    // if (interactiveData.button_reply) {
+    //   const buttonId = (interactiveData.button_reply as Record<string, unknown>).id;
+    //   await this.handleButtonClick(fromNumber, buttonId as string);
+    // }
+
+    await this.whatsappAPI.markAsRead(messageId);
+  }
+
+  /**
+   * Process media message (image, audio, video, document)
+   */
+  async processMediaMessage(
+    fromNumber: string,
+    mediaType: string,
+    mediaData: Record<string, unknown>,
+    messageId: string
+  ): Promise<void> {
+    console.log(`📎 Processing ${mediaType} message from ${fromNumber}`);
+
+    // TODO: Handle media messages
+    // Example: Download media or process it
+
+    await this.whatsappAPI.markAsRead(messageId);
+  }
+}

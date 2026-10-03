@@ -1,0 +1,22 @@
+name: generate-uuid
+description: Gera UUID v4 único
+category: utils
+type: function
+platform: nodejs
+version: 1.0.0
+author: '@barbara'
+tags:
+- uuid
+- guid
+- unique
+- id
+dependencies:
+- uuid
+tests: tests/generate-uuid.test.js
+invariants:
+- uuid v4 random generation
+- rfc 4122 compliant
+exports:
+- generate_uuid
+- GenerateUUID
+- generateUuid

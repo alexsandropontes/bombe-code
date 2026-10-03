@@ -1,0 +1,18 @@
+name: whatsapp-bff-spring
+blueprint: whatsapp-bff-spring
+category: BFF
+type: bff
+description: BFF WhatsApp Meta Cloud API em Java 21 / Spring Boot 3.4 (Webhooks, Mensageria, HMAC SHA256)
+tech_stack:
+  backend: "Java 21 (Spring Boot 3.4)"
+structure:
+  - src/backend/src/main/java/com/forge/whatsapp/service/
+  - src/backend/src/main/java/com/forge/whatsapp/controller/
+  - src/backend/src/test/java/com/forge/whatsapp/
+  - src/backend/pom.xml
+  - src/backend/src/main/resources/application.yml
+  - src/backend/.env.example
+  - src/backend/Dockerfile
+required_agents:
+  - James
+  - Turing

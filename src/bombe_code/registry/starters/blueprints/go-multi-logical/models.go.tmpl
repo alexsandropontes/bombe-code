@@ -1,0 +1,34 @@
+package models
+
+import (
+	"time"
+)
+
+/**
+ * Enterprise Standard: User Model (Logical Multi-tenancy)
+ * Rule: Single table 'users' with mandatory 'tenant_id' for isolation.
+ */
+type User struct {
+	ID           string     `json:"id" db:"id"`
+	TenantID     string     `json:"tenant_id" db:"tenant_id"` // MANDATORY for logical isolation
+	Email        string     `json:"email" db:"email"`
+	PasswordHash string     `json:"-" db:"password_hash"`
+	FirstName    string     `json:"first_name" db:"first_name"`
+	LastName     string     `json:"last_name" db:"last_name"`
+	Roles        []string   `json:"roles" db:"roles"` // RBAC
+	IsActive     bool       `json:"is_active" db:"is_active"`
+	CreatedAt    time.Time  `json:"created_at" db:"created_at"`
+	UpdatedAt    time.Time  `json:"updated_at" db:"updated_at"`
+	DeletedAt    *time.Time `json:"deleted_at,omitempty" db:"deleted_at"` // Soft Delete
+}
+
+/**
+ * Enterprise Standard: Tenant Model
+ */
+type Tenant struct {
+	ID        string    `json:"id" db:"id"`
+	Name      string    `json:"name" db:"name"`
+	Slug      string    `json:"slug" db:"slug"`
+	IsActive  bool      `json:"is_active" db:"is_active"`
+	CreatedAt time.Time `json:"created_at" db:"created_at"`
+}

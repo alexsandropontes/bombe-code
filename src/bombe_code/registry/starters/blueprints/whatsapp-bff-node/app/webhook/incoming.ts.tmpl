@@ -1,0 +1,75 @@
+import { WebhookPayload, Message } from '../types';
+import { WhatsAppCloudAPI } from '../services/whatsappService';
+import { MessageHandler } from '../services/messageHandler';
+
+export async function handleWebhook(
+  payload: WebhookPayload,
+  whatsappAPI: WhatsAppCloudAPI
+): Promise<void> {
+  try {
+    const entries = payload.entry || [];
+
+    for (const entry of entries) {
+      const changes = entry.changes || [];
+
+      for (const change of changes) {
+        const value = change.value || {};
+
+        // Skip if not a message event
+        if (change.field !== 'messages') {
+          continue;
+        }
+
+        // Extract messages and contacts
+        const messages = value.messages || [];
+        const contacts = value.contacts || [];
+
+        // Create contact lookup
+        const contactsMap: Record<string, { name?: string }> = {};
+        for (const contact of contacts) {
+          if (contact.wa_id) {
+            contactsMap[contact.wa_id] = contact.profile || {};
+          }
+        }
+
+        // Process each message
+        for (const message of messages) {
+          await processMessage(message, contactsMap, whatsappAPI);
+        }
+      }
+    }
+  } catch (error) {
+    console.error('❌ Error handling webhook:', error);
+  }
+}
+
+async function processMessage(
+  message: Message,
+  contactsMap: Record<string, { name?: string }>,
+  whatsappAPI: WhatsAppCloudAPI
+): Promise<void> {
+  const handler = new MessageHandler(whatsappAPI);
+
+  const fromNumber = message.from;
+  const messageId = message.id;
+  const messageType = message.type;
+
+  console.log(`📨 Received ${messageType} message from ${fromNumber} (ID: ${messageId})`);
+
+  // Route based on message type
+  if (messageType === 'text') {
+    const messageBody = message.text?.body || '';
+    await handler.processTextMessage(fromNumber, messageBody, messageId);
+  } else if (messageType === 'interactive') {
+    const interactiveData = message.interactive || {};
+    await handler.processInteractiveMessage(fromNumber, interactiveData, messageId);
+  } else if (['image', 'audio', 'video', 'document'].includes(messageType || '')) {
+    const mediaData = (message as Record<string, unknown>)[messageType || ''] as Record<string, unknown>;
+    await handler.processMediaMessage(fromNumber, messageType || '', mediaData, messageId);
+  } else if (messageType === 'button') {
+    const interactiveData = message.interactive || {};
+    await handler.processInteractiveMessage(fromNumber, interactiveData, messageId);
+  } else {
+    console.warn(`⚠️  Unhandled message type: ${messageType}`);
+  }
+}

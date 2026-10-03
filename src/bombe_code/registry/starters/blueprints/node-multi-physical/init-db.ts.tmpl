@@ -1,0 +1,58 @@
+import { Client } from 'pg';
+import bcrypt from 'bcrypt';
+import * as dotenv from 'dotenv';
+dotenv.config();
+
+const bootstrap = async () => {
+  const dbName = process.env.DB_NAME || 'forge_db';
+  
+  const masterConfig = {
+    host: process.env.DB_HOST || 'localhost',
+    port: parseInt(process.env.DB_PORT || '5432'),
+    user: process.env.DB_USER || 'postgres',
+    password: process.env.DB_PASSWORD || 'postgres',
+    database: 'postgres',
+  };
+
+  try {
+    console.log('[BOOTSTRAP] Validando existencia do banco de dados...');
+    const masterClient = new Client(masterConfig);
+    await masterClient.connect();
+    
+    const res = await masterClient.query("SELECT 1 FROM pg_database WHERE datname = $1", [dbName]);
+    if (res.rowCount === 0) {
+      console.log(`[BOOTSTRAP] Criando banco de dados: ${dbName}`);
+      // CREATE DATABASE nao aceita parametros via $1, deve ser injetado com cuidado
+      await masterClient.query(`CREATE DATABASE ${dbName}`);
+    }
+    await masterClient.end();
+
+    const client = new Client({
+      ...masterConfig,
+      database: dbName
+    });
+
+    await client.connect();
+    
+    await client.query('CREATE SCHEMA IF NOT EXISTS admin');
+    await client.query(`CREATE TABLE IF NOT EXISTS admin.tenants (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), name VARCHAR(255), tenant_slug VARCHAR(100) UNIQUE, is_active BOOLEAN DEFAULT true)`);
+    await client.query(`CREATE TABLE IF NOT EXISTS admin.global_users (email VARCHAR(255) PRIMARY KEY, tenant_id UUID REFERENCES admin.tenants(id))`);
+    
+    const tr = await client.query(`INSERT INTO admin.tenants (name, tenant_slug) VALUES ('ACME Corp', 'acme') ON CONFLICT (tenant_slug) DO UPDATE SET name = EXCLUDED.name RETURNING id`);
+    await client.query(`INSERT INTO admin.global_users (email, tenant_id) VALUES ('admin@forge.local', $1) ON CONFLICT DO NOTHING`, [tr.rows[0].id]);
+
+    await client.query('CREATE SCHEMA IF NOT EXISTS op_acme');
+    await client.query(`CREATE TABLE IF NOT EXISTS op_acme.users (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), email VARCHAR(255) UNIQUE, password_hash VARCHAR(255), first_name VARCHAR(100), roles JSONB DEFAULT '["USER"]', is_active BOOLEAN DEFAULT true)`);
+    
+    const hash = await bcrypt.hash('password', 10);
+    await client.query(`INSERT INTO op_acme.users (email, password_hash, first_name, roles) VALUES ('admin@forge.local', $1, 'Admin', '["ADMIN"]') ON CONFLICT DO NOTHING`, [hash]);
+    
+    console.log('[BOOTSTRAP] Estrutura Enterprise e Seeds configurados.');
+    await client.end();
+  } catch (e) {
+    console.error('[FATAL] Erro ao inicializar banco de dados:', e);
+    process.exit(1);
+  }
+};
+
+bootstrap();

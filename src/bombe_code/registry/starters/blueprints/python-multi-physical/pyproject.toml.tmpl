@@ -1,0 +1,20 @@
+[project]
+name = "forge-python-backend"
+version = "0.1.0"
+description = "Forge Core Python Backend (Physical Isolation)"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn>=0.30.6",
+    "sqlalchemy>=2.0.35",
+    "psycopg2-binary>=2.9.9",
+    "bcrypt>=4.2.0",
+    "pyjwt>=2.9.0",
+]
+
+[tool.uv]
+dev-dependencies = [
+    "pytest>=8.0.0",
+    "ruff>=0.3.0",
+]

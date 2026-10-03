@@ -1,0 +1,43 @@
+import React from 'react'
+import { Layout } from './components/Layout'
+import { DashboardPage } from './pages/DashboardPage'
+import { useAuth } from './hooks/AuthContext'
+
+export const App = () => {
+  const { isAuthenticated, login, logout, user } = useAuth();
+  const [email, setEmail] = React.useState('admin@forge.local');
+  const [password, setPassword] = React.useState('password');
+
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
+        <div className="max-w-md w-full space-y-8 bg-white p-10 rounded-xl shadow-lg border border-gray-100">
+          <div className="text-center">
+            <h2 className="text-3xl font-extrabold text-gray-900">Forge Portal</h2>
+            <p className="mt-2 text-sm text-gray-600">Enterprise Access</p>
+          </div>
+          <div className="mt-8 space-y-6">
+            <div className="rounded-md shadow-sm -space-y-px">
+              <input type="email" value={email} onChange={e => setEmail(e.target.value)} className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm" />
+              <input type="password" value={password} onChange={e => setPassword(e.target.value)} className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm" />
+            </div>
+            <button onClick={() => login(email, password)} className="w-full py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700">Acessar Painel</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <Layout>
+      <div className="flex justify-between items-center mb-8">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-800">Olá, {user?.first_name}</h2>
+          <p className="text-sm text-gray-500">Tenant: <span className="font-mono bg-gray-100 px-2 rounded">{user?.tenant_slug}</span></p>
+        </div>
+        <button onClick={logout} className="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-50">Sair do Sistema</button>
+      </div>
+      <DashboardPage />
+    </Layout>
+  );
+}

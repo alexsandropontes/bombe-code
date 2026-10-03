@@ -1,0 +1,148 @@
+package main
+
+import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"io"
+	"log"
+	"net/http"
+	"time"
+)
+
+// WhatsAppCloudAPI client for WhatsApp Cloud API
+type WhatsAppCloudAPI struct {
+	AccessToken   string
+	PhoneNumberID string
+	APIVersion    string
+	BaseURL       string
+	Client        *http.Client
+}
+
+// NewWhatsAppCloudAPI creates a new WhatsApp Cloud API client
+func NewWhatsAppCloudAPI(accessToken, phoneNumberID, apiVersion string) *WhatsAppCloudAPI {
+	if apiVersion == "" {
+		apiVersion = "v18.0"
+	}
+
+	return &WhatsAppCloudAPI{
+		AccessToken:   accessToken,
+		PhoneNumberID: phoneNumberID,
+		APIVersion:    apiVersion,
+		BaseURL:       fmt.Sprintf("https://graph.facebook.com/%s", apiVersion),
+		Client: &http.Client{
+			Timeout: 30 * time.Second,
+		},
+	}
+}
+
+// SendMessage sends a message to a WhatsApp number
+func (api *WhatsAppCloudAPI) SendMessage(to, messageType string, content map[string]interface{}) (map[string]interface{}, error) {
+	url := fmt.Sprintf("%s/%s/messages", api.BaseURL, api.PhoneNumberID)
+
+	payload := map[string]interface{}{
+		"messaging_product": "whatsapp",
+		"recipient_type":    "individual",
+		"to":                to,
+		"type":              messageType,
+	}
+
+	// Add content based on message type
+	switch messageType {
+	case "text":
+		payload["text"] = map[string]interface{}{
+			"body":        content["body"],
+			"preview_url": content["preview_url"],
+		}
+	case "image", "document", "audio", "video":
+		mediaPayload := map[string]interface{}{
+			"link": content["link"],
+		}
+		if caption, ok := content["caption"]; ok {
+			mediaPayload["caption"] = caption
+		}
+		if filename, ok := content["filename"]; ok {
+			mediaPayload["filename"] = filename
+		}
+		payload[messageType] = mediaPayload
+	}
+
+	return api.makeRequest("POST", url, payload)
+}
+
+// SendTemplate sends a message template
+func (api *WhatsAppCloudAPI) SendTemplate(to, templateName, languageCode string, components []map[string]interface{}) (map[string]interface{}, error) {
+	url := fmt.Sprintf("%s/%s/messages", api.BaseURL, api.PhoneNumberID)
+
+	payload := map[string]interface{}{
+		"messaging_product": "whatsapp",
+		"recipient_type":    "individual",
+		"to":                to,
+		"type":              "template",
+		"template": map[string]interface{}{
+			"name": templateName,
+			"language": map[string]interface{}{
+				"code": languageCode,
+			},
+		},
+	}
+
+	if len(components) > 0 {
+		(templatePayload := payload["template"].(map[string]interface{}))
+		templatePayload["components"] = components
+	}
+
+	log.Printf("✅ Template '%s' sent successfully to %s", templateName, to)
+	return api.makeRequest("POST", url, payload)
+}
+
+// MarkAsRead marks a message as read
+func (api *WhatsAppCloudAPI) MarkAsRead(messageID string) (map[string]interface{}, error) {
+	url := fmt.Sprintf("%s/%s/messages", api.BaseURL, api.PhoneNumberID)
+
+	payload := map[string]interface{}{
+		"messaging_product": "whatsapp",
+		"status":            "read",
+		"message_id":        messageID,
+	}
+
+	return api.makeRequest("POST", url, payload)
+}
+
+// makeRequest makes an HTTP request to the WhatsApp Cloud API
+func (api *WhatsAppCloudAPI) makeRequest(method, url string, payload interface{}) (map[string]interface{}, error) {
+	jsonData, err := json.Marshal(payload)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling JSON: %w", err)
+	}
+
+	req, err := http.NewRequest(method, url, bytes.NewBuffer(jsonData))
+	if err != nil {
+		return nil, fmt.Errorf("error creating request: %w", err)
+	}
+
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", api.AccessToken))
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := api.Client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("error making request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("error reading response: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("API error: %s", string(body))
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(body, &result); err != nil {
+		return nil, fmt.Errorf("error unmarshaling response: %w", err)
+	}
+
+	return result, nil
+}

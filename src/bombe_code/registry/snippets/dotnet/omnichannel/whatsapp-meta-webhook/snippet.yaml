@@ -1,0 +1,23 @@
+name: whatsapp-meta-webhook
+description: Validador criptográfico HMAC SHA-256 de webhooks da Meta Cloud API WhatsApp
+  em .NET 10
+category: omnichannel
+type: class
+platform: dotnet
+version: 1.0.0
+author: '@scott'
+tags:
+- whatsapp
+- meta
+- webhook
+- hmac
+- omnichannel
+dependencies: []
+invariants:
+- HMAC SHA-256 signature
+- constant-time comparison
+- verify token challenge
+exports:
+- WhatsAppWebhookValidator.VerifySignature
+- WhatsAppWebhookValidator.VerifyHubChallenge
+tests: tests/WhatsAppWebhookValidatorTests.cs

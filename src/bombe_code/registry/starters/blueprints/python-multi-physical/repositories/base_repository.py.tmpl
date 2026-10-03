@@ -1,0 +1,9 @@
+from sqlalchemy.orm import Session
+
+class BaseRepository:
+    def __init__(self, model):
+        self.model = model
+
+    def get_all(self, db: Session):
+        # Em multi-physical, a query já está protegida pelo search_path ativo
+        return db.query(self.model).all()

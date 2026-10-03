@@ -1,0 +1,57 @@
+using Forge.DotNetMultiPhysical.Domain.Entities;
+using Forge.DotNetMultiPhysical.Infrastructure.Data;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+
+namespace Forge.DotNetMultiPhysical.Controllers;
+
+[ApiController]
+[Route("api/[controller]")]
+public class TenantsController : ControllerBase
+{
+    private readonly TenantPhysicalDbContext _dbContext;
+
+    public TenantsController(TenantPhysicalDbContext dbContext)
+    {
+        _dbContext = dbContext;
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> GetAll()
+    {
+        var tenants = await _dbContext.Tenants.ToListAsync();
+        return Ok(tenants);
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> Create([FromBody] CreatePhysicalTenantRequest request)
+    {
+        var cleanSchema = System.Text.RegularExpressions.Regex.Replace(request.Id.ToLowerInvariant(), @"[^a-z0-9_]", "_");
+        var schemaName = $"tenant_{cleanSchema}";
+
+        // Cria fisicamente o schema no PostgreSQL
+        await _dbContext.Database.ExecuteSqlRawAsync($"CREATE SCHEMA IF NOT EXISTS {schemaName};");
+        await _dbContext.Database.ExecuteSqlRawAsync($@"
+            CREATE TABLE IF NOT EXISTS {schemaName}.customers (
+                id UUID PRIMARY KEY,
+                name VARCHAR(200) NOT NULL,
+                email VARCHAR(255) NOT NULL,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+            );
+        ");
+
+        var tenant = new Tenant
+        {
+            Id = request.Id,
+            Name = request.Name,
+            SchemaName = schemaName
+        };
+
+        _dbContext.Tenants.Add(tenant);
+        await _dbContext.SaveChangesAsync();
+
+        return CreatedAtAction(nameof(GetAll), new { id = tenant.Id }, tenant);
+    }
+}
+
+public record CreatePhysicalTenantRequest(string Id, string Name);

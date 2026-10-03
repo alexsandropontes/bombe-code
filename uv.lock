@@ -118,7 +118,7 @@ wheels = [
 
 [[package]]
 name = "bombe-code"
-version = "0.1.0"
+version = "0.1.2"
 source = { editable = "." }
 dependencies = [
     { name = "fastapi" },
@@ -126,6 +126,7 @@ dependencies = [
     { name = "platformdirs" },
     { name = "pydantic" },
     { name = "pydantic-ai" },
+    { name = "pyyaml" },
     { name = "textual" },
     { name = "typer" },
     { name = "uvicorn" },
@@ -153,6 +154,7 @@ requires-dist = [
     { name = "pydantic", specifier = ">=2" },
     { name = "pydantic-ai", specifier = ">=0.0.18" },
     { name = "pywebview", marker = "extra == 'desktop'" },
+    { name = "pyyaml", specifier = ">=6.0" },
     { name = "reflex", marker = "extra == 'web'" },
     { name = "textual", specifier = ">=0.70" },
     { name = "typer", specifier = ">=0.12" },

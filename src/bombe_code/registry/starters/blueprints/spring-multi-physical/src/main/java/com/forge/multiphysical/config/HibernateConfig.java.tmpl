@@ -1,0 +1,43 @@
+package com.forge.multiphysical.config;
+
+import com.forge.multiphysical.tenancy.MultiTenantConnectionProviderImpl;
+import com.forge.multiphysical.tenancy.SchemaTenantResolver;
+import org.hibernate.cfg.AvailableSettings;
+import org.springframework.boot.autoconfigure.orm.jpa.JpaProperties;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.orm.jpa.JpaVendorAdapter;
+import org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean;
+import org.springframework.orm.jpa.vendor.HibernateJpaVendorAdapter;
+
+import javax.sql.DataSource;
+import java.util.HashMap;
+import java.util.Map;
+
+@Configuration
+public class HibernateConfig {
+
+    @Bean
+    public JpaVendorAdapter jpaVendorAdapter() {
+        return new HibernateJpaVendorAdapter();
+    }
+
+    @Bean
+    public LocalContainerEntityManagerFactoryBean entityManagerFactory(
+            DataSource dataSource,
+            MultiTenantConnectionProviderImpl multiTenantConnectionProvider,
+            SchemaTenantResolver schemaTenantResolver,
+            JpaProperties jpaProperties) {
+
+        Map<String, Object> properties = new HashMap<>(jpaProperties.getProperties());
+        properties.put(AvailableSettings.MULTI_TENANT_CONNECTION_PROVIDER, multiTenantConnectionProvider);
+        properties.put(AvailableSettings.MULTI_TENANT_IDENTIFIER_RESOLVER, schemaTenantResolver);
+
+        LocalContainerEntityManagerFactoryBean em = new LocalContainerEntityManagerFactoryBean();
+        em.setDataSource(dataSource);
+        em.setPackagesToScan("com.forge.multiphysical.domain");
+        em.setJpaVendorAdapter(jpaVendorAdapter());
+        em.setJpaPropertyMap(properties);
+        return em;
+    }
+}

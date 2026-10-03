@@ -1,0 +1,26 @@
+import { Router } from 'express';
+import { AuthService } from '../services/authService';
+
+const router = Router();
+const authService = new AuthService();
+
+router.post('/discovery', async (req, res) => {
+  try {
+    const slug = await authService.discovery(req.body.email);
+    res.json({ tenant_slug: slug });
+  } catch (err: any) {
+    res.status(404).json({ message: err.message });
+  }
+});
+
+router.post('/login', async (req, res) => {
+  try {
+    const result = await authService.login(req.body.email, req.body.password, req.body.tenant_slug);
+    res.json(result);
+  } catch (err: any) {
+    res.status(401).json({ message: err.message });
+  }
+});
+
+router.get('/me', (req, res) => res.status(401).json({ message: 'Use o token JWT nas rotas protegidas' }));
+export default router;

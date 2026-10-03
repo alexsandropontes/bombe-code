@@ -1,0 +1,21 @@
+name: go-multi-physical-backend
+blueprint: go-multi-physical
+category: Backend
+type: server
+description: Go Multi-Tenant (Physical Isolation)
+tech_stack:
+  backend: "Go 1.24"
+  database: "PostgreSQL"
+structure:
+  - src/backend/database/
+  - src/backend/middleware/
+  - src/backend/models/
+  - src/backend/repositories/
+  - src/backend/routes/
+  - src/backend/services/
+  - src/backend/main.go
+  - src/backend/init-db.go
+  - src/backend/go.mod
+  - src/backend/.env.example
+required_agents:
+  - Barbara

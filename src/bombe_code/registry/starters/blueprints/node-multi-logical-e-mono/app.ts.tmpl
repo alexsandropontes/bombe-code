@@ -1,0 +1,29 @@
+import express from 'express';
+import cors from 'cors';
+import * as dotenv from 'dotenv';
+import authRoutes from './routes/auth';
+import { tenantContextMiddleware } from './middleware/tenantContext';
+
+dotenv.config();
+const app = express();
+app.use(cors()); 
+app.use(express.json());
+
+// Public Routes
+app.use('/auth', authRoutes);
+
+// Protected Routes (Applies tenantContextMiddleware)
+// Use TENANT_ID in .env to force a specific tenant (Mono-Tenant Mode)
+app.use(tenantContextMiddleware);
+
+app.get('/api/dashboard', (req, res) => {
+  // Enterprise Standard: Safe Access to user context
+  const user = req.user;
+  res.json({ 
+    message: 'Acesso lógico garantido.', 
+    tenant_id: user?.tenant_id || 'unknown' 
+  });
+});
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`[SERVER] Forge Node Logical rodando na porta ${PORT}`));

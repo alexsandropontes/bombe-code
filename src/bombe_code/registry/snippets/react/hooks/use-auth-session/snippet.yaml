@@ -1,0 +1,23 @@
+name: use-auth-session
+description: Hook e Contexto React 19 para gestão de sessão, tokens e expiração com
+  auto-refresh
+category: hooks
+type: hook
+platform: react
+version: 1.0.0
+author: '@ada'
+tags:
+- react
+- auth
+- session
+- jwt
+- hook
+dependencies: []
+invariants:
+- token persistence in memory/storage
+- expiry tracking
+- clean logout
+exports:
+- useAuthSession
+- AuthProvider
+tests: tests/useAuthSession.test.tsx

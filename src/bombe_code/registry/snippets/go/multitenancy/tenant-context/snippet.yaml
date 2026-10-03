@@ -1,0 +1,19 @@
+name: tenant-context
+description: Propagação de contexto de Tenant em Go usando context.Context
+category: multitenancy
+type: function
+platform: go
+version: 1.0.0
+author: '@barbara'
+tags:
+- multitenancy
+- tenant
+- context
+dependencies: []
+invariants:
+- context.Context key safety
+- fallback default
+exports:
+- WithTenant
+- TenantFromContext
+tests: tests/tenant_test.go

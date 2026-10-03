@@ -1,0 +1,21 @@
+name: format-cep
+description: Formata CEP brasileiro no padrão XXXXX-XXX
+category: data-validation
+type: function
+platform: python
+version: 1.0.0
+author: '@barbara'
+tags:
+- cep
+- formatacao
+- brasil
+- endereco
+dependencies: []
+tests: tests/test_format_cep.py
+invariants:
+- 8 digits check
+- format 00000-000
+exports:
+- format_cep
+- FormatCEP
+- formatCEP

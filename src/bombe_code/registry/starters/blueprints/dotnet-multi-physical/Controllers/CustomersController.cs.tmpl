@@ -1,0 +1,51 @@
+using Forge.DotNetMultiPhysical.Domain.Entities;
+using Forge.DotNetMultiPhysical.Infrastructure.Data;
+using Forge.DotNetMultiPhysical.Infrastructure.Tenancy;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+
+namespace Forge.DotNetMultiPhysical.Controllers;
+
+[ApiController]
+[Route("api/[controller]")]
+public class CustomersController : ControllerBase
+{
+    private readonly TenantPhysicalDbContext _dbContext;
+    private readonly ITenantContext _tenantContext;
+
+    public CustomersController(TenantPhysicalDbContext dbContext, ITenantContext tenantContext)
+    {
+        _dbContext = dbContext;
+        _tenantContext = tenantContext;
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> GetAll()
+    {
+        if (string.IsNullOrWhiteSpace(_tenantContext.CurrentTenantId) || _tenantContext.CurrentTenantId == "default")
+            return BadRequest(new { error = "Header X-Tenant-ID com identificador do tenant é obrigatório." });
+
+        var customers = await _dbContext.Customers.ToListAsync();
+        return Ok(customers);
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> Create([FromBody] CreateCustomerRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(_tenantContext.CurrentTenantId) || _tenantContext.CurrentTenantId == "default")
+            return BadRequest(new { error = "Header X-Tenant-ID com identificador do tenant é obrigatório." });
+
+        var customer = new Customer
+        {
+            Name = request.Name,
+            Email = request.Email
+        };
+
+        _dbContext.Customers.Add(customer);
+        await _dbContext.SaveChangesAsync();
+
+        return Ok(customer);
+    }
+}
+
+public record CreateCustomerRequest(string Name, string Email);

@@ -1,0 +1,3 @@
+Write-Host "Iniciando .NET Backend e React Frontend..." -ForegroundColor Cyan
+Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd src/backend; dotnet run"
+Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd src/frontend; npm run dev"

@@ -1,0 +1,35 @@
+package middleware
+
+import (
+	"context"
+	"net/http"
+)
+
+type contextKey string
+
+const TenantIDKey contextKey = "tenant_id"
+
+/**
+ * Enterprise Standard: Logical Tenant Middleware
+ * Rule: Extracts 'tenant_id' from JWT and injects into Context.
+ * All DB queries MUST use this context.
+ */
+func LogicalTenantMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// 1. Extract tenant_id from JWT payload (Assumes Auth middleware set it)
+		tenantID := r.Header.Get("X-Tenant-ID") // Simple example, usually via JWT claims
+
+		if tenantID == "" {
+			http.Error(w, "Acesso negado: ID de tenant ausente", http.StatusUnauthorized)
+			return
+		}
+
+		// 2. Injects tenant_id into context
+		ctx := context.WithValue(r.Context(), TenantIDKey, tenantID)
+		
+		// 3. Optional: SQL Filter injection could go here
+		// Rule: Every repository must use 'ctx.Value(TenantIDKey)' in WHERE clauses.
+
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}

@@ -1,0 +1,32 @@
+#!/bin/bash
+# Forge Core Fullstack Orchestrator (Linux/Mac)
+set -e
+BASE_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+BACKEND_DIR="$BASE_DIR/backend"
+FRONTEND_DIR="$BASE_DIR/frontend"
+
+echo -e "\033[1;36m[Forge] Verificando integridade do ambiente...\033[0m"
+
+if [ -d "$BACKEND_DIR" ]; then
+    cd "$BACKEND_DIR"
+    [ ! -f ".env" ] && [ -f ".env.example" ] && cp .env.example .env
+    [ ! -d "node_modules" ] && npm install
+    npx ts-node init-db.ts
+    cd "$BASE_DIR"
+fi
+
+if [ -d "$FRONTEND_DIR" ]; then
+    cd "$FRONTEND_DIR"
+    [ ! -f ".env" ] && [ -f ".env.example" ] && cp .env.example .env
+    [ ! -d "node_modules" ] && npm install
+    cd "$BASE_DIR"
+fi
+
+echo -e "\033[1;36m[Forge] Iniciando servicos...\033[0m"
+cd "$BACKEND_DIR" && npm run dev &
+BACKEND_PID=$!
+cd "$FRONTEND_DIR" && npm run dev &
+FRONTEND_PID=$!
+
+trap "kill $BACKEND_PID $FRONTEND_PID; exit" SIGINT SIGTERM
+wait

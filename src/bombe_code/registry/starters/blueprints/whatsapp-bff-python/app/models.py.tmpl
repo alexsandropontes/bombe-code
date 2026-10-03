@@ -1,0 +1,33 @@
+from pydantic import BaseModel
+from typing import Optional, List, Dict, Any
+
+class Message(BaseModel):
+    """Base model for WhatsApp messages"""
+    from_: Optional[str] = None
+    id: Optional[str] = None
+    timestamp: Optional[str] = None
+    type: Optional[str] = None
+    text: Optional[Dict[str, str]] = None
+
+class Contact(BaseModel):
+    """WhatsApp contact information"""
+    profile: Optional[Dict[str, str]] = None
+    wa_id: Optional[str] = None
+
+class WebhookPayload(BaseModel):
+    """WhatsApp webhook payload structure"""
+    object: Optional[str] = None
+    entry: Optional[List[Dict[str, Any]]] = None
+
+class SendMessageRequest(BaseModel):
+    """Request model for sending messages"""
+    to: str
+    type: str = "text"
+    content: Dict[str, Any]
+
+class SendTemplateRequest(BaseModel):
+    """Request model for sending templates"""
+    to: str
+    template_name: str
+    language_code: str = "pt_BR"
+    components: List[Dict[str, Any]] = []

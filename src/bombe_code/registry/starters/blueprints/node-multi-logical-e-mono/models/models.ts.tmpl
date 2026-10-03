@@ -1,0 +1,22 @@
+/**
+ * Enterprise Standard: User Model (Logical Isolation)
+ */
+export interface User {
+  id: string;
+  tenant_id: string; // MANDATORY: Logical Isolation Key
+  email: string;
+  first_name: string;
+  last_name: string;
+  roles: string[];
+  is_active: boolean;
+}
+
+/**
+ * Enterprise Standard: Tenant Model
+ */
+export interface Tenant {
+  id: string;
+  name: string;
+  slug: string;
+  is_active: boolean;
+}

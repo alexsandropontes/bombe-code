@@ -1,0 +1,38 @@
+using System.Data.Common;
+using Microsoft.Extensions.Configuration;
+using Npgsql;
+
+namespace Forge.DotNetMultiPhysical.Infrastructure.Tenancy;
+
+public class NpgsqlTenantConnectionFactory : ITenantConnectionFactory
+{
+    private readonly IConfiguration _configuration;
+    private readonly ITenantContext _tenantContext;
+
+    public NpgsqlTenantConnectionFactory(IConfiguration configuration, ITenantContext tenantContext)
+    {
+        _configuration = configuration;
+        _tenantContext = tenantContext;
+    }
+
+    public DbConnection CreateConnection()
+    {
+        var connectionString = _configuration.GetConnectionString("DefaultConnection")
+            ?? "Host=localhost;Port=5432;Database=forge_physical_db;Username=postgres;Password=postgres";
+
+        var connection = new NpgsqlConnection(connectionString);
+        connection.Open();
+
+        var schema = GetCurrentSchema();
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = $"SET search_path TO {schema}, public;";
+        cmd.ExecuteNonQuery();
+
+        return connection;
+    }
+
+    public string GetCurrentSchema()
+    {
+        return string.IsNullOrWhiteSpace(_tenantContext.CurrentSchema) ? "public" : _tenantContext.CurrentSchema;
+    }
+}

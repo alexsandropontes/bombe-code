@@ -1,0 +1,34 @@
+import { Request, Response, NextFunction } from 'express';
+import jwt from 'jsonwebtoken';
+
+export const tenantContextMiddleware = (req: Request, res: Response, next: NextFunction) => {
+  try {
+    // Enterprise Standard: Mono-tenant Fallback
+    // Se TENANT_ID estiver no .env, ignoramos a extração complexa e fixamos o contexto.
+    if (process.env.TENANT_ID) {
+      req.user = { tenant_id: process.env.TENANT_ID, role: 'admin' };
+      return next();
+    }
+
+    const token = req.headers.authorization?.split(' ')[1];
+    if (!token) throw new Error('Token missing');
+    
+    const decoded: any = jwt.verify(token, process.env.JWT_SECRET || 'secret');
+    req.user = decoded; 
+    next();
+  } catch (err) {
+    return res.status(401).json({ error: 'Sessão inválida ou contexto de inquilino ausente.' });
+  }
+};
+
+/**
+ * Enterprise Standard: Express Type Augmentation
+ * Rule: Extends Express Request to recognize the 'user' property globally.
+ */
+declare global {
+  namespace Express {
+    interface Request {
+      user?: any;
+    }
+  }
+}

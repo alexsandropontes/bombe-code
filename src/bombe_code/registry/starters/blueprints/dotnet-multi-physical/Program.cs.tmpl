@@ -1,0 +1,64 @@
+using Forge.DotNetMultiPhysical.Infrastructure.Data;
+using Forge.DotNetMultiPhysical.Infrastructure.Tenancy;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.OpenApi.Models;
+
+var builder = WebApplication.CreateBuilder(args);
+
+// Tenancy Físico
+builder.Services.AddScoped<ITenantContext, TenantContext>();
+builder.Services.AddScoped<ITenantConnectionFactory, NpgsqlTenantConnectionFactory>();
+
+// DbContext Físico
+builder.Services.AddDbContext<TenantPhysicalDbContext>((sp, options) =>
+{
+    var tenantContext = sp.GetRequiredService<ITenantContext>();
+    var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") 
+        ?? "Host=localhost;Port=5432;Database=forge_physical_db;Username=postgres;Password=postgres";
+    options.UseNpgsql(connectionString);
+});
+
+builder.Services.AddControllers();
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen(c =>
+{
+    c.SwaggerDoc("v1", new OpenApiInfo { Title = "Forge DotNet Multi-Tenant Físico API", Version = "v1" });
+    c.AddSecurityDefinition("TenantHeader", new OpenApiSecurityScheme
+    {
+        Description = "Header com o identificador do Tenant (ex: 'tenant_acme')",
+        Name = "X-Tenant-ID",
+        In = ParameterLocation.Header,
+        Type = SecuritySchemeType.ApiKey
+    });
+    c.AddSecurityRequirement(new OpenApiSecurityRequirement
+    {
+        {
+            new OpenApiSecurityScheme
+            {
+                Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = "TenantHeader" }
+            },
+            Array.Empty<string>()
+        }
+    });
+});
+
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowAll", policy =>
+        policy.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader());
+});
+
+var app = builder.Build();
+
+app.UseCors("AllowAll");
+app.UseMiddleware<TenantSchemaResolverMiddleware>();
+
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
+
+app.MapControllers();
+
+app.Run();

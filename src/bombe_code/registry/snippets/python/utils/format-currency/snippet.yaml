@@ -1,0 +1,22 @@
+name: format-currency
+description: Formata valor como moeda brasileira (R$)
+category: utils
+type: function
+platform: python
+version: 1.0.0
+author: '@barbara'
+tags:
+- currency
+- dinheiro
+- formatacao
+- real
+- brasil
+dependencies: []
+tests: tests/test_format_currency.py
+invariants:
+- brazilian real symbol
+- comma decimal separator
+exports:
+- format_currency
+- FormatCurrency
+- formatCurrency

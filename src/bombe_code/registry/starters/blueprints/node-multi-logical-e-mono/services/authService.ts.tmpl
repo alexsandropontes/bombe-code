@@ -1,0 +1,19 @@
+import { db } from '../database/connection';
+import bcrypt from 'bcrypt';
+import jwt from 'jsonwebtoken';
+
+export class AuthService {
+  async login(email: string, password: string) {
+    const { rows } = await db.query(`SELECT id, tenant_id, email, password_hash FROM users WHERE email = $1`, [email]);
+    if (rows.length === 0) throw new Error('Credenciais inválidas.');
+
+    const user = rows[0];
+    if (!(await bcrypt.compare(password, user.password_hash))) throw new Error('Credenciais inválidas.');
+
+    // No modo Mono-tenant, usamos o ID fixo do ambiente ou o do banco
+    const tenant_id = process.env.TENANT_ID || user.tenant_id;
+
+    const token = jwt.sign({ id: user.id, tenant_id: tenant_id }, process.env.JWT_SECRET || 'secret');
+    return { user: { email: user.email, tenant_id: tenant_id }, token };
+  }
+}

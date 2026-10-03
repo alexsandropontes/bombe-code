@@ -1,0 +1,30 @@
+package main
+
+import (
+	"net/http"
+	"os"
+
+	"github.com/gin-gonic/gin"
+)
+
+// verifyWebhook handles webhook verification from Meta
+func verifyWebhook(c *gin.Context) {
+	verifyToken := os.Getenv("WHATSAPP_WEBHOOK_VERIFY_TOKEN")
+
+	if verifyToken == "" {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Verify token not configured"})
+		return
+	}
+
+	mode := c.Query("hub.mode")
+	challenge := c.Query("hub.challenge")
+	token := c.Query("hub.verify_token")
+
+	// Verify the token
+	if mode == "subscribe" && token == verifyToken {
+		c.String(http.StatusOK, "%s", challenge)
+		return
+	}
+
+	c.JSON(http.StatusForbidden, gin.H{"error": "Verification failed"})
+}
