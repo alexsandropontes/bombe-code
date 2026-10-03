@@ -51,12 +51,15 @@ class AgentRunner:
         skill_registry: SkillRegistry | None = None,
         project_db: ProjectDatabase | None = None,
         extra_tools: list[Any] | None = None,
+        router: Any | None = None,
     ) -> None:
         self.agent = agent
         self.llm_factory = llm_factory
         self.skill_registry = skill_registry
         self.project_db = project_db
         self.extra_tools = extra_tools or []
+        self.router = router
+
 
     def _prepare_tools(self) -> list[Any]:
         """Prepara e injeta as tools de busca e carregamento de skills."""
@@ -82,146 +85,190 @@ class AgentRunner:
 
         tools = self._prepare_tools()
 
-        try:
-            # Cria a instância tipada do agente Pydantic AI
-            pydantic_agent = self.llm_factory.create_agent(
-                system_prompt=self.agent.system_prompt,
-                tools=tools,
-            )
+        max_attempts = (
+            max(1, len(self.router.slots))
+            if (self.router and getattr(self.router, "slots", None))
+            else 1
+        )
 
-            # Execução síncrona ou assíncrona
-            exec_prompt = prompt
-            if context:
-                context_str = "\n".join(f"- {k}: {v}" for k, v in context.items())
-                exec_prompt = f"{prompt}\n\nContexto da Execução:\n{context_str}"
+        for attempt in range(max_attempts):
+            active_slot = self.router.get_active_slot() if self.router else None
+            model_to_use = active_slot.model if active_slot else None
 
-            t0 = time.perf_counter()
-            print(f"  ⚡ [{self.agent.handle}] Invocando modelo...", flush=True)
-            from pydantic_ai.usage import UsageLimits
-            limits = UsageLimits(request_limit=15)
+            try:
+                # Cria a instância tipada do agente Pydantic AI
+                pydantic_agent = self.llm_factory.create_agent(
+                    model_name=model_to_use,
+                    system_prompt=self.agent.system_prompt,
+                    tools=tools,
+                )
 
-            # Execução: Pydantic AI real usa run_sync, mocks de teste unitário usam run
-            is_mock = type(pydantic_agent).__name__.endswith("Mock")
-            if (
-                is_mock
-                and hasattr(pydantic_agent, "run_sync")
-                and not type(pydantic_agent.run_sync.return_value).__name__.endswith("Mock")
-            ):
-                try:
-                    raw_result = pydantic_agent.run_sync(exec_prompt, usage_limits=limits)
-                except TypeError:
-                    raw_result = pydantic_agent.run_sync(exec_prompt)
-            elif is_mock:
-                raw_result = pydantic_agent.run(exec_prompt)
-            elif hasattr(pydantic_agent, "run_sync"):
-                try:
-                    raw_result = pydantic_agent.run_sync(exec_prompt, usage_limits=limits)
-                except TypeError:
-                    raw_result = pydantic_agent.run_sync(exec_prompt)
-            else:
-                raw_result = pydantic_agent.run(exec_prompt)
+                # Execução síncrona ou assíncrona
+                exec_prompt = prompt
+                if context:
+                    context_str = "\n".join(f"- {k}: {v}" for k, v in context.items())
+                    exec_prompt = f"{prompt}\n\nContexto da Execução:\n{context_str}"
 
-            duration_seconds = round(time.perf_counter() - t0, 3)
-            print(f"  ✓ [{self.agent.handle}] Resposta recebida em {duration_seconds:.1f}s.", flush=True)
+                t0 = time.perf_counter()
+                provider_tag = f" via {active_slot.name} ({active_slot.model})" if active_slot else ""
+                print(f"  ⚡ [{self.agent.handle}] Invocando modelo{provider_tag}...", flush=True)
+                from pydantic_ai.usage import UsageLimits
 
-            # Extrai telemetria de tokens e custos do Pydantic AI
-            input_tokens = 0
-            output_tokens = 0
-            total_tokens = 0
-            cost = 0.0
+                limits = UsageLimits(request_limit=15)
 
-            usage_obj = getattr(raw_result, "usage", None)
-            if usage_obj is not None:
-                if callable(usage_obj):
+                # Execução: Pydantic AI real usa run_sync, mocks de teste unitário usam run
+                is_mock = type(pydantic_agent).__name__.endswith("Mock")
+                if (
+                    is_mock
+                    and hasattr(pydantic_agent, "run_sync")
+                    and not type(pydantic_agent.run_sync.return_value).__name__.endswith("Mock")
+                ):
                     try:
-                        usage_obj = usage_obj()
-                    except (TypeError, AttributeError):  # pragma: no cover
-                        pass
-                input_tokens = getattr(usage_obj, "input_tokens", 0) or 0
-                output_tokens = getattr(usage_obj, "output_tokens", 0) or 0
-                total_tokens = getattr(usage_obj, "total_tokens", 0) or (
-                    input_tokens + output_tokens
-                )
-                c = getattr(usage_obj, "cost", 0.0) or 0.0
-                try:
-                    cost = float(c)
-                except (ValueError, TypeError):
-                    cost = 0.0
+                        raw_result = pydantic_agent.run_sync(exec_prompt, usage_limits=limits)
+                    except TypeError:
+                        raw_result = pydantic_agent.run_sync(exec_prompt)
+                elif is_mock:
+                    raw_result = pydantic_agent.run(exec_prompt)
+                elif hasattr(pydantic_agent, "run_sync"):
+                    try:
+                        raw_result = pydantic_agent.run_sync(exec_prompt, usage_limits=limits)
+                    except TypeError:
+                        raw_result = pydantic_agent.run_sync(exec_prompt)
+                else:
+                    raw_result = pydantic_agent.run(exec_prompt)
 
-            # Extrai texto de saída suportando pydantic-ai real (.output) e mocks de teste (.data)
-            if hasattr(raw_result, "output") and not type(raw_result.output).__name__.endswith(
-                "Mock"
-            ):
-                output_text = raw_result.output
-            elif hasattr(raw_result, "data") and not type(raw_result.data).__name__.endswith(
-                "Mock"
-            ):
-                output_text = raw_result.data
-            elif hasattr(raw_result, "output"):
-                output_text = raw_result.output
-            else:
-                output_text = getattr(raw_result, "data", str(raw_result))
+                duration_seconds = round(time.perf_counter() - t0, 3)
+                print(f"  ✓ [{self.agent.handle}] Resposta recebida em {duration_seconds:.1f}s.", flush=True)
 
-            output_str = str(output_text)
-            is_blocked, block_reason = self._detect_block(output_str)
+                # Extrai telemetria de tokens e custos do Pydantic AI
+                input_tokens = 0
+                output_tokens = 0
+                total_tokens = 0
+                cost = 0.0
 
-            task_status = "blocked" if is_blocked else "completed"
-            if self.project_db and task_id:
-                self.project_db.update_agent_task_status(
-                    task_id, task_status, output=output_str
-                )
+                usage_obj = getattr(raw_result, "usage", None)
+                if usage_obj is not None:
+                    if callable(usage_obj):
+                        try:
+                            usage_obj = usage_obj()
+                        except (TypeError, AttributeError):  # pragma: no cover
+                            pass
+                    input_tokens = getattr(usage_obj, "input_tokens", 0) or 0
+                    output_tokens = getattr(usage_obj, "output_tokens", 0) or 0
+                    total_tokens = getattr(usage_obj, "total_tokens", 0) or (
+                        input_tokens + output_tokens
+                    )
+                    c = getattr(usage_obj, "cost", 0.0) or 0.0
+                    try:
+                        cost = float(c)
+                    except (ValueError, TypeError):
+                        cost = 0.0
 
-            return AgentExecutionResult(
-                agent_handle=self.agent.handle,
-                success=not is_blocked,
-                status="BLOCKED" if is_blocked else "COMPLETED",
-                is_blocked=is_blocked,
-                block_reason=block_reason,
-                output=output_str,
-                task_id=task_id,
-                input_tokens=input_tokens,
-                output_tokens=output_tokens,
-                total_tokens=total_tokens,
-                cost=cost,
-                duration_seconds=duration_seconds,
-            )
+                # Extrai texto de saída suportando pydantic-ai real (.output) e mocks de teste (.data)
+                if hasattr(raw_result, "output") and not type(raw_result.output).__name__.endswith(
+                    "Mock"
+                ):
+                    output_text = raw_result.output
+                elif hasattr(raw_result, "data") and not type(raw_result.data).__name__.endswith(
+                    "Mock"
+                ):
+                    output_text = raw_result.data
+                elif hasattr(raw_result, "output"):
+                    output_text = raw_result.output
+                else:
+                    output_text = getattr(raw_result, "data", str(raw_result))
 
-        except Exception as exc:  # noqa: BLE001
-            logger.error("Falha na execução do agente %s: %s", self.agent.handle, exc)
+                output_str = str(output_text)
+                is_blocked, block_reason = self._detect_block(output_str)
 
-            is_quota, quota_reason = is_quota_or_rate_limit_error(exc)
-            if is_quota:
-                logger.critical(
-                    "🚨 ESTOURO DE COTA/RATE LIMIT DETECTADO para o agente %s: %s",
-                    self.agent.handle,
-                    quota_reason,
-                )
+                task_status = "blocked" if is_blocked else "completed"
                 if self.project_db and task_id:
                     self.project_db.update_agent_task_status(
-                        task_id, "blocked", output=quota_reason
+                        task_id, task_status, output=output_str
                     )
 
                 return AgentExecutionResult(
                     agent_handle=self.agent.handle,
+                    success=not is_blocked,
+                    status="BLOCKED" if is_blocked else "COMPLETED",
+                    is_blocked=is_blocked,
+                    block_reason=block_reason,
+                    output=output_str,
+                    task_id=task_id,
+                    input_tokens=input_tokens,
+                    output_tokens=output_tokens,
+                    total_tokens=total_tokens,
+                    cost=cost,
+                    duration_seconds=duration_seconds,
+                )
+
+            except Exception as exc:  # noqa: BLE001
+                logger.error("Falha na execução do agente %s: %s", self.agent.handle, exc)
+
+                is_quota, quota_reason = is_quota_or_rate_limit_error(exc)
+                if is_quota and self.router:
+                    from bombe_code.llm.quota_detector import parse_quota_reset_info
+
+                    quota_info = parse_quota_reset_info(
+                        exc, provider_hint=active_slot.name if active_slot else None
+                    )
+                    next_slot = self.router.report_quota_exhausted(
+                        active_slot, quota_info
+                    ) if active_slot else None
+
+                    if next_slot:
+                        logger.info(
+                            "🔄 [FAILOVER] Alternando automaticamente agente %s para o provedor %s (%s)...",
+                            self.agent.handle,
+                            next_slot.name,
+                            next_slot.model,
+                        )
+                        continue
+
+                    # Se todos os provedores estão em cooldown, avalia se pode esperar timer
+                    should_wait, wait_secs, wait_reason = self.router.should_wait_timer()
+                    if should_wait:
+                        logger.info(
+                            "⏳ [TIMER] %s. Aguardando %.1fs para retomar...",
+                            wait_reason,
+                            wait_secs,
+                        )
+                        time.sleep(wait_secs)
+                        continue
+
+                if is_quota:
+                    logger.critical(
+                        "🚨 ESTOURO DE COTA/RATE LIMIT DETECTADO para o agente %s: %s",
+                        self.agent.handle,
+                        quota_reason,
+                    )
+                    if self.project_db and task_id:
+                        self.project_db.update_agent_task_status(
+                            task_id, "blocked", output=quota_reason
+                        )
+
+                    return AgentExecutionResult(
+                        agent_handle=self.agent.handle,
+                        success=False,
+                        status="QUOTA_EXHAUSTED",
+                        is_blocked=True,
+                        block_reason=quota_reason,
+                        error=str(exc),
+                        task_id=task_id,
+                    )
+
+                if self.project_db and task_id:
+                    self.project_db.update_agent_task_status(task_id, "failed")
+
+                return AgentExecutionResult(
+                    agent_handle=self.agent.handle,
                     success=False,
-                    status="QUOTA_EXHAUSTED",
-                    is_blocked=True,
-                    block_reason=quota_reason,
+                    status="FAILED",
+                    is_blocked=False,
                     error=str(exc),
                     task_id=task_id,
                 )
 
-            if self.project_db and task_id:
-                self.project_db.update_agent_task_status(task_id, "failed")
-
-            return AgentExecutionResult(
-                agent_handle=self.agent.handle,
-                success=False,
-                status="FAILED",
-                is_blocked=False,
-                error=str(exc),
-                task_id=task_id,
-            )
 
     @staticmethod
     def _detect_block(output_text: str) -> tuple[bool, str | None]:

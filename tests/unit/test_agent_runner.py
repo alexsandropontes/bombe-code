@@ -135,3 +135,49 @@ def test_agent_runner_realtime_telemetry(mock_factory, capsys):
     assert "✓ [@grace] Resposta recebida" in captured.out
     assert result.success is True
 
+
+def test_agent_runner_automatic_failover():
+    from bombe_code.llm.provider_rotator import ProviderFailoverRouter, ProviderSlot
+
+    agent_registry = AgentRegistry.default()
+    grace = agent_registry.get("@grace")
+
+    slot1 = ProviderSlot(name="primary_zai", model="glm-5.3-flash", priority=1)
+    slot2 = ProviderSlot(name="fallback_groq", model="llama-3.3-70b-versatile", priority=2)
+    router = ProviderFailoverRouter(slots=[slot1, slot2])
+
+    class MockStatus429(Exception):
+        def __init__(self):
+            super().__init__("HTTP 429 Too Many Requests")
+            self.status_code = 429
+
+    mock_agent_primary = MagicMock()
+    mock_agent_primary.run.side_effect = MockStatus429()
+    mock_agent_primary.run_sync.side_effect = MockStatus429()
+
+    mock_agent_fallback = MagicMock()
+    mock_res = MagicMock()
+    mock_res.output = "Resposta gerada com sucesso via fallback"
+    mock_agent_fallback.run.return_value = mock_res
+    mock_agent_fallback.run_sync.return_value = mock_res
+
+
+    mock_factory = MagicMock()
+    # Primeiro retorno é o primário que falha; segundo retorno é o fallback que funciona
+    mock_factory.create_agent.side_effect = [mock_agent_primary, mock_agent_fallback]
+
+    runner = AgentRunner(
+        agent=grace,
+        llm_factory=mock_factory,
+        router=router,
+    )
+
+    result = runner.run("Executar demanda")
+
+    assert result.success is True
+    assert "Resposta gerada com sucesso via fallback" in result.output
+    # Garante que o slot 1 foi marcado como esgotado e o slot 2 está ativo
+    assert slot1.is_available() is False
+    assert router.get_active_slot().name == "fallback_groq"
+
+
