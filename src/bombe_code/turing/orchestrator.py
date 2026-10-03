@@ -37,6 +37,7 @@ from bombe_code.turing.upstream_gates import (
     StoryDoRGate,
     ViabilityQualityGate,
 )
+from bombe_code.turing.pbb import AtomicTask
 from bombe_code.turing.upstream_profiler import UpstreamProfile, UpstreamProfiler
 
 logger = logging.getLogger(__name__)
@@ -1338,6 +1339,77 @@ class WaveOrchestrator:
             "resolution": resolution_output,
             "message": f"Story {story_id} desbloqueada com sucesso após intervenção de {delegated_agent}.",
         }
+
+    def run_story_tasks(
+        self,
+        story_id: str,
+        tasks: list[AtomicTask],
+        context: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Executa a decomposição atômica de uma story task-por-task no ciclo TDD (ST-037)."""
+        completed_tasks: set[str] = set()
+        results: list[dict[str, Any]] = []
+
+        # Marca o card como IN_PROGRESS se estiver no Kanban
+        try:
+            self.kanban.update_status(story_id, KanbanCardStatus.IN_PROGRESS.value)
+        except Exception as exc:
+            logger.debug("Falha ao atualizar card %s para IN_PROGRESS: %s", story_id, exc)
+
+        for task in tasks:
+            # 1. Validação de dependências prévias
+            for dep_id in task.depends_on:
+                if dep_id not in completed_tasks:
+                    task.status = "BLOCKED"
+                    err = f"Task {task.id} bloqueada por dependência não concluída: {dep_id}"
+                    task.error = err
+                    return {"success": False, "story_id": story_id, "error": err}
+
+            # 2. Despacha o agente especialista responsável
+            runner = self._get_runner(task.responsible_agent)
+            if not runner:
+                task.status = "FAILED"
+                err = f"Agente {task.responsible_agent} não encontrado para executar a task {task.id}."
+                task.error = err
+                return {"success": False, "story_id": story_id, "error": err}
+
+            task_prompt = (
+                f"Execute a tarefa atômica [{task.id}] da Story {story_id}.\n"
+                f"Tipo: {task.task_type.value}\n"
+                f"Título: {task.title}\n"
+                f"Instruções:\n{task.description}\n"
+                f"Atue única e exclusivamente no escopo desta tarefa (Princípio de Responsabilidade Única).\n"
+            )
+            assembled = self._assemble_prompt(task.responsible_agent, task_prompt, context)
+            res = runner.run(prompt=assembled, context=context)
+            self._record_telemetry("EXECUTE", task.responsible_agent, res)
+
+            if not res.success or getattr(res, "is_blocked", False):
+                task.status = "FAILED"
+                task.error = getattr(res, "error", None) or getattr(res, "block_reason", None) or "Falha de execução"
+                return {
+                    "success": False,
+                    "story_id": story_id,
+                    "task_id": task.id,
+                    "error": task.error,
+                }
+
+            task.status = "COMPLETED"
+            task.output = res.output
+            completed_tasks.add(task.id)
+            results.append({
+                "task_id": task.id,
+                "agent": task.responsible_agent,
+                "success": True,
+            })
+
+        # Todas as tarefas concluídas: promove card no Kanban para DEV_DONE
+        try:
+            self.kanban.update_status(story_id, KanbanCardStatus.DEV_DONE.value)
+        except Exception as exc:
+            logger.debug("Falha ao promover card %s para DEV_DONE: %s", story_id, exc)
+
+        return {"success": True, "story_id": story_id, "results": results}
 
     def run_execute(
         self,
