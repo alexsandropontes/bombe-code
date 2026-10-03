@@ -425,6 +425,10 @@ class WaveOrchestrator:
         for rel_template, desc in reqs:
             rel_path = rel_template.replace("{story_id}", story_id or "ST-001")
             target = self.project_dir / rel_path
+            if not target.exists() and "stories" in rel_path:
+                alt = self.project_dir / "docs" / "backlog" / "stories" / f"{story_id or 'ST-001'}.md"
+                if alt.exists():
+                    target = alt
             if not target.exists():
                 return False, f"Pré-requisito ausente para {agent_handle}: O arquivo '{rel_path}' ({desc}) não existe no disco."
             if target.is_file() and target.stat().st_size < 50:
@@ -1288,7 +1292,16 @@ class WaveOrchestrator:
                     "error": f"Etapa atual é {self.state_machine.current_state.value}, esperado EXECUTE.",
                 }
 
-        target_stories = stories or ["ST-001"]
+        auto_skip_done = stories is None
+        if not stories:
+            cards = self.kanban.list_cards(wave_id=self.state_machine.wave_id)
+            if cards:
+                target_stories = [c["story_id"] for c in cards]
+            else:
+                target_stories = ["ST-001"]
+        else:
+            target_stories = stories
+
         completed_stories: list[str] = []
         is_manual = self.state_machine.autonomy_mode in (
             AutonomyMode.MANUAL,
@@ -1296,6 +1309,18 @@ class WaveOrchestrator:
         )
 
         for story in target_stories:
+            # Pula stories que já foram concluídas apenas se auto_skip_done for True
+            if auto_skip_done:
+                card = self.kanban.get_card(story)
+                if card and card.get("status") in (
+                    KanbanCardStatus.DEV_DONE.value,
+                    KanbanCardStatus.VALIDATE.value,
+                    KanbanCardStatus.DONE.value,
+                ):
+                    logger.info("Story %s já concluída (%s), avançando para a próxima.", story, card.get("status"))
+                    completed_stories.append(story)
+                    continue
+
             cycle_res = self.run_cycle(story_id=story)
             if not cycle_res.get("success"):
                 card = self.kanban.get_card(story)

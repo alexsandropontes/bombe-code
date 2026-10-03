@@ -353,3 +353,27 @@ def test_wave_orchestrator_caroli_dor_disk_inspection(project_env):
     assert res["success"] is True
     assert (tmp_path / "docs" / "stories" / "ST-001.md").exists()
     assert "INVEST" in (tmp_path / "docs" / "stories" / "ST-001.md").read_text(encoding="utf-8")
+
+
+def test_wave_orchestrator_run_execute_auto_discovers_cards_and_skips_done(project_env):
+    from unittest.mock import MagicMock
+
+    tmp_path, db = project_env
+    orchestrator = WaveOrchestrator(project_dir=str(tmp_path), db=db)
+    orchestrator.start_wave("ONDA-007")
+    orchestrator.transition_to(TuringStage.PLAN)
+    orchestrator.transition_to(TuringStage.EXECUTE)
+
+    # Cadastra dois cards: ST-001 já DEV_DONE e ST-002 READY
+    orchestrator.kanban.add_card("ST-001", "ONDA-007", "Title 1", "@valim", status="DEV_DONE")
+    orchestrator.kanban.add_card("ST-002", "ONDA-007", "Title 2", "@valim", status="READY")
+
+    # Mock run_cycle para retornar sucesso quando chamado para ST-002
+    orchestrator.run_cycle = MagicMock(return_value={"success": True})
+
+    # Chama run_execute sem passar lista de stories (deve auto-descobrir e pular ST-001)
+    res = orchestrator.run_execute()
+    assert res["success"] is True
+    assert res["completed_stories"] == ["ST-001", "ST-002"]
+    # Garante que run_cycle só foi chamado para ST-002
+    orchestrator.run_cycle.assert_called_once_with(story_id="ST-002")
