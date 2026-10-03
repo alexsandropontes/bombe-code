@@ -97,6 +97,9 @@ class AgentRunner:
 
             t0 = time.perf_counter()
             print(f"  ⚡ [{self.agent.handle}] Invocando modelo...", flush=True)
+            from pydantic_ai.usage import UsageLimits
+            limits = UsageLimits(request_limit=15)
+
             # Execução: Pydantic AI real usa run_sync, mocks de teste unitário usam run
             is_mock = type(pydantic_agent).__name__.endswith("Mock")
             if (
@@ -104,11 +107,17 @@ class AgentRunner:
                 and hasattr(pydantic_agent, "run_sync")
                 and not type(pydantic_agent.run_sync.return_value).__name__.endswith("Mock")
             ):
-                raw_result = pydantic_agent.run_sync(exec_prompt)
+                try:
+                    raw_result = pydantic_agent.run_sync(exec_prompt, usage_limits=limits)
+                except TypeError:
+                    raw_result = pydantic_agent.run_sync(exec_prompt)
             elif is_mock:
                 raw_result = pydantic_agent.run(exec_prompt)
             elif hasattr(pydantic_agent, "run_sync"):
-                raw_result = pydantic_agent.run_sync(exec_prompt)
+                try:
+                    raw_result = pydantic_agent.run_sync(exec_prompt, usage_limits=limits)
+                except TypeError:
+                    raw_result = pydantic_agent.run_sync(exec_prompt)
             else:
                 raw_result = pydantic_agent.run(exec_prompt)
 

@@ -53,7 +53,8 @@ def test_resolve_zai_model_uses_fail_fast_timeout():
     model = factory.resolve_model("zai-coding-plan/glm-5.3-flash")
     cli = getattr(model.provider, "client", None)
     assert cli is not None
-    assert cli.timeout == 90.0
+    assert getattr(cli.timeout, "read", None) == 90.0
+    assert getattr(cli.timeout, "connect", None) == 15.0
     assert cli.max_retries == 1
 
 

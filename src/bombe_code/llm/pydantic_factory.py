@@ -51,15 +51,21 @@ class PydanticAiFactory:
                 model_id = name.split("/", 1)[1]
             if model_id in ("", "zai", "zhipu", "zai-coding-plan"):
                 model_id = "glm-5.3-flash"
+            import httpx
             from openai import AsyncOpenAI
-            openai_cli = AsyncOpenAI(base_url=zai_url, api_key=zai_key or "dummy", timeout=90.0, max_retries=1)
+            timeout_cfg = httpx.Timeout(timeout=90.0, connect=15.0, read=90.0, write=15.0, pool=10.0)
+            http_cli = httpx.AsyncClient(timeout=timeout_cfg, limits=httpx.Limits(max_keepalive_connections=5, keepalive_expiry=30.0))
+            openai_cli = AsyncOpenAI(base_url=zai_url, api_key=zai_key or "dummy", http_client=http_cli, max_retries=1)
             provider = OpenAIProvider(openai_client=openai_cli)
             return OpenAIChatModel(model_id, provider=provider)
 
         # Se for default/vazio e tiver chave Z.ai, usa Z.ai com glm-5.3-flash como padrão
         if (not name or name in ("padrão", "default")) and zai_key:
+            import httpx
             from openai import AsyncOpenAI
-            openai_cli = AsyncOpenAI(base_url=zai_url, api_key=zai_key, timeout=90.0, max_retries=1)
+            timeout_cfg = httpx.Timeout(timeout=90.0, connect=15.0, read=90.0, write=15.0, pool=10.0)
+            http_cli = httpx.AsyncClient(timeout=timeout_cfg, limits=httpx.Limits(max_keepalive_connections=5, keepalive_expiry=30.0))
+            openai_cli = AsyncOpenAI(base_url=zai_url, api_key=zai_key, http_client=http_cli, max_retries=1)
             provider = OpenAIProvider(openai_client=openai_cli)
             return OpenAIChatModel("glm-5.3-flash", provider=provider)
 
