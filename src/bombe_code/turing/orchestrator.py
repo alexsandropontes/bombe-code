@@ -226,6 +226,7 @@ class WaveOrchestrator:
         autonomy_mode: str = "AUTO",
         engineering_mode: str = "tdd-code",
         force: bool = False,
+        delivery_target: str | None = None,
     ) -> dict[str, Any]:
         """Inicializa formalmente uma nova ONDA, resetando checkpoints para a etapa DISCUSS."""
         saved = self.db.load_wave_state()
@@ -248,6 +249,14 @@ class WaveOrchestrator:
                 ),
             }
 
+        if delivery_target:
+            self.delivery_target = DeliveryTarget.from_str(delivery_target)
+            try:
+                cfg = self.config_mgr.load()
+                cfg.delivery_target = self.delivery_target.value
+                self.config_mgr.save(cfg)
+            except Exception as e:
+                logger.warning("Falha ao salvar delivery_target no config: %s", e)
 
         try:
             autonomy = AutonomyMode(autonomy_mode.upper())
@@ -258,7 +267,6 @@ class WaveOrchestrator:
             eng = EngineeringMode(engineering_mode.lower())
         except ValueError:
             eng = EngineeringMode.TDD_CODE
-
 
         self.state_machine = TuringStateMachine(
             wave_id=wave_id,

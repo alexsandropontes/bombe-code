@@ -103,13 +103,19 @@ def wave_start(
     mode: Annotated[
         str, typer.Option("--mode", "-m", help="Modo de autonomia (auto, semi-auto, manual)")
     ] = "auto",
+    target: Annotated[
+        str, typer.Option("--target", "-t", help="Nível de maturidade/objetivo da entrega (snippet, poc, prototype, mvp, production, enterprise)")
+    ] = "mvp",
+    force: Annotated[
+        bool, typer.Option("--force", "-f", help="Força inicialização sobrescrevendo onda anterior")
+    ] = False,
     project_dir: Annotated[str, typer.Option("--project-dir", help="Pasta do projeto")] = ".",
 ) -> None:
     """Inicializa uma nova ONDA."""
     from bombe_code.turing.orchestrator import WaveOrchestrator
 
     orch = WaveOrchestrator(project_dir=project_dir)
-    res = orch.start_wave(wave_id)
+    res = orch.start_wave(wave_id, force=force, delivery_target=target)
     if mode:
         orch.set_mode(mode)
     typer.echo(res["message"])
