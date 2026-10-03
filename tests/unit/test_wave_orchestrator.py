@@ -272,3 +272,84 @@ def test_wave_orchestrator_meira_viability_persistence_and_approval(project_env)
     viab_file = tmp_path / "docs" / "briefings" / "VIABILITY.md"
     assert viab_file.exists()
     assert "Status: APROVADO" in viab_file.read_text(encoding="utf-8")
+
+
+def test_wave_orchestrator_caroli_dor_disk_inspection(project_env):
+    from unittest.mock import MagicMock
+    from bombe_code.agents.runner import AgentExecutionResult
+
+    tmp_path, db = project_env
+    orchestrator = WaveOrchestrator(project_dir=str(tmp_path), db=db)
+    orchestrator.start_wave("ONDA-006")
+    orchestrator.transition_to(TuringStage.PLAN)
+
+    # Pré-cria os artefatos de pré-requisitos para os arquitetos (> 50 bytes)
+    (tmp_path / "docs" / "briefings").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "docs" / "briefings" / "PRD.md").write_text(
+        "# PRD Oficial - Onboarding\n## Visão do Produto\nPersonas bem definidas\n## Escopo do MVP detalhado com requisitos funcionais.",
+        encoding="utf-8",
+    )
+    (tmp_path / "docs" / "architecture").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "docs" / "architecture" / "journey.md").write_text(
+        "# Journey Completo\n## Entry Points\nEntrada via web mobile.\n## Fluxo de Navegação\nPasso a passo 1-10.\n## Telas\nTelas responsivas.",
+        encoding="utf-8",
+    )
+    (tmp_path / "docs" / "architecture" / "SYSTEM_ARCHITECTURE.md").write_text(
+        "# Arquitetura do Sistema\n## Decisões Arquiteturais\nHexagonal puro e SPA client-side.\n## Stack\nPython e React com Vite.",
+        encoding="utf-8",
+    )
+    (tmp_path / "docs" / "architecture" / "db.md").write_text(
+        "# Database Schema\n## Tabelas e Coleções\nArmazenamento em localStorage sem backend.",
+        encoding="utf-8",
+    )
+
+    # Pré-cria a story com INVEST e BDD no diretório de backlog (como @caroli faz via tools)
+    backlog_dir = tmp_path / "docs" / "backlog" / "stories"
+    backlog_dir.mkdir(parents=True, exist_ok=True)
+    story_body = (
+        "# STORY ST-001: Implementação\n"
+        "> **Status:** READY\n"
+        "## INVEST\n"
+        "## Critérios de Aceite\n"
+        "### Cenários BDD\n"
+        "- Dado um usuário\n- Quando solicitar\n- Então recebe resposta\n"
+    )
+    (backlog_dir / "ST-001.md").write_text(story_body, encoding="utf-8")
+
+    # Mock runners retornando saídas válidas
+    mock_runner_alan = MagicMock()
+    mock_runner_alan.run.return_value = AgentExecutionResult(
+        agent_handle="@alan", success=True, output="## Entry Points\n## Fluxo de Navegação\n## Telas"
+    )
+    mock_runner_ieru = MagicMock()
+    mock_runner_ieru.run.return_value = AgentExecutionResult(
+        agent_handle="@ieru", success=True, output="## Decisões Arquiteturais\n## Stack"
+    )
+    mock_runner_codd = MagicMock()
+    mock_runner_codd.run.return_value = AgentExecutionResult(
+        agent_handle="@codd",
+        success=True,
+        output="## Schema e Tabelas\n## Constraints e Integridade\nCampos e chaves definidos.",
+    )
+    mock_runner_caroli = MagicMock()
+    mock_runner_caroli.run.return_value = AgentExecutionResult(
+        agent_handle="@caroli",
+        success=True,
+        output="Persistidas as stories em docs/backlog/stories/ conforme solicitado.",
+    )
+
+    def mock_get_runner(handle: str):
+        mapping = {
+            "@alan": mock_runner_alan,
+            "@ieru": mock_runner_ieru,
+            "@codd": mock_runner_codd,
+            "@caroli": mock_runner_caroli,
+        }
+        return mapping.get(handle)
+
+    orchestrator._get_runner = mock_get_runner
+
+    res = orchestrator.run_plan()
+    assert res["success"] is True
+    assert (tmp_path / "docs" / "stories" / "ST-001.md").exists()
+    assert "INVEST" in (tmp_path / "docs" / "stories" / "ST-001.md").read_text(encoding="utf-8")

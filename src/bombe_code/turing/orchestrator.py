@@ -668,16 +668,20 @@ class WaveOrchestrator:
                     "results": results,
                 }
 
-            # Salva journey no disco
+            # Salva journey no disco se ainda não existir
             try:
                 journeys_dir = self.project_dir / "docs" / "architecture"
                 journeys_dir.mkdir(parents=True, exist_ok=True)
-                (journeys_dir / "journey.md").write_text(res_alan.output, encoding="utf-8")
+                journey_file = journeys_dir / "journey.md"
+                if not journey_file.exists() or journey_file.stat().st_size < 50:
+                    journey_file.write_text(res_alan.output, encoding="utf-8")
+                art_content = journey_file.read_text(encoding="utf-8") if journey_file.exists() else ""
             except OSError as e:
                 logger.warning("Falha ao salvar journey.md: %s", e)
+                art_content = ""
 
             # Gate de Jornada
-            journey_eval = self.journey_gate.evaluate(res_alan.output)
+            journey_eval = self.journey_gate.evaluate(f"{art_content}\n\n{res_alan.output}" if art_content else res_alan.output)
             self._gate_evaluations["journey"] = journey_eval
             if not journey_eval.get("approved"):
                 self.handle_agent_block("@alan", journey_eval.get("message"))
@@ -724,16 +728,25 @@ class WaveOrchestrator:
                     "results": results,
                 }
 
-            # Salva arquitetura no disco
+            # Salva arquitetura no disco se ainda não existir
             try:
                 arch_dir = self.project_dir / "docs" / "architecture"
                 arch_dir.mkdir(parents=True, exist_ok=True)
-                (arch_dir / "SYSTEM_ARCHITECTURE.md").write_text(res_ieru.output, encoding="utf-8")
+                arch_file = arch_dir / "SYSTEM_ARCHITECTURE.md"
+                alt_arch = arch_dir / "arch.md"
+                if alt_arch.exists() and (not arch_file.exists() or arch_file.stat().st_size < 50):
+                    arch_file.write_text(alt_arch.read_text(encoding="utf-8"), encoding="utf-8")
+                elif not arch_file.exists() or arch_file.stat().st_size < 50:
+                    arch_file.write_text(res_ieru.output, encoding="utf-8")
+                art_content = arch_file.read_text(encoding="utf-8") if arch_file.exists() else ""
+                if alt_arch.exists():
+                    art_content = f"{art_content}\n\n{alt_arch.read_text(encoding='utf-8')}"
             except OSError as e:
                 logger.warning("Falha ao salvar SYSTEM_ARCHITECTURE.md: %s", e)
+                art_content = ""
 
             # Gate de Arquitetura
-            arch_eval = self.architecture_gate.evaluate(res_ieru.output)
+            arch_eval = self.architecture_gate.evaluate(f"{art_content}\n\n{res_ieru.output}" if art_content else res_ieru.output)
             self._gate_evaluations["architecture"] = arch_eval
             if not arch_eval.get("approved"):
                 self.handle_agent_block("@ieru", arch_eval.get("message"))
@@ -779,16 +792,20 @@ class WaveOrchestrator:
                     "results": results,
                 }
 
-            # Salva db.md no disco
+            # Salva db.md no disco se ainda não existir
             try:
                 db_dir = self.project_dir / "docs" / "architecture"
                 db_dir.mkdir(parents=True, exist_ok=True)
-                (db_dir / "db.md").write_text(res_codd.output, encoding="utf-8")
+                db_file = db_dir / "db.md"
+                if not db_file.exists() or db_file.stat().st_size < 50:
+                    db_file.write_text(res_codd.output, encoding="utf-8")
+                art_content = db_file.read_text(encoding="utf-8") if db_file.exists() else ""
             except OSError as e:
                 logger.warning("Falha ao salvar db.md: %s", e)
+                art_content = ""
 
             # Gate de Banco de Dados
-            db_eval = self.db_gate.evaluate(res_codd.output)
+            db_eval = self.db_gate.evaluate(f"{art_content}\n\n{res_codd.output}" if art_content else res_codd.output)
             self._gate_evaluations["database"] = db_eval
             if not db_eval.get("approved"):
                 self.handle_agent_block("@codd", db_eval.get("message"))
@@ -845,16 +862,32 @@ class WaveOrchestrator:
                     "results": results,
                 }
 
-            # Salva story ST-001 no disco
+            # Preserva stories no disco e avalia conformidade física
             try:
                 stories_dir = self.project_dir / "docs" / "stories"
                 stories_dir.mkdir(parents=True, exist_ok=True)
-                (stories_dir / "ST-001.md").write_text(res_caroli.output, encoding="utf-8")
-            except OSError as e:
-                logger.warning("Falha ao salvar ST-001.md: %s", e)
+                st1_file = stories_dir / "ST-001.md"
 
-            # Gate de Story DoR
-            story_dor_eval = self.story_dor_gate.evaluate(res_caroli.output)
+                # Procura por ST-001 em docs/backlog/stories ou docs/operational
+                all_st1 = list(self.project_dir.glob("docs/**/ST-001.md"))
+                alt_st1 = next((p for p in all_st1 if p != st1_file), None)
+                if alt_st1 and (not st1_file.exists() or st1_file.stat().st_size < 50):
+                    st1_file.write_text(alt_st1.read_text(encoding="utf-8"), encoding="utf-8")
+                elif not st1_file.exists() or st1_file.stat().st_size < 50:
+                    st1_file.write_text(res_caroli.output, encoding="utf-8")
+
+                story_content = ""
+                if st1_file.exists() and st1_file.stat().st_size >= 50:
+                    story_content = st1_file.read_text(encoding="utf-8")
+                elif alt_st1 and alt_st1.exists():
+                    story_content = alt_st1.read_text(encoding="utf-8")
+            except OSError as e:
+                logger.warning("Falha ao processar ST-001.md: %s", e)
+                story_content = ""
+
+            # Gate de Story DoR avalia o artefato real da story e o parecer do agente
+            eval_text = f"{story_content}\n\n{res_caroli.output}" if story_content else res_caroli.output
+            story_dor_eval = self.story_dor_gate.evaluate(eval_text)
             self._gate_evaluations["story_dor"] = story_dor_eval
             if not story_dor_eval.get("approved"):
                 self.handle_agent_block("@caroli", story_dor_eval.get("message"))
@@ -865,6 +898,7 @@ class WaveOrchestrator:
                     "results": results,
                     "gates": self._gate_evaluations,
                 }
+
 
         # Sincroniza backlog físico com o Kanban
         self.kanban.scan_and_sync_directory(wave_id=self.state_machine.wave_id)
