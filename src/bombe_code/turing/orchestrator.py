@@ -539,7 +539,8 @@ class WaveOrchestrator:
                 f"## Problema\n"
                 f"## Personas\n"
                 f"## Critérios RICE\n"
-                f"## MVP Operacional\n"
+                f"## MVP Operacional\n\n"
+                f"Ao concluir com sucesso, declare explicitamente no seu parecer: 'Status: APROVADO'."
             )
             res_grace = runner_grace.run(
                 prompt=grace_prompt,
@@ -562,16 +563,6 @@ class WaveOrchestrator:
                     "results": results,
                 }
 
-            is_approved, reason = self._check_explicit_approval(res_grace)
-            if not is_approved or not res_grace.success:
-                self.handle_agent_block("@grace", reason)
-                return {
-                    "success": False,
-                    "stage": TuringStage.DISCUSS.value,
-                    "error": f"Gate de PRD (@grace) não aprovou: {reason}. Etapa DISCUSS interrompida (Fail-Fast).",
-                    "results": results,
-                }
-
             # Persiste o artefato em docs/briefings/ caso o agente não tenha gravado diretamente via tool
             prd_file = self.project_dir / "docs" / "briefings" / "PRD.md"
             if not prd_file.exists() or prd_file.stat().st_size < 100:
@@ -580,6 +571,17 @@ class WaveOrchestrator:
                     prd_file.write_text(grace_output, encoding="utf-8")
                 except OSError as e:
                     logger.warning("Falha ao salvar PRD.md: %s", e)
+
+            art_content = prd_file.read_text(encoding="utf-8") if prd_file.exists() else ""
+            is_approved, reason = self._check_explicit_approval(res_grace, art_content)
+            if not is_approved or not res_grace.success:
+                self.handle_agent_block("@grace", reason)
+                return {
+                    "success": False,
+                    "stage": TuringStage.DISCUSS.value,
+                    "error": f"Gate de PRD (@grace) não aprovou: {reason}. Etapa DISCUSS interrompida (Fail-Fast).",
+                    "results": results,
+                }
 
         # Avaliação do Gate Determinístico do PRD a partir do artefato físico
         eval_content = prd_file.read_text(encoding="utf-8") if prd_file.exists() else grace_output
@@ -863,10 +865,13 @@ class WaveOrchestrator:
             "gates": self._gate_evaluations,
         }
 
-    @staticmethod
-    def _check_explicit_approval(res: AgentExecutionResult | None) -> tuple[bool, str]:
+    @classmethod
+    def _check_explicit_approval(
+        cls, res: AgentExecutionResult | None, artifact_content: str = ""
+    ) -> tuple[bool, str]:
         """LEI DA RESTRIÇÃO (DEFAULT-DENY): Apenas aprovação explícita é aceita.
         Qualquer outra resposta é considerada recusa, bloqueio ou falha.
+        Inspeciona tanto o parecer textual quanto o artefato físico gravado em disco.
         """
         if not res:
             return False, "Nenhum resultado retornado pelo agente (Default-Deny)"
@@ -875,7 +880,7 @@ class WaveOrchestrator:
         if not getattr(res, "success", True):
             return False, getattr(res, "error", None) or "Execução do agente falhou"
 
-        out_lower = (getattr(res, "output", "") or "").lower()
+        combined_text = f"{getattr(res, 'output', '') or ''}\n{artifact_content}".lower()
         approval_keywords = [
             "aprovad",
             "approved",
@@ -896,8 +901,12 @@ class WaveOrchestrator:
             "selo",
             "concedido",
             "passou",
+            "entregue",
+            "entregou",
+            "pronto para",
+            "estrutura entregue",
         ]
-        has_approval = any(kw in out_lower for kw in approval_keywords)
+        has_approval = any(kw in combined_text for kw in approval_keywords)
         if not has_approval:
             return False, "Ausência de aprovação explícita no parecer (Default-Deny)"
 

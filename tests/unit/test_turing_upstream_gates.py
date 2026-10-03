@@ -118,3 +118,21 @@ Sem critérios definidos e sem BDD.
 """
     bad_res = gate.evaluate(invalid_story)
     assert bad_res["approved"] is False
+
+
+def test_check_explicit_approval_inspects_artifact_content():
+    from bombe_code.agents.runner import AgentExecutionResult
+    from bombe_code.turing.orchestrator import TuringWaveOrchestrator
+
+    # Resposta de chat sem a palavra aprovado, mas artefato gravado com 'Status: Aprovado'
+    res = AgentExecutionResult(
+        agent_handle="@grace",
+        success=True,
+        output="Arquivo gravado em docs/briefings/PRD.md conforme solicitado.",
+    )
+    artifact = "# PRD Oficial\n**Status:** Aprovado para construção do MVP"
+
+    ok, reason = TuringWaveOrchestrator._check_explicit_approval(res, artifact)
+    assert ok is True
+    assert "Aprovado" in reason
+
