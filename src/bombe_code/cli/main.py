@@ -267,9 +267,7 @@ def wave_execute(
     from bombe_code.turing.orchestrator import WaveOrchestrator
 
     orch = WaveOrchestrator(project_dir=project_dir)
-    cards = orch.kanban.list_cards()
-    stories = [c["story_id"] for c in cards] if cards else None
-    res = orch.run_execute(stories=stories)
+    res = orch.run_execute()
     typer.echo(res.get("message", "Execução de stories finalizada."))
 
 

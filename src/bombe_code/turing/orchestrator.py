@@ -1277,6 +1277,7 @@ class WaveOrchestrator:
         self,
         stories: list[str] | None = None,
         confirm_callback: Callable[[str], bool] | None = None,
+        force: bool = False,
     ) -> dict[str, Any]:
         """Executa todas as stories da ONDA (Cycle-Full).
 
@@ -1292,7 +1293,6 @@ class WaveOrchestrator:
                     "error": f"Etapa atual é {self.state_machine.current_state.value}, esperado EXECUTE.",
                 }
 
-        auto_skip_done = stories is None
         if not stories:
             cards = self.kanban.list_cards(wave_id=self.state_machine.wave_id)
             if cards:
@@ -1309,17 +1309,21 @@ class WaveOrchestrator:
         )
 
         for story in target_stories:
-            # Pula stories que já foram concluídas apenas se auto_skip_done for True
-            if auto_skip_done:
-                card = self.kanban.get_card(story)
-                if card and card.get("status") in (
+            # Pula stories já concluídas no modo AUTO, a menos que force=True ou confirm_callback seja fornecido
+            card = self.kanban.get_card(story)
+            if (
+                not force
+                and not confirm_callback
+                and card
+                and card.get("status") in (
                     KanbanCardStatus.DEV_DONE.value,
                     KanbanCardStatus.VALIDATE.value,
                     KanbanCardStatus.DONE.value,
-                ):
-                    logger.info("Story %s já concluída (%s), avançando para a próxima.", story, card.get("status"))
-                    completed_stories.append(story)
-                    continue
+                )
+            ):
+                logger.info("Story %s já concluída (%s), avançando para a próxima.", story, card.get("status"))
+                completed_stories.append(story)
+                continue
 
             cycle_res = self.run_cycle(story_id=story)
             if not cycle_res.get("success"):

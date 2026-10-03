@@ -377,3 +377,9 @@ def test_wave_orchestrator_run_execute_auto_discovers_cards_and_skips_done(proje
     assert res["completed_stories"] == ["ST-001", "ST-002"]
     # Garante que run_cycle só foi chamado para ST-002
     orchestrator.run_cycle.assert_called_once_with(story_id="ST-002")
+
+    # Chama com force=True para forçar re-execução de todas as stories
+    orchestrator.run_cycle.reset_mock()
+    res_forced = orchestrator.run_execute(force=True)
+    assert res_forced["success"] is True
+    assert orchestrator.run_cycle.call_count == 2
