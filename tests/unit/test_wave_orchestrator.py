@@ -236,3 +236,39 @@ def test_wave_orchestrator_validate_and_end(project_env):
     assert end_res["success"] is True
     assert end_res["stage"] == TuringStage.COMPLETED.value
     assert orchestrator.get_status()["stage"] == TuringStage.COMPLETED.value
+
+
+def test_wave_orchestrator_meira_viability_persistence_and_approval(project_env):
+    from unittest.mock import MagicMock
+    from bombe_code.agents.runner import AgentExecutionResult
+
+    tmp_path, db = project_env
+    orchestrator = WaveOrchestrator(project_dir=str(tmp_path), db=db)
+    orchestrator.start_wave("ONDA-005")
+
+    # Mock runner_meira
+    mock_runner = MagicMock()
+    mock_runner.run.return_value = AgentExecutionResult(
+        agent_handle="@meira",
+        success=True,
+        output="## Análise de Viabilidade\nStatus: APROVADO\nVeredito: PROSSEGUIR com o MVP.",
+    )
+    # Mock runner_grace as well to prevent failing prerequisites or execution
+    mock_runner_grace = MagicMock()
+    mock_runner_grace.run.return_value = AgentExecutionResult(
+        agent_handle="@grace",
+        success=True,
+        output="## PRD Oficial\nVisão do Produto e Personas.\nStatus: APROVADO",
+    )
+
+    def mock_get_runner(handle: str):
+        if handle == "@meira":
+            return mock_runner
+        return mock_runner_grace
+
+    orchestrator._get_runner = mock_get_runner
+
+    res = orchestrator.run_discuss("Sistema de Pagamentos")
+    viab_file = tmp_path / "docs" / "briefings" / "VIABILITY.md"
+    assert viab_file.exists()
+    assert "Status: APROVADO" in viab_file.read_text(encoding="utf-8")

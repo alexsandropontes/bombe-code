@@ -470,8 +470,12 @@ class WaveOrchestrator:
 
         runner_meira = self._get_runner("@meira")
         if runner_meira:
+            meira_prompt = (
+                f"Analise a viabilidade técnica e estratégica para: {topic}.\n"
+                f"Se a viabilidade for positiva para o MVP, declare explicitamente no seu parecer: 'Status: APROVADO' ou 'Veredito: PROSSEGUIR'."
+            )
             res_meira = runner_meira.run(
-                prompt=f"Analise a viabilidade técnica e estratégica para: {topic}",
+                prompt=meira_prompt,
                 context=context,
             )
             self._record_telemetry("DISCUSS", "@meira", res_meira)
@@ -490,7 +494,21 @@ class WaveOrchestrator:
                     "results": results,
                 }
 
-            is_approved, reason = self._check_explicit_approval(res_meira)
+            # Persiste viabilidade em docs/briefings/
+            try:
+                briefings_dir = self.project_dir / "docs" / "briefings"
+                briefings_dir.mkdir(parents=True, exist_ok=True)
+                viab_file = briefings_dir / "VIABILITY.md"
+                viab_lower = briefings_dir / "viability.md"
+                if viab_lower.exists() and not viab_file.exists():
+                    viab_file.write_text(viab_lower.read_text(encoding="utf-8"), encoding="utf-8")
+                elif not viab_file.exists() or viab_file.stat().st_size < 50:
+                    viab_file.write_text(res_meira.output, encoding="utf-8")
+            except OSError as e:
+                logger.warning("Falha ao salvar VIABILITY.md: %s", e)
+
+            art_content = viab_file.read_text(encoding="utf-8") if viab_file.exists() else ""
+            is_approved, reason = self._check_explicit_approval(res_meira, art_content)
             if not is_approved or not res_meira.success:
                 self.handle_agent_block("@meira", reason)
                 return {
@@ -501,7 +519,8 @@ class WaveOrchestrator:
                 }
 
             # Avaliação determinística de qualidade do parecer de viabilidade
-            viab_eval = self.viability_gate.evaluate(res_meira.output)
+            eval_text = f"{art_content}\n\n{res_meira.output}"
+            viab_eval = self.viability_gate.evaluate(eval_text)
             self._gate_evaluations["viability"] = viab_eval
             if not viab_eval.get("approved"):
                 self.handle_agent_block("@meira", viab_eval.get("message"))
@@ -512,14 +531,6 @@ class WaveOrchestrator:
                     "results": results,
                     "gates": self._gate_evaluations,
                 }
-
-            # Persiste viabilidade em docs/briefings/
-            try:
-                briefings_dir = self.project_dir / "docs" / "briefings"
-                briefings_dir.mkdir(parents=True, exist_ok=True)
-                (briefings_dir / "VIABILITY.md").write_text(res_meira.output, encoding="utf-8")
-            except OSError as e:
-                logger.warning("Falha ao salvar VIABILITY.md: %s", e)
 
         # 2. Despacha @grace para PRD estruturado (apenas se @meira foi aprovado)
         ok, pre_err = self.validate_agent_prerequisites("@grace")
@@ -1536,3 +1547,6 @@ class WaveOrchestrator:
             "kanban_cards": status.get("kanban_cards", []),
             "config": cfg.model_dump(),
         }
+
+
+TuringWaveOrchestrator = WaveOrchestrator
