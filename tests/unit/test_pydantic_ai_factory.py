@@ -47,3 +47,13 @@ def test_create_agent_injects_thinking_disabled_for_zai_glm():
     assert agent.model_settings is not None
     assert agent.model_settings.get("extra_body", {}).get("thinking") == {"type": "disabled"}
 
+
+def test_resolve_zai_model_uses_fail_fast_timeout():
+    factory = PydanticAiFactory()
+    model = factory.resolve_model("zai-coding-plan/glm-5.3-flash")
+    cli = getattr(model.provider, "client", None)
+    assert cli is not None
+    assert cli.timeout == 90.0
+    assert cli.max_retries == 1
+
+
