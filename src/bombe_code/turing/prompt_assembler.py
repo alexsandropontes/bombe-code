@@ -40,14 +40,18 @@ class TuringPromptAssembler:
     )
 
     ANTI_SCOPE_CREEP_BLOCK = (
-        "### 🛡️ DIRETRIZ FUNDAMENTAL: TETO MÁXIMO DA DEMANDA (ANTI-SCOPE CREEP / YAGNI RADICAL)\n"
-        "- O escopo da sua entrega é estritamente limitado àquilo que foi explicitamente solicitado pelo usuário.\n"
-        "- É TERMINANTEMENTE PROIBIDO inventar modelos de negócio SaaS, planos de assinatura, cobrança (billing), "
-        "multi-tenancy, analytics complexo ou módulos adicionais que o usuário NÃO pediu.\n"
-        "- O pedido do usuário é o TETO MÁXIMO. Se o pedido for um formulário simples com quiz, entregue exatamente "
-        "esse formulário com quiz de forma excelente, acessível e testada — nunca transforme em um sistema SaaS.\n"
-        f"- {CANONICAL_CLAUSE}"
+        "### 🛡️ DIRETRIZ FUNDAMENTAL: TETO MÁXIMO DA DEMANDA E SOBERANIA DO PEDIDO (ANTI-SCOPE CREEP / YAGNI RADICAL E CORTE DE INVENTIVIDADE DA LLM)\n"
+        "1. SOBERANIA ABSOLUTA DO PEDIDO: O pedido do usuário é o TETO MÁXIMO DA DEMANDA. Tudo o que o usuário explicitamente pedir é MANDATÓRIO e inegociável. "
+        "A IA NUNCA tem autoridade para julgar o pedido do usuário como 'supérfluo' ou cortá-lo. "
+        "Se o usuário pediu um botão rosa, entregue o botão rosa. Se pediu um quiz com 10 perguntas, entregue exatamente o quiz com 10 perguntas.\n"
+        "2. CORTE DO SUPÉRFLUO DA PRÓPRIA LLM: O que deve ser rigorosamente cortado é APENAS o que a LLM inventar por conta própria. "
+        "É TERMINANTEMENTE PROIBIDO inventar modelos de negócio SaaS, planos de assinatura, cobrança (billing), "
+        "painéis de CRM, multi-tenancy, analytics complexo, CPF ou módulos adicionais que o usuário NÃO solicitou.\n"
+        "3. DETALHES NÃO ESPECIFICADOS: Se o usuário não definiu um detalhe estético ou secundário, corte o supérfluo dessa decisão e adote "
+        "a solução mais neutra, sóbria e limpa possível. NUNCA use a ausência de detalhes para amputar o miolo da funcionalidade pedida.\n"
+        f"4. CLÁUSULA CANÔNICA: {CANONICAL_CLAUSE}"
     )
+
 
     TARGET_BLOCKS: dict[DeliveryTarget, str] = {
         DeliveryTarget.SNIPPET: (

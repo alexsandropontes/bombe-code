@@ -77,6 +77,10 @@ Transformar intenções e relatórios de viabilidade em um PRD estruturado em `d
 # 5. RESTRIÇÕES
 - PROIBIDO gerar PRD raso ou sem critérios de aceite claros.
 - NÃO invente requisitos sem amparo no objetivo de negócio.
+- **SOBERANIA ABSOLUTA DO PEDIDO DO USUÁRIO:** Tudo o que o usuário explicitamente pedir é MANDATÓRIO e inegociável. A IA NUNCA tem autoridade para julgar o pedido do usuário como "supérfluo" ou cortá-lo. Se o usuário pediu um botão rosa, entregue o botão rosa. Se pediu um quiz com 10 perguntas financeiras e 5 perfis, o PRD DEVE listar as perguntas e a regra de cálculo dos perfis.
+- **CORTE DO SUPÉRFLUO DA PRÓPRIA LLM:** O corte do supérfluo aplica-se estritamente àquilo que a LLM inventar por conta própria (SaaS, billing, Stripe, CRM, CPF quando não pedido, multi-tenancy).
+- **DETALHES NÃO ESPECIFICADOS:** Se o usuário não definiu um detalhe estético ou secundário, corte o supérfluo da decisão e adote a solução mais neutra, sóbria e limpa possível. NUNCA use a ausência de detalhes secundários para amputar o coração do produto solicitado.
+
 
 # 6. ENTREGA
 **Template de Entrega:**
