@@ -171,6 +171,29 @@ O Bombe Code se adapta ao nível de controle desejado pelo engenheiro de softwar
 
 ---
 
+## 🖥️ Experiência de Terminal (TUI) Moderna & Soberana
+
+A TUI do Bombe Code foi desenhada para paridade visual e de desempenho com as ferramentas mais sofisticadas do mercado (como OpenCode original e Claude Code):
+
+* **⚡ Streaming Real Token-a-Token:** Pipeline reativo assíncrono via SSE (`text-delta`) que exibe as respostas em tempo real à medida que são geradas pela nuvem ou modelos locais, sem acumular em blocos estáticos.
+* **🧠 Suporte Nativo a Reasoning Stream (`reasoning-delta`):** Para modelos com raciocínio integrado (ex: **GLM-5.3-Flash** da Z.ai, DeepSeek R1, Claude Thinking e OpenAI o1/o3-mini), os pensamentos do modelo fluem na tela ao vivo em painel dedicado antes da resposta final ser produzida.
+* **🛡️ Arquitetura Anti-Freezing (30-60 FPS):** Atualização de alta frequência controlada (*throttled streaming* a ~35ms) que elimina o re-parsing desnecessário de Markdown durante o envio de tokens, garantindo CPU baixa e permitindo que atalhos como `Ctrl+Q` e `Ctrl+C` respondam instantaneamente sem nunca travar a aplicação.
+* **📝 Caixa de Entrada Multilinha com Auto-Grow:** Suporte completo para colar textos extensos (inclusive prompts de ChatGPT, Claude ou especificações complexas) com preservação de quebras de linha. Cresce dinamicamente de 3 a 8 linhas. Pressione `Enter` para enviar ou `Shift+Enter` para nova linha.
+* **⏳ Indicador Dinâmico de Pensamento (`ThinkingWidget`):** Ampulheta animada (`⏳` ➔ `⌛`) e pontinhos de status enquanto a IA prepara a primeira palavra.
+* **🤝 Orientação Didática para Usuários:** Comandos e orquestradores determinísticos fornecem instruções passo a passo se acionados sem argumentos, guiando desenvolvedores e não-devs sobre como iniciar uma ONDA ou refinar um briefing sem suposições.
+
+---
+
+## 🔌 Provedores de Inteligência Artificial
+
+O Bombe Code conta com resolução hierárquica e tolerância a falhas:
+* **Z.ai / Zhipu AI (GLM-5.3-Flash):** Provedor prioritário oficial pré-configurado, com suporte a streaming de alta velocidade e cadeias de raciocínio.
+* **Nuvem Padrão:** OpenAI (`gpt-4o`), Anthropic (`claude-3-5-sonnet`), OpenRouter e Groq.
+* **Local-First:** Suporte nativo a `llama.cpp` e `Ollama` com detecção de endereços locais.
+* **Zero Falhas Silenciosas:** Caso nenhum provedor esteja configurado, o Bombe Code não recorre a respostas falsas; ele orienta claramente o usuário através do comando `/connect` na TUI ou CLI.
+
+---
+
 ## 🚀 Instalação e Primeiros Passos
 
 ### Pré-requisitos
@@ -179,28 +202,32 @@ O Bombe Code se adapta ao nível de controle desejado pelo engenheiro de softwar
 
 ### Instalação
 ```bash
-# Clone o repositório
+# Instalação global recomendada via uv tool:
+uv tool install --force .
+
+# Ou via repositório de desenvolvimento:
 git clone https://github.com/alexsandropontes/bombe-code.git
 cd bombe-code
-
-# Sincronize as dependências com uv
 uv sync
 ```
 
 ### Execução da Interface (TUI & CLI)
 ```bash
-# Inicie o Terminal Interativo (TUI)
-uv run bombe-code tui
+# Inicie o Terminal Interativo (TUI):
+bombe-code tui
+# ou simplesmente:
+bombe
 
 # Ou execute comandos diretamente pela CLI:
-uv run bombe-code init                          # Inicializa o projeto local
-uv run bombe-code wave start ONDA-001          # Inicia uma nova ONDA
-uv run bombe-code wave status                  # Exibe o status da ONDA e o Kanban
+bombe-code init                          # Inicializa o projeto local
+bombe-code wave start ONDA-001          # Inicia uma nova ONDA
+bombe-code wave status                  # Exibe o status da ONDA e o Kanban
 ```
 
 ### Comandos Slash Comuns na TUI
 * `/wave status`: Exibe o dashboard com os Gates do Turing e o Kanban das stories ativas.
-* `/mode [tdd|vibe]`: Alterna o modo de engenharia em tempo de execução.
+* `/connect`: Abre o assistente para conectar provedores de IA e configurar chaves de API.
+* `/mode [tdd|vibe]`: Alterna o modo de engenharia em tempo de execução (`Shift + Tab`).
 * `/autonomy [auto|semi-auto|manual]`: Ajusta a autonomia do orquestrador.
 * `/project starter [starter-id] [dir]`: Inicializa um novo projeto a partir de um starter oficial.
 * `/snippet list`: Lista os blocos de código LEGO disponíveis no repositório.

@@ -167,14 +167,35 @@ O Bombe Code conta com agentes de inteligência hiper-focados que podem ser cham
 
 | Tecla de Atalho | Ação Executada |
 |---|---|
+| **`Enter`** | **Envia a mensagem ou prompt digitado** |
+| **`Shift + Enter`** | **Insere uma quebra de linha (modo multilinha)** |
 | **`Shift + Tab`** | **Comuta entre Modo TDD e Modo VIBE** |
 | **`Tab`** | **Alterna ciclicamente as etapas do Modo TDD** (`DISCUSS` ➔ `PLAN` ➔ `EXECUTE` ➔ `VALIDATE`) |
 | **`Tab` (em `/` ou `@`)** | Autocompleta comandos de barra ou arquivos do projeto |
 | **`Ctrl + P`** | Abre a Paleta de Comandos unificada |
 | **`Ctrl + B`** | Alterna a exibição do Painel Lateral (Sidebar) com métricas de contexto |
 | **`Ctrl + C`** / **`Esc`** | Interrompe o turno ativo da LLM |
-| **`Ctrl + Q`** | Fecha a TUI com segurança |
+| **`Ctrl + Q`** | Fecha a TUI com segurança imediata (sem travamentos) |
 | **`Up` / `Down`** | Navega no histórico de prompts enviados |
+
+---
+
+## 📝 Caixa de Entrada Multilinha & Colagem Segura (Paste Support)
+
+O campo de prompt do Bombe Code é uma área de texto multilinha com auto-grow dinâmico (3 a 8 linhas):
+* **Colagem Completa de Textos:** Cole especificações extensas, snippets de código ou instruções vindas do ChatGPT, Claude ou da web sem perder quebras de linha e sem corte na primeira linha.
+* **Envio Imediato:** Pressione `Enter` para despachar o prompt.
+* **Quebras de Linha Manuais:** Use `Shift + Enter` para quebrar linhas e formatar seu texto antes do envio.
+
+---
+
+## ⚡ Streaming em Tempo Real & Raciocínio ao Vivo
+
+A experiência de resposta na TUI opera com paridade com o OpenCode original:
+* **Token-a-Token Imediato:** Os tokens fluem progressivamente via Server-Sent Events (SSE). Nada de esperar dezenas de segundos para ver um bloco gigante cair de uma só vez.
+* **Pensamento ao Vivo (`reasoning-delta`):** Em modelos com raciocínio analítico (como o Z.ai **GLM-5.3-Flash**, DeepSeek R1 ou Claude 3.7 Sonnet), o raciocínio é exibido em tempo real em um painel discreto (`⚡ Pensamento / Raciocínio`), permitindo acompanhar as decisões da IA antes da produção da resposta final.
+* **Arquitetura Anti-Freezing:** A renderização utiliza throttling inteligente a ~35ms, garantindo fluidez contínua sem consumir 100% de CPU. A TUI nunca trava e você pode rolar a tela ou sair com `Ctrl + Q` a qualquer instante.
+* **Feedback Visual Animado:** Durante a conexão com a nuvem, uma ampulheta animada (`⏳` ➔ `⌛`) e pontinhos de status sinalizam atividade enquanto a resposta é preparada.
 
 ---
 
@@ -182,6 +203,7 @@ O Bombe Code conta com agentes de inteligência hiper-focados que podem ser cham
 
 Digite `/` no campo de prompt para ter sugestões instantâneas:
 
+* `/connect` — Abre o assistente para conectar provedores de IA (Z.ai, OpenAI, Anthropic, Ollama, etc.) e registrar chaves.
 * `/wave status` — Visualiza o status da ONDA ativa, resumo de stories e gates do Turing.
 * `/wave start [id] [auto|semi]` — Inicializa uma nova ONDA formal.
 * `/wave discuss [tema]` — Executa a etapa DISCUSS com `@demarco` e `@grace`.

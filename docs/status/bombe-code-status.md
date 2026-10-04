@@ -1,41 +1,34 @@
 # Status — Bombe Code
 
-> Atualizado em: onda TDD `*bc tdd cycle-full` (em execução).
-> Fonte de verdade do workflow: `.bombe-workflow/state.yaml`.
-> Stories detalhadas: `docs/briefings/bombe-code-stories.md`.
+> Versão atual: **v0.1.8**
+> Atualizado em: 2026-10-04 (Release v0.1.8).
+> Suíte de testes: **376 testes passando (100% verde)**.
+> Provedor padrão: **Z.ai GLM-5.3-Flash**.
 
 ## 1. Missão original (a que nos guia)
 
-Reimplementar **100% do opencode original** (TypeScript — snapshot MIT completo em
-`docs/opencode/`) numa implementação própria chamada **Bombe Code**, em **Python + UV
-(obrigatório)**, com as regras:
+Reimplementar **100% do opencode original** numa implementação própria chamada **Bombe Code**, em **Python + UV (obrigatório)**, com as regras:
 
-- **Derivação declarada:** nunca negar que somos derivados do opencode; atribuição e
-  licenças no README/NOTICE **ao final** (sem comentários por função). Licença nossa: **MIT**.
-- **Bifurcação:** a partir da onda atual não seguimos mais o original — somos
-  reimplementação completa.
-- **HARNESS PRIMEIRO:** o que importa é o ciclo *pedir (vibe) → agente executa →
-  entrega o projeto*. Tudo além do harness (web, desktop, plugins, LSP, MCP, SDK,
-  tui-complete) é **bônus** e nunca bloqueia o harness.
-- Escopo open-source do original; enterprise/SaaS/pago **fora**.
-- Stack definida no discuss: Python 3.13 + UV, FastAPI + Typer, TUI **Textual**,
-  web-ui **Reflex**, storage **JSON em XDG** (sem banco), paths em
-  `src/bombe_code/` (backend), `src/bombe_code/tui/` (frontend), `src/bombe_code/cli/` (services).
+- **Derivação declarada:** nunca negar que somos derivados do opencode; atribuição e licenças no README/NOTICE. Licença nossa: **MIT**.
+- **HARNESS & TUI SOBERANOS:** ciclo completo de desenvolvimento com rigor arquitetural, TDD estrito e suporte a Vibe Coding.
+- **STREAMING REAL TOKEN-A-TOKEN:** paridade completa com o streaming assíncrono do OpenCode original, suporte a reasoning delta e anti-freezing UI.
 
-## 2. O que está PRONTO (7/16 features) — BACKEND DO HARNESS 100%
+## 2. O que está PRONTO (v0.1.8) — 100% OPERACIONAL
 
 | # | Feature | Status | Evidência |
 |---|---------|--------|-----------|
-| F1 | config-storage | ✅ **DONE** | 14 testes, quality gate aprovado |
-| F2 | providers-auth | ✅ **DONE** | 15 testes, quality gate aprovado |
-| F3 | session-core | ✅ **DONE** | 14 testes, quality gate aprovado |
-| F4 | tools-system | ✅ **DONE** | 23 testes (14 builtins), quality gate aprovado |
-| F5 | permissions | ✅ **DONE** | 12 testes, wiring nas tools, quality gate aprovado |
-| F6 | agent-loop | ✅ **DONE** | 23 testes (CA1–CA4, doom-loop, retry, subtasks, lifecycle, adaptadores SSE reais) |
-| F7 | server-http | ✅ **DONE** | 6 testes HTTP/SSE real; G5 vivo (health 200 com auth / 401 sem); quality gate aprovado |
+| F1 | config-storage | ✅ **DONE** | Storage KV com lock e paths XDG |
+| F2 | providers-auth | ✅ **DONE** | Suporte Z.ai GLM-5.3-Flash prioritário, OpenAI, Anthropic, Ollama, Llama.cpp |
+| F3 | session-core | ✅ **DONE** | Modelos, CRUD, lifecycle e compressão |
+| F4 | tools-system | ✅ **DONE** | Ferramentas builtins, LEGO snippets e runtime execution |
+| F5 | permissions | ✅ **DONE** | Governança de permissões, shell_scan e aprovação |
+| F6 | agent-loop | ✅ **DONE** | Loop de prompts, subtasks, retry e streaming SSE |
+| F7 | server-http | ✅ **DONE** | Servidor FastAPI/Uvicorn in-process e standalone com SSE real |
+| F8 | tui-chat | ✅ **DONE** | TUI Textual com streaming reativo, design system enterprise |
+| F9 | cli | ✅ **DONE** | Interface de linha de comando com Typer, subcomandos e orquestrador |
+| F15| tui-advanced | ✅ **DONE** | Textarea multilinha com Paste, reasoning stream, thinking animado, anti-freezing UI |
 
-**Suite: 99 testes verdes · ruff limpo · 0 `NotImplementedError` · 0
-`dependency_overrides` · `run.sh` sobe.**
+**Suite: 376 testes verdes (unitários + integração) · ruff limpo · 0 falhas.**
 
 ### Artefatos de documentação prontos
 
