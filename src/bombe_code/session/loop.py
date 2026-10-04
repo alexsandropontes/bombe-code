@@ -109,9 +109,14 @@ def _handle_event(event, processor, recent_signatures, ask, ctx, registry) -> st
         recent_signatures[:] = recent_signatures[-2:]
         processor.emit(event)
         return None
+    if event["type"] == "reasoning-delta":
+        processor.add_reasoning(event["text"])
+        processor.emit(event)
+        return None
     if event["type"] == "text-delta":
         processor.add_text(event["text"])
         processor.emit(event)
+        return None
     return None
 
 

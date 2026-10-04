@@ -12,6 +12,8 @@ from rich.text import Text
 from textual.containers import VerticalScroll
 from textual.widgets import Static
 
+import time
+
 from ..tokens import TOKENS
 
 
@@ -21,8 +23,30 @@ class PartWidget(Static):
     def __init__(self, part_data: dict[str, Any], **kwargs: Any) -> None:
         super().__init__(**kwargs)
         self.part_data = part_data
+        self._is_streaming: bool = False
+        self._last_render_time: float = 0.0
 
     def on_mount(self) -> None:
+        self.update(self._render_content())
+
+    def update_stream(self, text: str) -> None:
+        """Atualização de alta frequência durante streaming contínuo.
+        
+        Garante fluidez visual idêntica ao OpenCode original e previne congelamento
+        da UI por re-parsing excessivo de Markdown na mesma frame de execução.
+        """
+        self.part_data["text"] = text
+        self._is_streaming = True
+        now = time.monotonic()
+        # Atualiza a tela a no máximo ~25-30 FPS (~35ms), permitindo fluidez visual impecável
+        # sem consumir 100% da CPU do event loop do Textual.
+        if now - self._last_render_time >= 0.035:
+            self._last_render_time = now
+            self.update(self._render_content())
+
+    def finalize_stream(self) -> None:
+        """Finaliza o ciclo de streaming e consolida a renderização definitiva."""
+        self._is_streaming = False
         self.update(self._render_content())
 
     def update_text(self, text: str) -> None:
@@ -41,9 +65,14 @@ class PartWidget(Static):
 
         elif ptype == "reasoning":
             content = self.part_data.get("text", "")
+            title = (
+                "[dim]⚡ Pensamento / Raciocínio (em tempo real...)[/dim]"
+                if self._is_streaming
+                else "[dim]Pensamento / Raciocínio[/dim]"
+            )
             return Panel(
                 Text(content, style=f"italic {TOKENS['text_muted']}"),
-                title="[dim]Pensamento / Raciocínio[/dim]",
+                title=title,
                 border_style=TOKENS["border"],
             )
 

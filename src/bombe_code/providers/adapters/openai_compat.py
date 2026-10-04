@@ -24,6 +24,13 @@ def parse_sse(lines) -> Iterator[dict]:
             continue
         choice = choices[0]
         delta = choice.get("delta") or {}
+
+        # 1. Reasoning / Thinking delta (Z.ai glm-5.3-flash, DeepSeek, Ollama, OpenAI o1/o3)
+        reasoning = delta.get("reasoning_content") or delta.get("reasoning")
+        if reasoning:
+            yield {"type": "reasoning-delta", "text": reasoning}
+
+        # 2. Content delta
         content = delta.get("content")
         if content:
             yield {"type": "text-delta", "text": content}
@@ -94,6 +101,8 @@ class OpenAICompatAdapter:
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
+            "Accept": "text/event-stream",
+            "Cache-Control": "no-cache",
         }
         return self._iter(payload, headers)
 

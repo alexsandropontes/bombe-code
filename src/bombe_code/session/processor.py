@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from . import crud
-from .models import Message, TextPart, ToolPart
+from .models import Message, ReasoningPart, TextPart, ToolPart
 
 
 class TurnProcessor:
@@ -12,11 +12,17 @@ class TurnProcessor:
         crud.save_message(self.message)
         self._text: str = ""
         self._text_part: TextPart | None = None
+        self._reasoning: str = ""
+        self._reasoning_part: ReasoningPart | None = None
         self._tool_parts: dict[str, ToolPart] = {}
 
     @property
     def text(self) -> str:
         return self._text
+
+    @property
+    def reasoning(self) -> str:
+        return self._reasoning
 
     @property
     def has_tools(self) -> bool:
@@ -26,6 +32,13 @@ class TurnProcessor:
         if self.on_event:
             self.on_event(event)
 
+    def add_reasoning(self, delta: str) -> None:
+        self._reasoning += delta
+        if self._reasoning_part is None:
+            self._reasoning_part = ReasoningPart(message_id=self.message.id, text=delta)
+        else:
+            self._reasoning_part.text += delta
+
     def add_text(self, delta: str) -> None:
         self._text += delta
         if self._text_part is None:
@@ -34,6 +47,8 @@ class TurnProcessor:
             self._text_part.text += delta
 
     def flush(self) -> None:
+        if self._reasoning_part is not None:
+            crud.save_part(self.session_id, self._reasoning_part)
         if self._text_part is not None:
             crud.save_part(self.session_id, self._text_part)
 

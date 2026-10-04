@@ -23,6 +23,7 @@ from .widgets.help_dialog import HelpDialog
 from .widgets.parts_view import ChatView, PartWidget
 from .widgets.prompt_input import PromptInput
 from .widgets.sidebar import Sidebar
+from .widgets.thinking_widget import ThinkingWidget
 
 logger = logging.getLogger(__name__)
 
@@ -108,6 +109,8 @@ class BombeTuiApp(App):
         self._load_current_stage_from_db()
         self._current_assistant_widget: PartWidget | None = None
         self._current_assistant_text: str = ""
+        self._current_reasoning_widget: PartWidget | None = None
+        self._current_reasoning_text: str = ""
         self._thinking_widget: Static | None = None
         self._sse_task: asyncio.Task | None = None
         self._is_active_turn: bool = False
@@ -565,6 +568,8 @@ class BombeTuiApp(App):
             self._is_active_turn = True
             self._current_assistant_text = ""
             self._current_assistant_widget = None
+            self._current_reasoning_text = ""
+            self._current_reasoning_widget = None
             if self._thinking_widget is not None:
                 await self._thinking_widget.remove()
                 self._thinking_widget = None
@@ -572,15 +577,32 @@ class BombeTuiApp(App):
             await chat.mount(
                 Static(f"\n[{TOKENS['secondary']} bold]Agente:[/{TOKENS['secondary']} bold]")
             )
-            self._thinking_widget = Static(
-                f"[{TOKENS['text_muted']} italic]⏳ Processando contexto e aguardando tokens do modelo...[/{TOKENS['text_muted']} italic]"
-            )
+            self._thinking_widget = ThinkingWidget()
             await chat.mount(self._thinking_widget)
+
+        elif etype == "reasoning-delta":
+            if self._thinking_widget is not None:
+                await self._thinking_widget.remove()
+                self._thinking_widget = None
+            delta = event.get("text", "")
+            self._current_reasoning_text += delta
+            if self._current_reasoning_widget is None:
+                self._current_reasoning_widget = PartWidget(
+                    {"type": "reasoning", "text": self._current_reasoning_text}
+                )
+                await chat.mount(self._current_reasoning_widget)
+            else:
+                self._current_reasoning_widget.update_stream(self._current_reasoning_text)
+            chat.scroll_end(animate=False)
 
         elif etype == "text-delta":
             if self._thinking_widget is not None:
                 await self._thinking_widget.remove()
                 self._thinking_widget = None
+            if self._current_reasoning_widget is not None:
+                self._current_reasoning_widget.finalize_stream()
+                self._current_reasoning_widget = None
+
             delta = event.get("text", "")
             self._current_assistant_text += delta
             if self._current_assistant_widget is None:
@@ -589,15 +611,20 @@ class BombeTuiApp(App):
                 )
                 await chat.mount(self._current_assistant_widget)
             else:
-                self._current_assistant_widget.update_text(self._current_assistant_text)
+                self._current_assistant_widget.update_stream(self._current_assistant_text)
             chat.scroll_end(animate=False)
 
-        elif etype == "tool-call" or etype == "tool-input":
+        elif etype in ("tool-call", "tool-input"):
             if self._thinking_widget is not None:
                 await self._thinking_widget.remove()
                 self._thinking_widget = None
-            # nova tool invocada
-            self._current_assistant_widget = None
+            if self._current_reasoning_widget is not None:
+                self._current_reasoning_widget.finalize_stream()
+                self._current_reasoning_widget = None
+            if self._current_assistant_widget is not None:
+                self._current_assistant_widget.finalize_stream()
+                self._current_assistant_widget = None
+
             widget = PartWidget(
                 {
                     "type": "tool",
@@ -641,13 +668,18 @@ class BombeTuiApp(App):
             if self._thinking_widget is not None:
                 await self._thinking_widget.remove()
                 self._thinking_widget = None
+            if self._current_reasoning_widget is not None:
+                self._current_reasoning_widget.finalize_stream()
+                self._current_reasoning_widget = None
+            if self._current_assistant_widget is not None:
+                self._current_assistant_widget.finalize_stream()
+                self._current_assistant_widget = None
             self._is_active_turn = False
-            self._current_assistant_widget = None
             self.update_status()
 
         try:
             sidebar = self.query_one("#sidebar", Sidebar)
-            if etype == "text-delta":
+            if etype in ("text-delta", "reasoning-delta"):
                 delta_text = event.get("text", "")
                 if delta_text:
                     sidebar.tokens_count += max(1, len(delta_text) // 4)

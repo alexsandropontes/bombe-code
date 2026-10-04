@@ -58,3 +58,29 @@ def test_resolve_zai_model_uses_fail_fast_timeout():
     assert cli.max_retries == 2
 
 
+def test_resolve_model_raises_when_no_provider_configured(monkeypatch):
+    import pytest
+
+    # Mock sem credenciais e sem env
+    monkeypatch.setattr("bombe_code.llm.pydantic_factory.load_auth", lambda: {})
+    for k in (
+        "ZAI_API_KEY",
+        "ZHIPU_API_KEY",
+        "OPENAI_API_KEY",
+        "ANTHROPIC_API_KEY",
+        "GROQ_API_KEY",
+        "OPENROUTER_API_KEY",
+        "LLAMA_CPP_BASE_URL",
+        "OLLAMA_BASE_URL",
+    ):
+        monkeypatch.delenv(k, raising=False)
+
+    factory = PydanticAiFactory()
+    with pytest.raises(RuntimeError) as exc_info:
+        factory.resolve_model(None)
+
+    assert "Nenhum provedor de IA configurado" in str(exc_info.value)
+    assert "/connect" in str(exc_info.value)
+
+
+

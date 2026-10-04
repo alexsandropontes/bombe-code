@@ -24,6 +24,8 @@ def parse_anthropic_sse(lines) -> Iterator[dict]:
             delta = event.get("delta") or {}
             if delta.get("type") == "text_delta" and delta.get("text"):
                 yield {"type": "text-delta", "text": delta["text"]}
+            elif delta.get("type") == "thinking_delta" and delta.get("thinking"):
+                yield {"type": "reasoning-delta", "text": delta["thinking"]}
             elif delta.get("type") == "input_json_delta":
                 index = event.get("index", 0)
                 entry = tool_blocks.setdefault(index, {"id": "", "name": "", "arguments": ""})
