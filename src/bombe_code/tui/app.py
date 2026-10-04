@@ -8,7 +8,7 @@ import os
 from typing import Any, ClassVar
 
 import httpx
-from textual import work
+from textual import on, work
 from textual.app import App, ComposeResult, ScreenStackError
 from textual.binding import Binding
 from textual.containers import Container, Horizontal, Vertical
@@ -453,7 +453,7 @@ class BombeTuiApp(App):
         except (OSError, RuntimeError, httpx.HTTPError) as exc:
             logger.warning("Falha ao carregar histórico: %s", exc)
 
-    async def on_input_submitted(self, event: PromptInput.Submitted) -> None:
+    async def on_prompt_input_submitted(self, event: PromptInput.Submitted) -> None:
         if not self.session_id:
             return
         text = event.value.strip()
@@ -465,7 +465,22 @@ class BombeTuiApp(App):
 
         # Roteamento completo dos 28 comandos de barra (/) do OpenCode
         if text.startswith("/"):
-            self._run_slash_command_worker(text)
+            from .commands import handle_slash_command
+
+            try:
+                await handle_slash_command(self, text)
+            except Exception as exc:
+                from ..errors import record_exception
+
+                err_file = record_exception(exc, context=f"slash_command: {text}")
+                logger.exception("Erro ao processar slash command '%s'", text)
+                await chat.mount(
+                    Static(
+                        f"[{TOKENS['error']} bold]❌ Erro ao executar '{text}':[/{TOKENS['error']} bold] "
+                        f"[{TOKENS['error']}]{exc}[/{TOKENS['error']}]\n"
+                        f"[dim]Detalhes técnicos gravados em: {err_file}[/dim]"
+                    )
+                )
             return
 
         await chat.mount(

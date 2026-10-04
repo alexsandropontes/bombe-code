@@ -177,6 +177,16 @@ class ConnectDialog(ModalScreen[tuple[str, str] | None]):
                 yield Button("Salvar e Conectar", variant="primary", id="btn-save")
                 yield Button("Cancelar", variant="default", id="btn-cancel")
 
+    BINDINGS: ClassVar[list[Binding]] = [
+        Binding("escape", "cancel_dialog", "Fechar", show=False, priority=True),
+    ]
+
+    def action_cancel_dialog(self) -> None:
+        self.dismiss(None)
+
+    def on_mount(self) -> None:
+        self.query_one("#connect-provider-input", Input).focus()
+
     def on_input_submitted(self, event: Input.Submitted) -> None:
         if event.input.id == "connect-provider-input":
             self.query_one("#connect-value-input", Input).focus()
@@ -244,7 +254,7 @@ class ModelDialog(ModalScreen[str | None]):
     """
 
     BINDINGS: ClassVar[list[Binding]] = [
-        Binding("escape", "cancel_dialog", "Fechar", show=False),
+        Binding("escape", "cancel_dialog", "Fechar", show=False, priority=True),
     ]
 
     def __init__(

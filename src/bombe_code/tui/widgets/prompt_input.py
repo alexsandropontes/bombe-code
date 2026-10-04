@@ -1,4 +1,4 @@
-"""Widget PromptInput com autocompletar dinâmico, histórico e envio de comandos."""
+"""Widget PromptInput multiline com autocompletar dinâmico, histórico e suporte a paste de múltiplas linhas."""
 
 from __future__ import annotations
 
@@ -6,8 +6,10 @@ import os
 from typing import Any, ClassVar
 
 from textual.binding import Binding
+from textual.events import Key, Paste
+from textual.message import Message
 from textual.suggester import Suggester
-from textual.widgets import Input
+from textual.widgets import TextArea
 
 from ..tokens import TOKENS
 
@@ -138,8 +140,16 @@ class PromptSuggester(Suggester):
         return None
 
 
-class PromptInput(Input):
-    """Input de prompt para envio de mensagens com autocompletar e histórico."""
+class PromptInput(TextArea):
+    """Input de prompt multiline para envio de mensagens com autocompletar e histórico."""
+
+    class Submitted(Message):
+        """Evento emitido ao submeter o prompt com Enter."""
+
+        def __init__(self, input: PromptInput, value: str) -> None:
+            super().__init__()
+            self.input = input
+            self.value = value
 
     DEFAULT_CSS = f"""
     PromptInput {{
@@ -150,34 +160,93 @@ class PromptInput(Input):
         padding: 0 1;
         margin: 1;
         height: 3;
+        min-height: 3;
+        max-height: 8;
+        scrollbar-size-vertical: 1;
+        scrollbar-size-horizontal: 0;
     }}
     PromptInput:focus {{
         border: tall {TOKENS["secondary"]};
     }}
+    PromptInput > .text-area--cursor-line {{
+        background: transparent;
+    }}
     """
 
     BINDINGS: ClassVar[list[Binding]] = [
-        Binding("up", "history_prev", "Histórico Anterior", show=False),
-        Binding("down", "history_next", "Histórico Próximo", show=False),
-        Binding("tab", "complete", "Autocompletar", show=False),
-        Binding("shift+tab", "toggle_vibe_mode", "Alternar Modo VIBE/TDD", show=False),
+        Binding("tab", "complete", "Autocompletar", show=False, priority=True),
+        Binding("shift+tab", "toggle_vibe_mode", "Alternar Modo VIBE/TDD", show=False, priority=True),
     ]
-
 
     def __init__(self, project_dir: str = ".", **kwargs: Any) -> None:
         self.project_dir = os.path.abspath(project_dir)
         self._suggester = PromptSuggester(self.project_dir)
-        self.history: list[str] = []
+        self.prompt_history: list[str] = []
         self._history_index: int = -1
         self._current_buffer: str = ""
         self._tab_candidates: list[str] = []
         self._tab_index: int = -1
 
+        # Limpa parâmetros herdados de Input que não existem em TextArea
+        kwargs.pop("suggester", None)
+
         super().__init__(
-            placeholder="Digite uma instrução ou comando (/help, @arquivo)...",
-            suggester=self._suggester,
+            text="",
+            placeholder="Digite uma instrução ou comando (/help, @arquivo)... (Shift+Enter para nova linha)",
+            show_line_numbers=False,
+            soft_wrap=True,
+            tab_behavior="focus",
             **kwargs,
         )
+        self._update_height()
+
+    @property
+    def value(self) -> str:
+        return self.text
+
+    @value.setter
+    def value(self, val: str) -> None:
+        self.load_text(val)
+        self.cursor_location = (max(0, self.document.line_count - 1), len(self.document.lines[-1]))
+        self._update_height()
+
+    @property
+    def cursor_position(self) -> int:
+        row, col = self.cursor_location
+        pos = 0
+        for r in range(row):
+            pos += len(self.document.get_line(r)) + 1
+        return pos + col
+
+    @cursor_position.setter
+    def cursor_position(self, pos: int) -> None:
+        accum = 0
+        for r, line in enumerate(self.document.lines):
+            line_len = len(line)
+            if accum + line_len >= pos:
+                self.cursor_location = (r, pos - accum)
+                return
+            accum += line_len + 1
+        self.cursor_location = (max(0, self.document.line_count - 1), len(self.document.lines[-1]))
+
+    def _update_height(self) -> None:
+        """Ajusta a altura dinamicamente entre 3 e 8 linhas conforme a quantidade de texto."""
+        lines = self.document.line_count
+        new_height = max(3, min(8, lines + 2))
+        self.styles.height = new_height
+
+    def on_text_area_changed(self, event: TextArea.Changed) -> None:
+        self._update_height()
+
+    async def _on_paste(self, event: Paste) -> None:
+        event.stop()
+        event.prevent_default()
+        if self.read_only or not event.text:
+            return
+        if result := self._replace_via_keyboard(event.text, *self.selection):
+            self.move_cursor(result.end_location)
+            self.focus()
+            self._update_height()
 
     def set_project_dir(self, path: str) -> None:
         """Atualiza a pasta do workspace para autocompletar de arquivos."""
@@ -243,12 +312,6 @@ class PromptInput(Input):
                 self.cursor_position = len(self.value)
                 return
 
-        # Se houver sugestão ativa inline, aceita-a
-        if self._suggestion:
-            self.value = self._suggestion
-            self.cursor_position = len(self.value)
-            return
-
         # Sem autocomplete aplicável: o Tab atua ciclando a etapa da ONDA exclusivamente no modo TDD
         try:
             app = self.app
@@ -269,37 +332,70 @@ class PromptInput(Input):
         except (AttributeError, RuntimeError):  # pragma: no cover
             pass
 
-
-
     def action_history_prev(self) -> None:
-
-        if not self.history:
+        if not self.prompt_history:
             return
         if self._history_index == -1:
             self._current_buffer = self.value
-            self._history_index = len(self.history) - 1
+            self._history_index = len(self.prompt_history) - 1
         elif self._history_index > 0:
             self._history_index -= 1
 
-        if 0 <= self._history_index < len(self.history):
-            self.value = self.history[self._history_index]
-            self.cursor_position = len(self.value)
+        if 0 <= self._history_index < len(self.prompt_history):
+            self.value = self.prompt_history[self._history_index]
 
     def action_history_next(self) -> None:
         if self._history_index == -1:
             return
-        if self._history_index < len(self.history) - 1:
+        if self._history_index < len(self.prompt_history) - 1:
             self._history_index += 1
-            self.value = self.history[self._history_index]
+            self.value = self.prompt_history[self._history_index]
         else:
             self._history_index = -1
             self.value = self._current_buffer
-        self.cursor_position = len(self.value)
 
     def record_history(self, val: str) -> None:
-        self.history.append(val)
+        self.prompt_history.append(val)
         self._history_index = -1
         self._current_buffer = ""
         self._tab_candidates = []
         self._tab_index = -1
         self.value = ""
+        self._update_height()
+
+    async def _on_key(self, event: Key) -> None:
+        # 1. Enter sem modificadores: submete o prompt
+        if event.key == "enter":
+            event.stop()
+            event.prevent_default()
+            val = self.value.strip()
+            if val:
+                self.post_message(self.Submitted(self, self.value))
+            return
+
+        # 2. Shift+Enter, Ctrl+J ou Alt+Enter: insere quebra de linha manual
+        if event.key in ("shift+enter", "ctrl+j", "alt+enter"):
+            event.stop()
+            event.prevent_default()
+            start, end = self.selection
+            self._replace_via_keyboard("\n", start, end)
+            self._update_height()
+            return
+
+        # 3. Up: navega no histórico se estiver na primeira linha
+        if event.key == "up" and (self.cursor_location[0] == 0 or self.document.line_count <= 1):
+            event.stop()
+            event.prevent_default()
+            self.action_history_prev()
+            return
+
+        # 4. Down: navega no histórico se estiver na última linha
+        if event.key == "down" and (
+            self.cursor_location[0] >= self.document.line_count - 1 or self.document.line_count <= 1
+        ):
+            event.stop()
+            event.prevent_default()
+            self.action_history_next()
+            return
+
+        await super()._on_key(event)
