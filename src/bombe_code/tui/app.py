@@ -427,6 +427,26 @@ class BombeTuiApp(App):
                 await chat.mount(Static(prefix))
                 for part in msg.get("parts", []):
                     await chat.mount(PartWidget(part))
+            if not history:
+                lines = [
+                    f"[{TOKENS['primary']} bold]╔════════════════════════════════════════════════════════════════╗[/{TOKENS['primary']} bold]",
+                    f"[{TOKENS['primary']} bold]║               ⚡ BEM-VINDO AO BOMBE CODE ⚡                    ║[/{TOKENS['primary']} bold]",
+                    f"[{TOKENS['primary']} bold]╚════════════════════════════════════════════════════════════════╝[/{TOKENS['primary']} bold]",
+                    "",
+                    f"[bold]Modo Atual:[/] {self.mode} | [bold]Etapa:[/] {self.wave_station} | [bold]Autonomia:[/] AUTO",
+                    f"[bold]Diretório:[/] {self.project_dir}",
+                    "",
+                    f"[{TOKENS['secondary']} bold]🎯 Como começar a construir seu produto:[/{TOKENS['secondary']} bold]",
+                    "1. [bold]Informe o que deseja criar[/bold] na caixa de mensagem abaixo.",
+                    "   [dim]Exemplo: 'Quero criar um app de onboarding com quiz financeiro e validação de leads'[/dim]",
+                    "2. Ou use os comandos da ONDA se preferir controlar passo a passo:",
+                    "   • [cyan]/wave start[/cyan]          [dim]- Inicia formalmente a ONDA de engenharia[/dim]",
+                    "   • [cyan]/wave discuss <ideia>[/cyan] [dim]- Avalia viabilidade (@meira) e gera PRD (@grace)[/dim]",
+                    "   • [cyan]/wave status[/cyan]         [dim]- Exibe o status da ONDA, gates e tarefas[/dim]",
+                    "",
+                    "[dim]💡 Você não precisa ser desenvolvedor: envie sua ideia e os agentes cuidam do ciclo completo![/dim]",
+                ]
+                await chat.mount(Static("\n".join(lines)))
         except (OSError, RuntimeError, httpx.HTTPError) as exc:
             logger.warning("Falha ao carregar histórico: %s", exc)
 

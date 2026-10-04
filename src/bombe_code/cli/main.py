@@ -131,8 +131,8 @@ def wave_start(
 @wave_cli.command("run")
 def wave_run(
     topic: Annotated[
-        str, typer.Option("--topic", "-t", help="Demanda/tópico de produto")
-    ] = "Evolução do Sistema",
+        str | None, typer.Option("--topic", "-t", help="Demanda/tópico de produto")
+    ] = None,
     project_dir: Annotated[str, typer.Option("--project-dir", help="Pasta do projeto")] = ".",
 ) -> None:
     """Executa o pipeline completo da ONDA ativa de acordo com seu modo de autonomia."""
@@ -146,8 +146,22 @@ def wave_run(
 
     # 1. DISCUSS (se necessário)
     if st["stage"] == "DISCUSS":
-        typer.echo(f"📋 Executando DISCUSS: {topic}...")
-        res_disc = orch.run_discuss(topic)
+        final_topic = topic
+        if not final_topic:
+            prd_file = Path(project_dir) / "docs" / "briefings" / "PRD.md"
+            if prd_file.exists():
+                final_topic = "Execução baseada no PRD existente"
+            else:
+                typer.echo(
+                    "⚠️ Nenhum tópico informado e nenhum PRD prévio encontrado em docs/briefings/PRD.md.\n"
+                    "Para iniciar a execução, informe a missão usando:\n"
+                    "  bombe-code wave run --topic \"Descreva sua ideia aqui\"",
+                    err=True,
+                )
+                raise typer.Exit(code=1)
+
+        typer.echo(f"📋 Executando DISCUSS: {final_topic}...")
+        res_disc = orch.run_discuss(final_topic)
         if not res_disc.get("success"):
             typer.echo(f"❌ Falha em DISCUSS: {res_disc.get('error')}", err=True)
             return
@@ -227,11 +241,19 @@ def wave_status(
 @wave_cli.command("discuss")
 def wave_discuss(
     topic: Annotated[
-        str, typer.Argument(help="Tópico para discussão de viabilidade e PRD")
-    ] = "Evolução do Sistema",
+        str | None, typer.Argument(help="Tópico para discussão de viabilidade e PRD")
+    ] = None,
     project_dir: Annotated[str, typer.Option("--project-dir", help="Pasta do projeto")] = ".",
 ) -> None:
     """Executa a etapa DISCUSS com @meira e @grace."""
+    if not topic or not topic.strip():
+        typer.echo(
+            "⚠️ O comando 'bombe-code wave discuss' requer a descrição da missão ou produto.\n"
+            "Exemplo: bombe-code wave discuss \"App de Onboarding com Quiz Financeiro\"",
+            err=True,
+        )
+        raise typer.Exit(code=1)
+
     from bombe_code.turing.orchestrator import WaveOrchestrator
 
     orch = WaveOrchestrator(project_dir=project_dir)
@@ -247,6 +269,16 @@ def wave_plan(
     project_dir: Annotated[str, typer.Option("--project-dir", help="Pasta do projeto")] = ".",
 ) -> None:
     """Executa a etapa PLAN com os arquitetos de Upstream."""
+    prd_file = Path(project_dir) / "docs" / "briefings" / "PRD.md"
+    if not prd_file.exists():
+        typer.echo(
+            "⚠️ Não é possível executar a etapa PLAN sem um PRD aprovado.\n"
+            "Execute primeiro a etapa DISCUSS com sua ideia:\n"
+            "  bombe-code wave discuss \"Descreva sua ideia aqui\"",
+            err=True,
+        )
+        raise typer.Exit(code=1)
+
     from bombe_code.turing.orchestrator import WaveOrchestrator
 
     orch = WaveOrchestrator(project_dir=project_dir)

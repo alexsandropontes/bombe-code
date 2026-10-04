@@ -790,12 +790,30 @@ async def handle_slash_command(app: BombeTuiApp, raw_text: str) -> bool:
                 app.mode = "TDD"
                 app.wave_station = "DISCUSS"
                 app.update_status()
-                await chat.mount(
-                    Static(
-                        f"[{TOKENS['success']} bold]✓ {res['message']}[/{TOKENS['success']} bold]\n"
-                        f"[dim]Modo de autonomia: {autonomy} | Etapa inicial: DISCUSS (Pressione Tab para navegar etapas ou Shift+Tab para VIBE)[/dim]"
-                    )
-                )
+
+                is_greenfield = wave_id in ("ONDA-000", "ONDA-0", "WAVE-0", "WAVE-000") or "DISCOVERY" in app.get_current_wave_stages()
+                lines = [
+                    f"[{TOKENS['success']} bold]✓ {res['message']}[/{TOKENS['success']} bold]",
+                    f"[dim]Modo de autonomia: {autonomy} | Etapa ativa: DISCUSS (Pressione Tab para navegar etapas ou Shift+Tab para VIBE)[/dim]",
+                    "",
+                ]
+                if is_greenfield:
+                    lines.extend([
+                        f"[{TOKENS['primary']} bold]📋 Novo Projeto Detectado (Onda 0 - Greenfield)[/{TOKENS['primary']} bold]",
+                        "Para que o time de especialistas (@meira e @grace) possa avaliar a viabilidade e gerar o PRD, precisamos da sua [bold]MISSÃO[/bold] ou [bold]BRIEFING[/bold].",
+                        "",
+                        f"[{TOKENS['secondary']} bold]👉 Como prosseguir agora:[/{TOKENS['secondary']} bold]",
+                        "  1. Digite a sua ideia diretamente no campo de texto abaixo (ex: [italic]Quero criar um SaaS de gestão de frotas com telemetria[/italic]).",
+                        "  2. Ou use o comando: [cyan]/wave discuss <sua ideia/briefing>[/cyan]",
+                        "",
+                        "[dim]Assim que você enviar a ideia, o orquestrador aciona @meira para viabilidade técnica e @grace para o PRD.[/dim]",
+                    ])
+                else:
+                    lines.extend([
+                        f"[{TOKENS['primary']} bold]📋 ONDA {wave_id} iniciada com sucesso![/{TOKENS['primary']} bold]",
+                        f"Para iniciar a discussão de escopo, envie sua ideia no chat ou use: [cyan]/wave discuss <demanda>[/cyan]",
+                    ])
+                await chat.mount(Static("\n".join(lines)))
             else:
                 await chat.mount(
                     Static(
@@ -806,7 +824,26 @@ async def handle_slash_command(app: BombeTuiApp, raw_text: str) -> bool:
 
 
         if subcmd == "discuss":
-            topic = subarg or "Evolução do Sistema"
+            topic = subarg.strip()
+            if not topic:
+                msg = [
+                    f"[{TOKENS['warning']} bold]⚠️ O comando '/wave discuss' requer uma demanda ou missão![/{TOKENS['warning']} bold]",
+                    "",
+                    "Para que [bold]@meira[/bold] (Viabilidade) e [bold]@grace[/bold] (PRD) possam trabalhar, você precisa descrever o que deseja construir.",
+                    "",
+                    f"[{TOKENS['secondary']} bold]👉 Como executar:[/{TOKENS['secondary']} bold]",
+                    "  [cyan]/wave discuss <descreva sua ideia aqui>[/cyan]",
+                    "",
+                    "[bold]Exemplos práticos:[/bold]",
+                    "  • [italic]/wave discuss App de Onboarding Interativo com Quiz Financeiro e Validação de Leads[/italic]",
+                    "  • [italic]/wave discuss API REST para gestão de assinaturas com multitenancy[/italic]",
+                    "  • [italic]/wave discuss Dashboard de logística com React e FastAPI[/italic]",
+                    "",
+                    "[dim]Dica: Você também pode simplesmente digitar a sua ideia no campo de mensagem abaixo sem comando![/dim]",
+                ]
+                await chat.mount(Static("\n".join(msg)))
+                return True
+
             await chat.mount(
                 Static(
                     f"[{TOKENS['secondary']} bold]Iniciando etapa DISCUSS para:[/{TOKENS['secondary']} bold] {topic}"
@@ -816,7 +853,8 @@ async def handle_slash_command(app: BombeTuiApp, raw_text: str) -> bool:
             if res.get("success"):
                 await chat.mount(
                     Static(
-                        f"[{TOKENS['success']}]✓ Etapa DISCUSS concluída com sucesso com @meira e @grace.[/{TOKENS['success']}]"
+                        f"[{TOKENS['success']}]✓ Etapa DISCUSS concluída com sucesso com @meira e @grace.[/{TOKENS['success']}]\n"
+                        f"[dim]Artefatos gerados: docs/briefings/VIABILITY.md e docs/briefings/PRD.md. Próxima etapa: /wave plan[/dim]"
                     )
                 )
             else:
@@ -828,16 +866,33 @@ async def handle_slash_command(app: BombeTuiApp, raw_text: str) -> bool:
             return True
 
         if subcmd == "plan":
+            prd_file = Path(app.project_dir) / "docs" / "briefings" / "PRD.md"
+            if not prd_file.exists():
+                msg = [
+                    f"[{TOKENS['warning']} bold]⚠️ Não é possível executar a etapa PLAN ainda![/{TOKENS['warning']} bold]",
+                    "",
+                    "A etapa [bold]PLAN[/bold] requer um PRD (Product Requirements Document) aprovado pela [bold]@grace[/bold].",
+                    "",
+                    f"[{TOKENS['secondary']} bold]👉 Próximo Passo:[/{TOKENS['secondary']} bold]",
+                    "Execute primeiro a etapa de discussão de produto informando sua ideia:",
+                    "  [cyan]/wave discuss <sua ideia>[/cyan]",
+                    "",
+                    "[dim]Assim que o PRD for gerado e aprovado, os arquitetos (@ieru, @codd, @caroli) poderão desenhar a arquitetura e quebrar as stories.[/dim]",
+                ]
+                await chat.mount(Static("\n".join(msg)))
+                return True
+
             await chat.mount(
                 Static(
-                    f"[{TOKENS['secondary']} bold]Iniciando etapa PLAN com os arquitetos de Upstream...[/{TOKENS['secondary']} bold]"
+                    f"[{TOKENS['secondary']} bold]Iniciando etapa PLAN com os arquitetos de Upstream (@ieru, @codd, @caroli)...[/{TOKENS['secondary']} bold]"
                 )
             )
             res = await anyio.to_thread.run_sync(orch.run_plan)
             if res.get("success"):
                 await chat.mount(
                     Static(
-                        f"[{TOKENS['success']}]✓ Etapa PLAN concluída. Backlog e arquitetura prontos para execução.[/{TOKENS['success']}]"
+                        f"[{TOKENS['success']}]✓ Etapa PLAN concluída. Backlog e arquitetura prontos para execução.[/{TOKENS['success']}]\n"
+                        f"[dim]Stories registradas no Kanban. Próxima etapa: /wave execute ou /wave cycle[/dim]"
                     )
                 )
             else:
@@ -851,6 +906,20 @@ async def handle_slash_command(app: BombeTuiApp, raw_text: str) -> bool:
         if subcmd == "cycle":
             target_story = subarg or None
             story_label = target_story or "próxima story"
+            cards = orch.kanban.list_cards(wave_id=orch.state_machine.wave_id)
+            if not cards:
+                msg = [
+                    f"[{TOKENS['warning']} bold]⚠️ Nenhuma story disponível no Kanban para execução![/{TOKENS['warning']} bold]",
+                    "",
+                    "O time de engenharia ([bold]@unclebob, @barbara, @ada, @fowler[/bold]) precisa de histórias prontas para codificar.",
+                    "",
+                    f"[{TOKENS['secondary']} bold]👉 Próximo Passo:[/{TOKENS['secondary']} bold]",
+                    "Execute a etapa de planejamento para que o [bold]@caroli[/bold] gere as histórias no PBB:",
+                    "  [cyan]/wave plan[/cyan]",
+                ]
+                await chat.mount(Static("\n".join(msg)))
+                return True
+
             await chat.mount(
                 Static(
                     f"[{TOKENS['secondary']} bold]Executando ciclo atômico para {story_label}...[/{TOKENS['secondary']} bold]"

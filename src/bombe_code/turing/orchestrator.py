@@ -501,6 +501,16 @@ class WaveOrchestrator:
 
     def run_discuss(self, topic: str, context: dict[str, Any] | None = None) -> dict[str, Any]:
         """Executa a etapa DISCUSS com @meira (viabilidade) e @grace (PRD)."""
+        if not topic or not str(topic).strip():
+            return {
+                "success": False,
+                "error": "missing_topic",
+                "message": (
+                    "⚠️ Nenhuma demanda ou briefing informado para a etapa DISCUSS. "
+                    "Informe a ideia ou escopo do produto (ex: /wave discuss <ideia>) para iniciar a viabilidade com @meira e o PRD com @grace."
+                ),
+            }
+
         if self.state_machine.current_state != WaveState.DISCUSS:
             return {
                 "success": False,
