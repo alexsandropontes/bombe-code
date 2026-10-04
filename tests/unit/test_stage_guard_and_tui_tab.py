@@ -305,3 +305,51 @@ def test_orchestrator_start_wave_incomplete_warning_and_force(tmp_path: Path):
     res3 = orch.start_wave("ONDA-002", force=True)
     assert res3["success"] is True
     assert res3["wave_id"] == "ONDA-002"
+
+
+def test_validate_safe_relative_path_blocks_xml_and_invalid_chars():
+    from bombe_code.permissions.stage_guard import validate_safe_relative_path
+
+    # Caminhos válidos
+    valid_paths = [
+        "docs/briefings/PRD.md",
+        "src/server/index.ts",
+        "tests/unit/app.test.py",
+        "README.md",
+        "package.json",
+    ]
+    for p in valid_paths:
+        ok, err = validate_safe_relative_path(p)
+        assert ok is True, f"Deveria ser válido: {p} ({err})"
+
+    # Caminhos inválidos / tags XML de LLM
+    invalid_paths = [
+        "</parameter></function></tool_call><tool_call><function=write>?<parameter=content>",
+        "<invalid_tag>",
+        "file?.txt",
+        "some:path.js",
+        "/absolute/path/file.txt",
+        "../traversal.py",
+        "",
+        "   ",
+    ]
+    for p in invalid_paths:
+        ok, err = validate_safe_relative_path(p)
+        assert ok is False, f"Deveria ser inválido: {p}"
+        assert err != ""
+
+
+def test_orchestrator_fs_tools_block_invalid_path(tmp_path: Path):
+    from bombe_code.turing.orchestrator import WaveOrchestrator
+
+    orch = WaveOrchestrator(project_dir=str(tmp_path))
+    read_fn, write_fn, list_fn = orch._get_project_fs_tools()
+
+    malformed_path = "</parameter></function></tool_call><tool_call><function=write>?<parameter=content>"
+    res_write = write_fn(malformed_path, "conteudo malformado")
+    assert "Erro: Caminho inválido" in res_write
+
+    # Garante que nenhum diretório '<' ou arquivo estranho foi criado no disco
+    assert not (tmp_path / "<").exists()
+    assert not list(tmp_path.glob("<*"))
+

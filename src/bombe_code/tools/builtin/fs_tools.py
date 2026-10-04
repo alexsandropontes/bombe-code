@@ -8,7 +8,10 @@ from pathlib import Path
 from pydantic import BaseModel
 
 from ...permissions.shell_scan import is_external
-from ...permissions.stage_guard import validate_stage_permission
+from ...permissions.stage_guard import (
+    validate_safe_relative_path,
+    validate_stage_permission,
+)
 from ..base import ToolContext, ToolDef
 
 
@@ -54,6 +57,9 @@ def _check_external(path: str, ctx: ToolContext) -> str | None:
 
 
 def _read(args: dict, ctx: ToolContext) -> str:
+    is_safe, err_msg = validate_safe_relative_path(args.get("path", ""))
+    if not is_safe:
+        return f"Erro: {err_msg}"
     target = Path(args["path"])
     denied = _check_external(str(target), ctx)
     if denied:

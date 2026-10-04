@@ -38,6 +38,10 @@ from bombe_code.turing.upstream_gates import (
     StoryDoRGate,
     ViabilityQualityGate,
 )
+from bombe_code.permissions.stage_guard import (
+    validate_safe_relative_path,
+    validate_stage_permission,
+)
 from bombe_code.turing.upstream_profiler import UpstreamProfiler
 
 logger = logging.getLogger(__name__)
@@ -352,6 +356,9 @@ class WaveOrchestrator:
 
         def read_project_file(path: str) -> str:
             """Lê o conteúdo de um arquivo do projeto a partir do caminho relativo (ex: 'docs/stories/ST-001.md')."""
+            is_safe, err_msg = validate_safe_relative_path(path)
+            if not is_safe:
+                return f"Erro: {err_msg}"
             try:
                 target = (project_dir / path).resolve()
                 if not target.is_relative_to(project_dir.resolve()):
@@ -364,10 +371,20 @@ class WaveOrchestrator:
 
         def write_project_file(path: str, content: str) -> str:
             """Grava conteúdo em um arquivo do projeto no caminho relativo especificado (ex: 'js/logic.js')."""
+            is_safe, err_msg = validate_safe_relative_path(path)
+            if not is_safe:
+                return f"Erro: {err_msg}"
             try:
                 target = (project_dir / path).resolve()
                 if not target.is_relative_to(project_dir.resolve()):
                     return f"Erro: Acesso fora do projeto negado para {path}"
+                stage = getattr(self.state_machine, "stage", None)
+                stage_name = stage.name if hasattr(stage, "name") else str(stage or "DISCUSS")
+                allowed, stage_reason = validate_stage_permission(
+                    stage_name, "write", str(target), str(project_dir)
+                )
+                if not allowed:
+                    return stage_reason or "Erro: Operação bloqueada pelas regras da etapa atual da ONDA."
                 target.parent.mkdir(parents=True, exist_ok=True)
                 target.write_text(content, encoding="utf-8")
                 return f"Arquivo {path} gravado com sucesso ({len(content)} caracteres)."
@@ -376,6 +393,10 @@ class WaveOrchestrator:
 
         def list_project_files(directory: str = ".") -> list[str]:
             """Lista os arquivos existentes no diretório relativo do projeto."""
+            if directory and directory != ".":
+                is_safe, err_msg = validate_safe_relative_path(directory)
+                if not is_safe:
+                    return [f"Erro: {err_msg}"]
             try:
                 target = (project_dir / directory).resolve()
                 if not target.is_relative_to(project_dir.resolve()):

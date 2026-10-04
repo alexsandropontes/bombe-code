@@ -10,7 +10,38 @@ do ciclo de vida da ONDA:
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
+
+# Caracteres proibidos em caminhos de arquivos e artefatos de tags XML de LLM
+INVALID_PATH_CHARS_REGEX = re.compile(r'[<>:"|?*\x00-\x1f\r\n]')
+
+
+def validate_safe_relative_path(path: str) -> tuple[bool, str]:
+    """Valida se o caminho é seguro, relativo e livre de artefatos de LLM (tags XML, caracteres proibidos).
+
+    Retorna (True, "") se válido, ou (False, mensagem_de_erro) se inválido.
+    """
+    if not path or not isinstance(path, str) or not path.strip():
+        return False, "Caminho do arquivo não pode ser vazio."
+
+    cleaned = path.strip()
+    if INVALID_PATH_CHARS_REGEX.search(cleaned):
+        return (
+            False,
+            f"Caminho inválido: '{path}' contém caracteres proibidos ou tags XML malformadas (ex: '<', '>', '?', ':').",
+        )
+
+    if cleaned.startswith(("/", "\\")):
+        return False, f"Caminho deve ser relativo ao projeto: '{path}'"
+
+    # Previne directory traversal explícito
+    parts = Path(cleaned).parts
+    if ".." in parts:
+        return False, f"Caminho não pode conter '..': '{path}'"
+
+    return True, ""
+
 
 STAGE_DISCUSS = "DISCUSS"
 STAGE_DISCOVERY = "DISCOVERY"
@@ -126,6 +157,11 @@ def validate_stage_permission(
         rel = target_path
 
     rel = rel.replace("\\", "/").lstrip("./")
+
+    # Validação de caminho seguro contra tags XML e caracteres proibidos
+    is_safe, err_msg = validate_safe_relative_path(rel)
+    if not is_safe:
+        return False, f"⛔ [CAMINHO INVÁLIDO] {err_msg}"
 
     # 1. ETAPA DISCUSS / DISCOVERY
     if normalized_stage in {STAGE_DISCUSS, STAGE_DISCOVERY}:
