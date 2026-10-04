@@ -94,24 +94,30 @@ def main() -> int:
     print(f"🚀 Bump de versão: {base_version} ➔ {new_version} ({bump_type.upper()})")
     update_files(new_version)
 
-    # Cria commit e tag
+    # Cria commit se houver modificações staged
     subprocess.run(["git", "add", str(PYPROJECT_PATH), str(INIT_PATH)], cwd=ROOT_DIR, check=True)
-    subprocess.run(
-        [
-            "git",
-            "commit",
-            "--author=Alexsandro Pontes <alexsandropontes@gmail.com>",
-            "-m",
-            f"chore(release): v{new_version} [no-test]",
-        ],
-        cwd=ROOT_DIR,
-        check=True,
-    )
-    subprocess.run(
-        ["git", "tag", "-a", f"v{new_version}", "-m", f"Release v{new_version}"],
-        cwd=ROOT_DIR,
-        check=True,
-    )
+    status_out = run_git(["status", "--porcelain", str(PYPROJECT_PATH), str(INIT_PATH)])
+    if status_out.strip():
+        subprocess.run(
+            [
+                "git",
+                "commit",
+                "--author=Alexsandro Pontes <alexsandropontes@gmail.com>",
+                "-m",
+                f"chore(release): v{new_version} [no-test]",
+            ],
+            cwd=ROOT_DIR,
+            check=True,
+        )
+
+    # Cria tag se não existir
+    existing_tags = run_git(["tag", "-l", f"v{new_version}"]).strip()
+    if not existing_tags:
+        subprocess.run(
+            ["git", "tag", "-a", f"v{new_version}", "-m", f"Release v{new_version}"],
+            cwd=ROOT_DIR,
+            check=True,
+        )
 
     print(f"✅ Versão v{new_version} commitada e tagueada com sucesso!")
     return 0
