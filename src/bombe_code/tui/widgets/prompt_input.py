@@ -238,12 +238,33 @@ class PromptInput(TextArea):
     def on_text_area_changed(self, event: TextArea.Changed) -> None:
         self._update_height()
 
+    def action_paste(self) -> None:
+        """Cola do clipboard do sistema operacional ou do clipboard interno com suporte a textos grandes."""
+        if self.read_only:
+            return
+        text = ""
+        try:
+            import pyperclip
+
+            text = pyperclip.paste()
+        except Exception:
+            pass
+        if not text:
+            text = self.app.clipboard
+        if text:
+            clean_text = text.replace("\r\n", "\n").replace("\r", "\n")
+            if result := self._replace_via_keyboard(clean_text, *self.selection):
+                self.move_cursor(result.end_location)
+                self.focus()
+                self._update_height()
+
     async def _on_paste(self, event: Paste) -> None:
         event.stop()
         event.prevent_default()
         if self.read_only or not event.text:
             return
-        if result := self._replace_via_keyboard(event.text, *self.selection):
+        clean_text = event.text.replace("\r\n", "\n").replace("\r", "\n")
+        if result := self._replace_via_keyboard(clean_text, *self.selection):
             self.move_cursor(result.end_location)
             self.focus()
             self._update_height()

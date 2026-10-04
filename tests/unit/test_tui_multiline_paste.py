@@ -100,3 +100,40 @@ async def test_prompt_input_history_multiline_recovery():
 
         assert inp.value == multiline_text
         assert inp.document.line_count == 3
+
+
+@pytest.mark.anyio
+async def test_prompt_input_large_paste_nonblocking_submission(monkeypatch):
+    """Valida que a colagem de textos grandes (>8 linhas) e submissão não travam o event loop e acionam worker."""
+    client = BombeClient("http://127.0.0.1:9999")
+    app = BombeTuiApp(client=client, session_id="ses_test")
+
+    dispatched_commands = []
+
+    def fake_worker(cmd: str):
+        dispatched_commands.append(cmd)
+
+    monkeypatch.setattr(app, "_run_slash_command_worker", fake_worker)
+
+    large_briefing = "\n".join([f"Linha de requisito {i} com caracteres [especiais]" for i in range(25)])
+
+    async with app.run_test() as pilot:
+        inp = app.query_one("#prompt-input", PromptInput)
+        chat = app.query_one("#chat-view", ChatView)
+
+        # Cola texto grande
+        inp.post_message(Paste(text=large_briefing))
+        await pilot.pause(0.05)
+        assert inp.document.line_count == 25
+
+        # Pressiona enter para submeter
+        await pilot.press("enter")
+        await pilot.pause(0.05)
+
+        # O input deve ter sido limpo
+        assert inp.value == ""
+
+        # O chat deve renderizar a mensagem com indicador de linhas coladas
+        chat_texts = [str(w.render()) for w in chat.children]
+        assert any("linhas coladas" in t for t in chat_texts)
+

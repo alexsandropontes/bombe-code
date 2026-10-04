@@ -8,6 +8,7 @@ import os
 from typing import Any, ClassVar
 
 import httpx
+from rich.markup import escape
 from textual import on, work
 from textual.app import App, ComposeResult, ScreenStackError
 from textual.binding import Binding
@@ -483,33 +484,24 @@ class BombeTuiApp(App):
 
         # Roteamento completo dos 28 comandos de barra (/) do OpenCode
         if text.startswith("/"):
-            from .commands import handle_slash_command
-
-            try:
-                await handle_slash_command(self, text)
-            except Exception as exc:
-                from ..errors import record_exception
-
-                err_file = record_exception(exc, context=f"slash_command: {text}")
-                logger.exception("Erro ao processar slash command '%s'", text)
-                await chat.mount(
-                    Static(
-                        f"[{TOKENS['error']} bold]❌ Erro ao executar '{text}':[/{TOKENS['error']} bold] "
-                        f"[{TOKENS['error']}]{exc}[/{TOKENS['error']}]\n"
-                        f"[dim]Detalhes técnicos gravados em: {err_file}[/dim]"
-                    )
-                )
+            self._run_slash_command_worker(text)
             return
 
+        lines = text.splitlines()
+        if len(lines) > 8:
+            preview = escape("\n".join(lines[:5]))
+            formatted_text = f"{preview}\n[dim]... (+{len(lines) - 5} linhas coladas)[/dim]"
+        else:
+            formatted_text = escape(text)
+
         await chat.mount(
-            Static(f"\n[{TOKENS['primary']} bold]Você:[/{TOKENS['primary']} bold] {text}")
+            Static(f"\n[{TOKENS['primary']} bold]Você:[/{TOKENS['primary']} bold] {formatted_text}")
         )
 
         # No modo TDD, toda entrada de texto livre passa obrigatoriamente pelo Motor de Intenções do Turing
         if self.mode == "TDD":
             from pathlib import Path
             from ..turing.waiter import TuringWaiter
-            from .commands import handle_slash_command
 
             waiter = TuringWaiter()
             prd_file = Path(self.project_dir) / "docs" / "briefings" / "PRD.md"
@@ -519,29 +511,15 @@ class BombeTuiApp(App):
             )
 
             if action.command and action.command.startswith("/"):
+                first_line_cmd = action.command.splitlines()[0][:100]
                 await chat.mount(
                     Static(
                         f"[{TOKENS['secondary']} bold]🎯 [TURING MOTOR DE INTENÇÕES - {action.intention.upper()}][/]\n"
-                        f"[dim]Roteando deterministicamente para o comando da ONDA: {action.command}[/dim]"
+                        f"[dim]Roteando deterministicamente para o comando da ONDA: {first_line_cmd}[/dim]"
                     )
                 )
-                try:
-                    handled = await handle_slash_command(self, action.command)
-                    if handled:
-                        return
-                except Exception as exc:
-                    from ..errors import record_exception
-
-                    err_file = record_exception(exc, context=f"turing_routed: {action.command}")
-                    logger.exception("Erro ao executar comando roteado pelo Turing '%s'", action.command)
-                    await chat.mount(
-                        Static(
-                            f"[{TOKENS['error']} bold]❌ Erro ao executar comando roteado '{action.command}':[/{TOKENS['error']} bold] "
-                            f"[{TOKENS['error']}]{exc}[/{TOKENS['error']}]\n"
-                            f"[dim]Detalhes gravados em: {err_file}[/dim]"
-                        )
-                    )
-                    return
+                self._run_slash_command_worker(action.command)
+                return
 
         self._is_active_turn = True
         self.update_status()
@@ -578,17 +556,20 @@ class BombeTuiApp(App):
 
         chat = self.query_one("#chat-view", ChatView)
         self._is_active_turn = True
+        cmd_name = text.split()[0] if text else "comando"
+        if self._processing_bar is not None:
+            self._processing_bar.start(f"Executando {cmd_name} da ONDA...")
         self.update_status()
         try:
             await handle_slash_command(self, text)
         except Exception as exc:
             from ..errors import record_exception
 
-            err_file = record_exception(exc, context=f"slash_command: {text}")
-            logger.exception("Erro ao processar slash command '%s'", text)
+            err_file = record_exception(exc, context=f"slash_command: {text[:100]}")
+            logger.exception("Erro ao processar slash command '%s'", text[:100])
             await chat.mount(
                 Static(
-                    f"[{TOKENS['error']} bold]❌ Erro ao executar '{text}':[/{TOKENS['error']} bold] "
+                    f"[{TOKENS['error']} bold]❌ Erro ao executar '{cmd_name}':[/{TOKENS['error']} bold] "
                     f"[{TOKENS['error']}]{exc}[/{TOKENS['error']}]\n"
                     f"[dim]Detalhes técnicos gravados em: {err_file}[/dim]"
                 )

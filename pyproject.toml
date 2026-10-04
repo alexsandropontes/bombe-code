@@ -1,6 +1,6 @@
 [project]
 name = "bombe-code"
-version = "0.1.13"
+version = "0.1.14"
 description = "Bombe Code — agente de código com harness vibe (reimplementação Python do opencode)"
 license = "MIT"
 requires-python = ">=3.13"
@@ -14,6 +14,7 @@ dependencies = [
     "typer>=0.12",
     "pydantic-ai>=0.0.18",
     "pyyaml>=6.0",
+    "pyperclip>=1.8.2",
 ]
 
 [project.optional-dependencies]
