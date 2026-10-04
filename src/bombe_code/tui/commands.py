@@ -7,6 +7,7 @@ import logging
 import os
 import subprocess
 import tempfile
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import anyio
@@ -811,7 +812,7 @@ async def handle_slash_command(app: BombeTuiApp, raw_text: str) -> bool:
                 else:
                     lines.extend([
                         f"[{TOKENS['primary']} bold]📋 ONDA {wave_id} iniciada com sucesso![/{TOKENS['primary']} bold]",
-                        f"Para iniciar a discussão de escopo, envie sua ideia no chat ou use: [cyan]/wave discuss <demanda>[/cyan]",
+                        "Para iniciar a discussão de escopo, envie sua ideia no chat ou use: [cyan]/wave discuss <demanda>[/cyan]",
                     ])
                 await chat.mount(Static("\n".join(lines)))
             else:

@@ -282,3 +282,24 @@ async def test_tui_slash_command_models_prioritizes_connected_and_recent(tmp_pat
 
         # Verifica se o modelo selecionado foi registrado nos recentes
         assert "llama.cpp/mimo-qwen-9b" in get_recent_models()
+
+
+@pytest.mark.anyio
+async def test_tui_slash_command_wave_plan_checks_prd_path_cleanly(tmp_path):
+    """Valida que /wave plan avalia o caminho do PRD sem erro de NameError: Path is not defined."""
+    client = BombeClient("http://127.0.0.1:9999")
+    app = BombeTuiApp(client=client, session_id="ses_test")
+    app.project_dir = str(tmp_path)
+
+    async with app.run_test() as pilot:
+        inp = app.query_one("#prompt-input", PromptInput)
+        chat = app.query_one("#chat-view")
+
+        inp.value = "/wave plan"
+        await pilot.press("enter")
+        await pilot.pause(0.1)
+
+        # Sem PRD, deve exibir o aviso orientativo sem explodir NameError
+        chat_texts = [str(w.render()) for w in chat.children]
+        assert any("requer um PRD" in t for t in chat_texts)
+
