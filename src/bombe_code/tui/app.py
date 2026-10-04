@@ -469,6 +469,7 @@ class BombeTuiApp(App):
                     "[dim]💡 Você não precisa ser desenvolvedor: envie sua ideia e os agentes cuidam do ciclo completo![/dim]",
                 ]
                 await chat.mount(Static("\n".join(lines)))
+            chat.scroll_to_latest()
         except (OSError, RuntimeError, httpx.HTTPError) as exc:
             logger.warning("Falha ao carregar histórico: %s", exc)
 
@@ -497,6 +498,7 @@ class BombeTuiApp(App):
         await chat.mount(
             Static(f"\n[{TOKENS['primary']} bold]Você:[/{TOKENS['primary']} bold] {formatted_text}")
         )
+        chat.scroll_to_latest()
 
         # No modo TDD, toda entrada de texto livre passa obrigatoriamente pelo Motor de Intenções do Turing
         if self.mode == "TDD":
@@ -518,6 +520,7 @@ class BombeTuiApp(App):
                         f"[dim]Roteando deterministicamente para o comando da ONDA: {first_line_cmd}[/dim]"
                     )
                 )
+                chat.scroll_to_latest()
                 self._run_slash_command_worker(action.command)
                 return
 
@@ -616,6 +619,7 @@ class BombeTuiApp(App):
             await chat.mount(
                 Static(f"\n[{TOKENS['secondary']} bold]Agente:[/{TOKENS['secondary']} bold]")
             )
+            chat.scroll_to_latest()
 
         elif etype == "reasoning-delta":
             if self._processing_bar is not None:

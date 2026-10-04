@@ -10,6 +10,7 @@ from rich.panel import Panel
 from rich.syntax import Syntax
 from rich.text import Text
 from textual.containers import VerticalScroll
+from textual.widget import AwaitMount, Widget
 from textual.widgets import Static
 
 import time
@@ -127,7 +128,7 @@ class PartWidget(Static):
 
 
 class ChatView(VerticalScroll):
-    """Contêiner do histórico de chat com rolagem."""
+    """Contêiner do histórico de chat com rolagem e ancoragem automática ao final."""
 
     DEFAULT_CSS = f"""
     ChatView {{
@@ -137,3 +138,23 @@ class ChatView(VerticalScroll):
         overflow-y: scroll;
     }}
     """
+
+    def on_mount(self) -> None:
+        self.anchor()
+
+    def mount(
+        self,
+        *widgets: Widget,
+        before: int | str | Widget | None = None,
+        after: int | str | Widget | None = None,
+    ) -> AwaitMount:
+        res = super().mount(*widgets, before=before, after=after)
+        self.scroll_to_latest()
+        return res
+
+    def scroll_to_latest(self) -> None:
+        """Rola imediatamente para o final e reativa a ancoragem automática."""
+        if not self.is_attached:
+            return
+        self.anchor()
+        self.scroll_end(animate=False)

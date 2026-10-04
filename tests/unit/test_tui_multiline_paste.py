@@ -9,6 +9,7 @@ from bombe_code.tui.app import BombeTuiApp
 from bombe_code.tui.client import BombeClient
 from bombe_code.tui.widgets.parts_view import ChatView
 from bombe_code.tui.widgets.prompt_input import PromptInput
+from textual.widgets import Static
 
 
 @pytest.mark.anyio
@@ -136,4 +137,34 @@ async def test_prompt_input_large_paste_nonblocking_submission(monkeypatch):
         # O chat deve renderizar a mensagem com indicador de linhas coladas
         chat_texts = [str(w.render()) for w in chat.children]
         assert any("linhas coladas" in t for t in chat_texts)
+
+
+@pytest.mark.anyio
+async def test_chat_view_autoscroll_on_message_submission_and_mount(monkeypatch):
+    """Valida que o ChatView ancora e rola automaticamente para o final ao enviar mensagem."""
+    client = BombeClient("http://127.0.0.1:9999")
+    app = BombeTuiApp(client=client, session_id="ses_test")
+
+    monkeypatch.setattr(app, "_run_slash_command_worker", lambda cmd: None)
+
+    async with app.run_test() as pilot:
+        inp = app.query_one("#prompt-input", PromptInput)
+        chat = app.query_one("#chat-view", ChatView)
+
+        # Monta 30 mensagens iniciais para criar scroll
+        for i in range(30):
+            await chat.mount(Static(f"Mensagem anterior {i}"))
+        await pilot.pause(0.05)
+
+        # Verifica se o ChatView está no final
+        assert chat.is_vertical_scroll_end
+
+        # Submete uma nova mensagem do usuário
+        inp.value = "Nova mensagem do usuário para testar scroll automático"
+        await pilot.press("enter")
+        await pilot.pause(0.05)
+
+        # Deve permanecer ancorado e no final absoluto do scroll
+        assert chat.is_vertical_scroll_end
+        assert chat.scroll_y == chat.max_scroll_y
 
