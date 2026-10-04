@@ -62,6 +62,15 @@ class BombeTuiApp(App):
         width: 100%;
         height: 1fr;
     }}
+
+    #processing-status-bar {{
+        height: 1;
+        min-height: 1;
+        max-height: 1;
+        background: transparent;
+        color: {TOKENS["text_muted"]};
+        padding: 0 1;
+    }}
     """
 
     BINDINGS: ClassVar[list[Binding]] = [
@@ -111,6 +120,7 @@ class BombeTuiApp(App):
         self._current_assistant_text: str = ""
         self._current_reasoning_widget: PartWidget | None = None
         self._current_reasoning_text: str = ""
+        self._processing_bar: ThinkingWidget | None = None
         self._thinking_widget: Static | None = None
         self._sse_task: asyncio.Task | None = None
         self._is_active_turn: bool = False
@@ -179,6 +189,7 @@ class BombeTuiApp(App):
             with Vertical(id="chat-container"):
                 with Container(id="main-container"):
                     yield ChatView(id="chat-view")
+                yield ThinkingWidget(id="processing-status-bar")
                 yield PromptInput(project_dir=self.project_dir, id="prompt-input")
             yield Sidebar(
                 id="sidebar",
@@ -408,6 +419,10 @@ class BombeTuiApp(App):
         await self._load_history()
         self._sse_task = asyncio.create_task(self._listen_sse())
         try:
+            self._processing_bar = self.query_one("#processing-status-bar", ThinkingWidget)
+        except NoMatches:
+            pass
+        try:
             self.query_one("#prompt-input", PromptInput).focus()
         except NoMatches:
             pass
@@ -514,6 +529,8 @@ class BombeTuiApp(App):
             )
         finally:
             self._is_active_turn = False
+            if self._processing_bar is not None:
+                self._processing_bar.stop()
             self.update_status()
 
     @work(exclusive=False)
@@ -539,6 +556,8 @@ class BombeTuiApp(App):
             )
         finally:
             self._is_active_turn = False
+            if self._processing_bar is not None:
+                self._processing_bar.stop()
             self.update_status()
 
     async def _listen_sse(self) -> None:
@@ -554,9 +573,10 @@ class BombeTuiApp(App):
                     if ev_id:
                         last_id = ev_id
                     await self._handle_event(event)
+                await asyncio.sleep(0.5)
             except asyncio.CancelledError:
                 break
-            except (OSError, RuntimeError, httpx.HTTPError) as exc:
+            except Exception as exc:
                 logger.debug("Reconectando SSE após erro: %s", exc)
                 await asyncio.sleep(1.0)
 
@@ -570,20 +590,16 @@ class BombeTuiApp(App):
             self._current_assistant_widget = None
             self._current_reasoning_text = ""
             self._current_reasoning_widget = None
-            if self._thinking_widget is not None:
-                await self._thinking_widget.remove()
-                self._thinking_widget = None
+            if self._processing_bar is not None:
+                self._processing_bar.start("Processando contexto e aguardando tokens do modelo")
             self.update_status()
             await chat.mount(
                 Static(f"\n[{TOKENS['secondary']} bold]Agente:[/{TOKENS['secondary']} bold]")
             )
-            self._thinking_widget = ThinkingWidget()
-            await chat.mount(self._thinking_widget)
 
         elif etype == "reasoning-delta":
-            if self._thinking_widget is not None:
-                await self._thinking_widget.remove()
-                self._thinking_widget = None
+            if self._processing_bar is not None:
+                self._processing_bar.set_message("Raciocinando / Analisando contexto")
             delta = event.get("text", "")
             self._current_reasoning_text += delta
             if self._current_reasoning_widget is None:
@@ -596,12 +612,11 @@ class BombeTuiApp(App):
             chat.scroll_end(animate=False)
 
         elif etype == "text-delta":
-            if self._thinking_widget is not None:
-                await self._thinking_widget.remove()
-                self._thinking_widget = None
             if self._current_reasoning_widget is not None:
                 self._current_reasoning_widget.finalize_stream()
                 self._current_reasoning_widget = None
+            if self._processing_bar is not None:
+                self._processing_bar.set_message("Recebendo resposta da LLM")
 
             delta = event.get("text", "")
             self._current_assistant_text += delta
@@ -615,9 +630,9 @@ class BombeTuiApp(App):
             chat.scroll_end(animate=False)
 
         elif etype in ("tool-call", "tool-input"):
-            if self._thinking_widget is not None:
-                await self._thinking_widget.remove()
-                self._thinking_widget = None
+            tool_name = event.get("tool", "ferramenta")
+            if self._processing_bar is not None:
+                self._processing_bar.set_message(f"Executando ferramenta: {tool_name}")
             if self._current_reasoning_widget is not None:
                 self._current_reasoning_widget.finalize_stream()
                 self._current_reasoning_widget = None
@@ -628,7 +643,7 @@ class BombeTuiApp(App):
             widget = PartWidget(
                 {
                     "type": "tool",
-                    "tool": event.get("tool", "ferramenta"),
+                    "tool": tool_name,
                     "state": "running",
                     "arguments": event.get("arguments", {}),
                 }
@@ -637,9 +652,8 @@ class BombeTuiApp(App):
             chat.scroll_end(animate=False)
 
         elif etype == "tool-result":
-            if self._thinking_widget is not None:
-                await self._thinking_widget.remove()
-                self._thinking_widget = None
+            if self._processing_bar is not None:
+                self._processing_bar.set_message("Processando resultado da ferramenta")
             widget = PartWidget(
                 {
                     "type": "tool",
@@ -665,9 +679,8 @@ class BombeTuiApp(App):
                 await self.client.reply_question(self.session_id, question, answer)
 
         elif etype == "prompt.finished":
-            if self._thinking_widget is not None:
-                await self._thinking_widget.remove()
-                self._thinking_widget = None
+            if self._processing_bar is not None:
+                self._processing_bar.stop()
             if self._current_reasoning_widget is not None:
                 self._current_reasoning_widget.finalize_stream()
                 self._current_reasoning_widget = None
@@ -706,6 +719,8 @@ class BombeTuiApp(App):
                 logger.warning("Erro ao interromper turno: %s", exc)
             finally:
                 self._is_active_turn = False
+                if self._processing_bar is not None:
+                    self._processing_bar.stop()
                 self.update_status()
 
     def action_command_palette(self) -> None:
