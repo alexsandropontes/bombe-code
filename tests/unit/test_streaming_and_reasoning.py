@@ -105,11 +105,11 @@ def test_part_widget_reasoning_streaming():
     widget = PartWidget({"type": "reasoning", "text": "Pensando..."})
     widget.update_stream("Pensando... analisando requisitos...")
     assert widget._is_streaming is True
-    rendered = widget._render_content()
+    rendered = widget._get_renderable()
     # Título dinâmico de streaming ativo
     assert "tempo real" in str(rendered.title)
 
     widget.finalize_stream()
     assert widget._is_streaming is False
-    rendered_final = widget._render_content()
+    rendered_final = widget._get_renderable()
     assert "tempo real" not in str(rendered_final.title)

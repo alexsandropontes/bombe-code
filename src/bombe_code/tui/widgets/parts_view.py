@@ -27,7 +27,7 @@ class PartWidget(Static):
         self._last_render_time: float = 0.0
 
     def on_mount(self) -> None:
-        self.update(self._render_content())
+        self.update(self._get_renderable())
 
     def update_stream(self, text: str) -> None:
         """Atualização de alta frequência durante streaming contínuo.
@@ -42,21 +42,18 @@ class PartWidget(Static):
         # sem consumir 100% da CPU do event loop do Textual.
         if now - self._last_render_time >= 0.035:
             self._last_render_time = now
-            self.update(self._render_content())
+            self.update(self._get_renderable())
 
     def finalize_stream(self) -> None:
         """Finaliza o ciclo de streaming e consolida a renderização definitiva."""
         self._is_streaming = False
-        self.update(self._render_content())
+        self.update(self._get_renderable())
 
     def update_text(self, text: str) -> None:
         self.part_data["text"] = text
-        self.update(self._render_content())
+        self.update(self._get_renderable())
 
-    def render(self) -> Any:
-        return self._render_content()
-
-    def _render_content(self) -> Any:
+    def _get_renderable(self) -> Any:
         ptype = self.part_data.get("type", "text")
 
         if ptype == "text":
@@ -71,7 +68,7 @@ class PartWidget(Static):
                 else "[dim]Pensamento / Raciocínio[/dim]"
             )
             return Panel(
-                Text(content, style=f"italic {TOKENS['text_muted']}"),
+                Text(content, style=f"italic {TOKENS['text']} dim"),
                 title=title,
                 border_style=TOKENS["border"],
             )
