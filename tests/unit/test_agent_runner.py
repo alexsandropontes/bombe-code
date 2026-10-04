@@ -120,7 +120,8 @@ def test_agent_runner_execution_failure(skill_registry, mock_factory, tmp_path):
     assert tasks[0]["status"] == "failed"
 
 
-def test_agent_runner_realtime_telemetry(mock_factory, capsys):
+def test_agent_runner_realtime_telemetry(mock_factory, capsys, monkeypatch):
+    monkeypatch.delenv("BOMBE_TUI_RUNNING", raising=False)
     agent_registry = AgentRegistry.default()
     grace = agent_registry.get("@grace")
 

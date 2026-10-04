@@ -14,9 +14,9 @@
 
 O **Bombe Code** é uma plataforma e harness de desenvolvimento que transforma múltiplos agentes autônomos de IA em uma equipe de engenharia de software coesa, disciplinada e previsível.
 
-Inspirado no poder computacional e na precisão da máquina *Bombe* de Bletchley Park — projetada para decifrar problemas de altíssima complexidade combinatória através de especialização mecânica —, o Bombe Code elimina a fragilidade do chamado *"vibe coding"* (códigos gerados sem planejamento, sem modelagem e sem testes reais).
+Inspirado no poder computacional e na precisão da máquina *Bombe* de Bletchley Park — projetada para decifrar problemas de altíssima complexidade combinatória através de especialização mecânica —, o Bombe Code elimina a fragilidade do chamado *"vibe coding"* desgovernado (código gerado sem planejamento, sem modelagem e sem testes reais).
 
-No Bombe Code, nenhuma linha de código de produção é gerada ao acaso. O desenvolvimento segue a **Metodologia ONDA**, guiada por **23 Agentes Especialistas** e fiscalizada por **Gates Determinísticos do Turing Runtime**, onde a qualidade técnica é garantida por contratos de software em código Python, e não por promessas de modelos de linguagem.
+No Bombe Code, nenhuma linha de código de produção é gerada ao acaso. O desenvolvimento segue a **Metodologia ONDA**, guiada por **23 Agentes Especialistas** e fiscalizada por **Gates Determinísticos do Turing Runtime**, onde a qualidade técnica é garantida por contratos de software em código Python imperativo, e não por promessas de modelos de linguagem.
 
 ---
 
@@ -26,112 +26,201 @@ No Bombe Code, nenhuma linha de código de produção é gerada ao acaso. O dese
 O Bombe Code opera prioritariamente na sua estação de trabalho:
 * **Banco Local SQLite (`state.db`):** Armazena o estado do runtime, tarefas, cards do Kanban e checkpoints das ONDAS.
 * **Transparência em Arquivos Físicos (`docs/`):** Todos os artefatos de PRDs, jornadas, decisões de arquitetura e histórias BDD são arquivos Markdown versionados no Git.
-* **Zero Vendor Lock-in:** Suporte nativo tanto a modelos LLM locais (via [llama.cpp](https://github.com/ggerganov/llama.cpp) ou [Ollama](https://ollama.ai)) quanto a provedores de nuvem (OpenAI, Anthropic, Google Gemini) via adaptadores padronizados PydanticAI.
+* **Zero Vendor Lock-in:** Suporte nativo tanto a modelos LLM locais (via [llama.cpp](https://github.com/ggerganov/llama.cpp) ou [Ollama](https://ollama.ai)) quanto a provedores de nuvem (Z.ai GLM-5.3-Flash, OpenAI, Anthropic, Google Gemini) via adaptadores padronizados PydanticAI.
 
-### 2. Separação Rigorosa: Upstream vs. Downstream
-O desenvolvimento de software no Bombe Code é dividido em duas metades indissociáveis:
+### 2. As Duas Grandes Fases Canônicas: Upstream vs. Downstream
+O desenvolvimento de software no Bombe Code é estruturado em duas fases indissociáveis (`WavePhase`):
 
 ```
                       ┌────────────────────────────────────────────────────────┐
                       │                   FASE 1: UPSTREAM                     │
-                      │  (Descoberta, Viabilidade, Jornada e Especificação)    │
+                      │  (Descoberta, Viabilidade, Inception, Arquitetura,     │
+                      │   Modelagem de Dados e Refinamento PBB de Stories)     │
+                      │                                                        │
+                      │  Etapas: DISCOVERY • INCEPTION • DISCUSS •             │
+                      │          PLAN • REFINEMENT                             │
+                      │  Regra: Código em src/ é terminantemente BLOQUEADO     │
                       └──────────────────────────┬─────────────────────────────┘
                                                  │
                                                  ▼
-                                        [TURING GATES]
-                                 PRD • Journey • Arch • DoR
+                                        [TURING QUALITY GATES]
+                                 PRD • Journey • Arch • DB • DoR (INVEST)
                                                  │
                                                  ▼
                       ┌────────────────────────────────────────────────────────┐
                       │                  FASE 2: DOWNSTREAM                    │
-                      │   (Engenharia por Stack, TDD Estrito e Duplo Review)   │
+                      │  (Engenharia por Stack, Ciclo TDD e Homologação)       │
+                      │                                                        │
+                      │  Etapas: EXECUTE • VALIDATE                            │
+                      │  Regra: Implementação orientada a testes e duplo gate  │
                       └──────────────────────────┬─────────────────────────────┘
                                                  │
                                                  ▼
-                                      [TURING REVIEW GATE]
-                                 @aniche (Testes) + @unclebob
+                                       [TURING REVIEW GATES]
+                                @aniche (QA/Testes) + @unclebob (Clean Code)
+                                      + @edith (Selo) + @nina (FinOps)
                                                  │
                                                  ▼
                                            PRONTO P/ PROD
 ```
 
-* **Upstream:** Concepção da solução antes de codificar. Se o problema de negócio não estiver claro, as telas não estiverem mapeadas e as histórias não atenderem ao **DoR (Definition of Ready)** e **INVEST**, o Turing rejeita o avanço.
-* **Downstream:** Construção sob **TDD Estrito** (`RED -> GREEN -> REFACTOR`). O código só é considerado pronto após validação automatizada e aprovação formal de dois revisores independentes: qualidade de testes (`@aniche`) e arquitetura limpa (`@unclebob`).
+* **Upstream:** Concepção determinística da solução antes de codificar. Se o problema de negócio não estiver claro, as telas não estiverem mapeadas, a arquitetura e modelo de dados não estiverem definidos e as histórias não atenderem ao **DoR (Definition of Ready)** e critérios **INVEST**, o Turing Runtime rejeita o avanço.
+* **Downstream:** Construção sob **TDD Estrito** (`RED -> GREEN -> REFACTOR`). O código só é considerado pronto após validação automatizada e aprovação formal do Duplo Review Gate (`@aniche` para testes reais e `@unclebob` para Clean Code/SOLID), seguido da homologação contratual por `@edith` e auditoria de FinOps e conformidade por `@nina`.
 
-### 3. Gates Determinísticos do Turing
+### 3. Ontologia das Ondas: Onda 0 vs. Ondas de Entrega (1..N)
+O ciclo de entrega no Bombe Code é classificado deterministicamente pela máquina de estados (`WaveType`):
+
+* **Onda 0 (`WAVE_ZERO` — Greenfield Lean Inception Macro):**
+  * **Identificadores:** `ONDA-0`, `ONDA-00`, `ONDA-000`, `WAVE-0`, `WAVE-00`, `WAVE-000` (ou prefixos `ONDA-000-*`).
+  * **Ciclo de Estados:** `DISCOVERY` ➔ `INCEPTION` ➔ `COMPLETED`.
+  * **Natureza:** Estritamente **UPSTREAM**. Conduz pesquisa de viabilidade (`@meira`), PRD e visão de produto (`@grace`), jornadas do usuário (`@alan`), design system e wireframes (`@norman`), arquitetura de sistemas (`@ieru`), modelagem de dados relacional (`@codd`) e NoSQL/vetorial (`@claudia`), modelagem de ameaças STRIDE (`@barreto`), Lean Inception Macro com Canvas MVP e o **Sequenciador de Ondas** (`@caroli`), e alinhamento de contexto de IA (`@nelson`).
+  * **Trava Arquitetural:** Transições para `EXECUTE` ou `VALIDATE` são **terminantemente PROIBIDAS** e geram `InvalidTransitionError`. A Onda Zero não gera código em `src/`; ela entrega a fundação soberana para as ondas de desenvolvimento.
+* **Ondas de Entrega 1..N e Brownfield (`DELIVERY_WAVE`):**
+  * **Identificadores:** `ONDA-001`, `ONDA-002`, `WAVE-001` em diante, ou evolução de sistemas legados.
+  * **Ciclo de Estados:** `PLAN` ➔ `REFINEMENT` ➔ `EXECUTE` ➔ `VALIDATE` ➔ `COMPLETED`.
+  * **Natureza:** Fatias verticais executáveis de entrega de valor real.
+  * **Refinamento PBB:** Em `REFINEMENT`, a fatia é decomposta pelo método PBB (*Product Backlog Building*) por `@caroli` em tarefas atômicas padronizadas (`FOUNDATION`, `DATABASE`, `CONTRACT`, `BACKEND_TDD`, `FRONTEND_UI`, `E2E_INTEGRATION`).
+  * **Downstream TDD:** A implementação é executada sob o ciclo atômico de testes falhantes e código de produção pelas stacks especialistas (`@valim`, `@barbara`, `@scott`, `@ryan`, `@james`, `@ada`).
+
+### 4. Gates Determinísticos do Turing
 Modelos de linguagem são probabilisticamente criativos, mas a engenharia de software exige determinismo. O agente central **`@turing`** atua como fiscal de qualidade através de código Python imperativo:
-* **PRDQualityGate:** Garante a presença de Visão Geral, Problema, Personas, Critérios RICE e MVP Operacional.
-* **JourneyGate:** Valida Entry Points, Fluxos de Navegação e Telas.
-* **ArchitectureGate:** Valida as Decisões de Arquitetura (ADRs) e Stacks homologadas.
-* **StoryDoRGate:** Valida se a história tem INVEST e cenários de aceite em sintaxe BDD (*Dado / Quando / Então*).
-* **TuringReviewGate:** Veta entregas se a suíte de testes falhar ou se houver objeções técnicas dos revisores.
+* **ViabilityQualityGate & PRDQualityGate:** Garantem viabilidade técnica, problema, personas, critérios RICE e MVP Operacional.
+* **JourneyGate:** Valida Entry Points, Fluxos de Navegação e Telas mapeadas.
+* **ArchitectureGate & DatabaseQualityGate:** Valida as Decisões de Arquitetura (ADRs), separação de camadas, schemas SQL e modelos NoSQL.
+* **StoryDoRGate:** Valida se cada história cumpre rigorosamente o INVEST, DoR e cenários BDD (*Dado / Quando / Então*).
+* **TuringReviewGate:** Veta entregas se a suíte de testes falhar ou se houver objeções técnicas dos revisores (`@aniche` e `@unclebob`).
+* **SealGate:** Emite o relatório de validação contratual e selo de prontidão da ONDA (`@edith` e `@nina`).
 
 ---
 
 ## 👥 O Elenco Oficial: 23 Agentes Especialistas
 
-O Bombe Code organiza sua equipe em especialistas de papéis bem delimitados, garantindo profundidade em cada disciplina:
+O Bombe Code reúne 23 agentes especialistas de elite, homenageando 12 pioneiros proeminentes do Brasil e 11 expoentes internacionais seminais da computação. Cada agente atua com foco cirúrgico em sua disciplina:
 
-| Estágio | Agente | Papel Especialista | Foco Principal |
-| :--- | :--- | :--- | :--- |
-| **Maestro** | **`@turing`** | Runtime Master & Gatekeeper | Orquestração da ONDA, máquina de estados e fiscalização de gates |
-| **DISCUSS** | **`@meira`** | Senior Research & Viability Analyst | Análise de viabilidade técnica, mercado e inovação tecnológica |
-| **DISCUSS** | **`@grace`** | Lead Product Manager | Visão de produto, priorização RICE e elaboração do PRD |
-| **PLAN** | **`@alan`** | User Journey Architect | Mapeamento de entry points, navegação e inventário de telas |
-| **PLAN** | **`@norman`** | UI/UX Designer & Design Systems | Heurísticas de Nielsen, wireframes e design tokens |
-| **PLAN** | **`@ieru`** | Principal Systems Architect | Arquitetura limpa, microsserviços, monolitos modulares e ADRs |
-| **PLAN** | **`@codd`** | Relational Database Architect | Modelagem relacional, normalização, migrações e índices SQL |
-| **PLAN** | **`@claudia`** | NoSQL & Vector Store Architect | Bancos de documentos, chave-valor e índices para IA vetorial |
-| **PLAN** | **`@barreto`** | Security Architect & Threat Modeling | Modelagem de ameaças (STRIDE), criptografia e proteção de dados |
-| **PLAN** | **`@caroli`** | Agile Master & Flow Architect | Quebra de histórias de usuário, critérios INVEST e DoR |
-| **PLAN** | **`@nelson`** | Prompt Engineer & AI Context Specialist | Engenharia de contexto e alinhamento de system prompts |
-| **EXECUTE** | **`@valim`** | Senior Elixir Backend Developer | Concorrência massiva, tolerância a falhas e arquitetura OTP |
-| **EXECUTE** | **`@barbara`** | Senior Python & Go Backend Developer | APIs de alto desempenho, FastAPI, Pydantic, Concorrência Go |
-| **EXECUTE** | **`@scott`** | Senior .NET Backend Developer | ASP.NET Core 8+, C# 12+, Minimal APIs e Entity Framework Core |
-| **EXECUTE** | **`@ryan`** | Senior Node.js & TS Backend Developer | Runtime Node/TS, TypeScript Strict, APIs REST e microsserviços |
-| **EXECUTE** | **`@james`** | Senior Java Backend Developer | Spring Boot 3+, Java 21, Virtual Threads e Clean Architecture |
-| **EXECUTE** | **`@ada`** | Senior Frontend Developer | React, Tailwind CSS, componentes acessíveis e interfaces ricas |
-| **EXECUTE** | **`@diego`** | AppSec Pentest & Vulnerability Auditor | Auditoria ofensiva, verificação SAST/DAST e OWASP Top 10 |
-| **EXECUTE** | **`@aniche`** | Test Architect & QA Automation | Estratégia de testes unitários, integração, E2E e cobertura |
-| **EXECUTE** | **`@unclebob`** | Tech Lead & Architectural Guardian | Clean Code, princípios SOLID, refatoração e integridade do código |
-| **EXECUTE** | **`@demi`** | SRE & Infrastructure Engineer | Redes, containers Docker, pipelines CI/CD e observabilidade |
-| **VALIDATE**| **`@edith`** | Contract & Deliverable Validator | Auditoria final do entregável contra o PRD e emissão do Selo |
-| **VALIDATE**| **`@nina`** | Gov, FinOps & AI Ethics Auditor | Auditoria de custos de tokens, conformidade LGPD e ética em IA |
+### Upstream (Concepção, Arquitetura, Inception & Refinamento)
+
+| Agente | Pioneiro Homenageado | País | Papel Especialista | Artefatos & Foco Principal |
+| :--- | :--- | :--- | :--- | :--- |
+| **`@meira`** | Silvio Meira | Brasil | Senior Research & Viability Analyst | `docs/briefings/viability.md` — Viabilidade técnica e análise de mercado |
+| **`@grace`** | Grace Hopper | EUA | Lead Product Manager & Strategy Lead | `docs/briefings/PRD.md` — Visão de produto, RICE score e MVP Operacional |
+| **`@alan`** | Alan Cooper | EUA | User Journey Architect | `docs/architecture/journey.md` — Entry points, jornadas e fluxos de tela |
+| **`@norman`** | Don Norman | EUA | UI/UX Designer & Design Systems | `docs/architecture/ui-ux.md` — Heurísticas de Nielsen, wireframes e design tokens |
+| **`@ieru`** | Roberto Ierusalimschy | Brasil | Principal Systems Architect | `docs/architecture/arch.md`, `docs/architecture/adr/` — Clean Arch e ADRs |
+| **`@codd`** | Edgar F. Codd | UK | Relational Database Architect | `docs/architecture/db.md`, `migrations/` — Modelagem relacional e normalização |
+| **`@claudia`** | Claudia B. Medeiros | Brasil | NoSQL & Vector Store Architect | `docs/architecture/db-nosql.md` — Bancos NoSQL, IA vetorial e grafos |
+| **`@barreto`** | Paulo Barreto | Brasil | Principal Security Architect | `docs/security/threat-model.md` — Threat Modeling STRIDE e criptografia |
+| **`@caroli`** | Paulo Caroli | Brasil | Agile Master & Flow Architect | `docs/backlog/` — Lean Inception Macro, Decomposição PBB e DoR INVEST |
+| **`@nelson`** | Nelson Mattos | Brasil | Prompt Engineer & AI Specialist | Engenharia de contexto, system prompts e alinhamento de IA |
+
+### Downstream (Execução TDD & Qualidade de Código)
+
+| Agente | Pioneiro Homenageado | País | Papel Especialista | Artefatos & Foco Principal |
+| :--- | :--- | :--- | :--- | :--- |
+| **`@valim`** | José Valim | Brasil | Senior Elixir Backend Developer | `src/`, `tests/` — Backend Elixir, OTP, alta concorrência e BEAM |
+| **`@barbara`** | Barbara Liskov | EUA | Senior Python & Go Developer | `src/`, `tests/` — APIs FastAPI, Pydantic v2, microserviços Go e concorrência |
+| **`@scott`** | Scott Guthrie | EUA | Senior .NET Backend Developer | `src/`, `tests/` — ASP.NET Core 8+, C# 12, Minimal APIs e EF Core |
+| **`@ryan`** | Ryan Dahl | EUA | Senior Node.js & TS Developer | `src/`, `tests/` — Node.js runtime, TypeScript Strict e APIs REST |
+| **`@james`** | James Gosling | Canadá | Senior Java Backend Developer | `src/`, `tests/` — Java 21, Spring Boot 3+, Virtual Threads e Clean Arch |
+| **`@ada`** | Ada Lovelace | UK | Senior Frontend Developer | `src/`, `tests/` — React 19, Tailwind CSS, Flutter e Acessibilidade |
+| **`@diego`** | Diego Aranha | Brasil | AppSec & Offensive Security | Auditoria ofensiva, pentest, SAST/DAST e mitigação OWASP Top 10 |
+| **`@aniche`** | Maurício Aniche | Brasil | Test Architect & QA Automation | `tests/` — TDD Estrito: plano de testes, testes falhantes RED e automação |
+| **`@unclebob`** | Robert C. Martin | EUA | Tech Lead & Architectural Guardian | Clean Code, princípios SOLID, refatoração e Code Review de aprovação |
+| **`@demi`** | Demi Getschko | Brasil | SRE & Infrastructure Engineer | Docker, infraestrutura local, redes, pipelines CI/CD e observabilidade |
+
+### Downstream (Validação, Homologação & Maestro)
+
+| Agente | Pioneiro Homenageado | País | Papel Especialista | Artefatos & Foco Principal |
+| :--- | :--- | :--- | :--- | :--- |
+| **`@edith`** | Edith Ranzini | Brasil | Contract & Deliverable Validator | `docs/reports/` — Auditoria do entregável contra o PRD e emissão do Selo |
+| **`@nina`** | Nina Silva | Brasil | Gov, FinOps & AI Ethics Auditor | Auditoria de consumo de tokens, governança de custos e conformidade ética |
+| **`@turing`** | Alan Turing | UK | Sovereign Runtime Maestro | Orquestração da ONDA, máquina de estados finita e guarda de gates |
 
 ---
 
 ## 🌊 O Ciclo de Vida da ONDA
 
-A unidade fundamental de entrega no Bombe Code é a **ONDA**. Uma ONDA é um pacote de valor completo que transita por cinco estágios sucessivos:
+A unidade fundamental de entrega no Bombe Code é a **ONDA**. Dependendo de estarmos iniciando um projeto novo (Greenfield) ou construindo fatias verticais de valor (Brownfield/Evolução), a máquina de estados executa fluxos determinísticos distintos:
+
+### 1. Onda 0: Greenfield Lean Inception Macro (`WaveType.WAVE_ZERO`)
+
+A **Onda 0** é estritamente **UPSTREAM**. Ela estabelece toda a fundação do produto e do sistema sem gerar código de produção em `src/`:
 
 ```mermaid
 stateDiagram-v2
-    [*] --> DISCUSS: bombe-code wave start
-    DISCUSS --> PLAN: PRDQualityGate Aprovado
-    PLAN --> EXECUTE: Journey, Arch & DoR Gates Aprovados
-    state EXECUTE {
-        [*] --> RED: Teste Falhante
-        RED --> GREEN: Código Mínimo
-        GREEN --> REFACTOR: Clean Code
-        REFACTOR --> REVIEW: @aniche + @unclebob
-        REVIEW --> [*]: TuringReviewGate Aprovado
-    }
-    EXECUTE --> VALIDATE: Todas as Stories DONE
-    VALIDATE --> COMPLETED: Selo Edith & Nina
-    COMPLETED --> [*]
+    [*] --> DISCOVERY: /wave start ONDA-000
+    DISCOVERY --> INCEPTION: Viability & PRD Gates Aprovados (@meira + @grace)
+    INCEPTION --> COMPLETED: Canvas MVP & Sequenciador Concluídos (@caroli + arquitetos)
+    COMPLETED --> [*]: Pronto para as Ondas de Entrega (1..N)
+
+    note right of INCEPTION
+      Mapeia jornadas (@alan), UI/UX (@norman),
+      arquitetura (@ieru), dados (@codd/@claudia),
+      segurança (@barreto) e Sequenciador (@caroli).
+      Avanço para EXECUTE é terminantemente PROIBIDO.
+    end note
 ```
 
-1. **`DISCUSS`:** O usuário ou time define um objetivo. `@meira` investiga a viabilidade e `@grace` redige o PRD estruturado com pontuação RICE. O `PRDQualityGate` inspeciona o documento.
-2. **`PLAN`:** Os arquitetos entram em ação. `@alan` mapeia fluxos e telas; `@ieru` define as fronteiras de software; `@codd` ou `@claudia` criam o modelo de persistência; `@caroli` fatia a entrega em histórias com critérios BDD.
-3. **`EXECUTE`:** O especialista da stack de tecnologia (`@valim`, `@barbara`, `@scott`, `@ryan` ou `@james`) e o frontend (`@ada`) executam cada história aplicando TDD estrito. Ao término, a dupla `@aniche` e `@unclebob` revisa o código.
-4. **`VALIDATE`:** `@edith` valida o cumprimento do contrato inicial contra o PRD e `@nina` fiscaliza o consumo de tokens e a segurança ética.
-5. **`COMPLETED`:** A ONDA é arquivada com relatório formal de validação emitido em `docs/reports/`.
+### 2. Ondas de Entrega 1..N e Brownfield (`WaveType.DELIVERY_WAVE`)
+
+As **Ondas de Entrega** pegam uma fatia vertical definida no Sequenciador e constroem software funcional production-ready sob rigoroso TDD:
+
+```mermaid
+stateDiagram-v2
+    [*] --> PLAN: /wave start ONDA-001
+    PLAN --> REFINEMENT: Journey, Arch & DB Gates Aprovados
+    REFINEMENT --> EXECUTE: Refinamento PBB & StoryDoRGate Aprovado (@caroli)
+    
+    state EXECUTE {
+        [*] --> RED: @aniche cria Teste Falhante
+        RED --> GREEN: Dev implementa Código Mínimo
+        GREEN --> REFACTOR: Refatoração Clean Code
+        REFACTOR --> REVIEW: Duplo Gate (@aniche + @unclebob)
+        REVIEW --> [*]: Story Aprovada no Kanban
+    }
+    
+    EXECUTE --> VALIDATE: Todas as Stories DONE no Kanban
+    VALIDATE --> COMPLETED: Selo Edith & Nina (@edith + @nina)
+    COMPLETED --> [*]: Entrega Arquivada em docs/reports/
+```
+
+### 3. O Ciclo Atômico de TDD em EXECUTE
+Dentro da etapa `EXECUTE`, cada história de usuário atravessa um ciclo determinístico inquebrável:
+1. **RED (`@aniche`):** O arquiteto de testes escreve testes unitários e de integração que falham deterministicamente.
+2. **GREEN (Dev da Stack):** O especialista da linguagem (`@valim`, `@barbara`, `@scott`, `@ryan` ou `@james`) ou frontend (`@ada`) implementa a quantidade mínima de código necessária para fazer os testes passarem.
+3. **REFACTOR (`@unclebob`):** O código é refatorado para atender aos princípios Clean Code, SOLID e eliminação de duplicidades.
+4. **REVIEW GATE (`@aniche` + `@unclebob`):** Dupla aprovação estrita obrigatória. `@aniche` roda a suíte de testes real (sem mocks artificiais) e `@unclebob` valida a arquitetura. Se qualquer um reprovar, a história é bloqueada no Kanban (`BLOCKED`) até correção.
+
+---
+
+## 🎛️ Modos de Engenharia & Autonomia
+
+O Bombe Code equilibra disciplina industrial com agilidade imediata:
+
+### Modos de Engenharia
+* **`tdd-code` (Padrão — Engenharia Formal):**
+  * Rigor determinístico máximo.
+  * Travas rígidas por etapa via `StageGuard`: código de produção em `src/` é bloqueado em `DISCUSS`, `DISCOVERY`, `PLAN`, `INCEPTION` e `REFINEMENT`.
+  * Ciclo atômico `RED` ➔ `GREEN` ➔ `REFACTOR` ➔ `REVIEW`.
+  * **Navegação Contextual com `Tab`:** A tecla `Tab` cicla as etapas válidas para o tipo de onda ativa:
+    * Na Onda 0: cicla entre `DISCOVERY` e `INCEPTION`.
+    * Nas Ondas de Entrega: cicla entre `PLAN`, `REFINEMENT`, `EXECUTE` e `VALIDATE`.
+* **`vibe-code` (Chave Mestra `Shift + Tab` — Prototipagem Livre):**
+  * Alternado instantaneamente com **`Shift + Tab`** (ou comando `/mode vibe`).
+  * Liberdade total: sem etapas, sem travas de arquivo e sem cerimônias. A LLM executa diretamente qualquer script, código ou refatoração solicitada.
+  * Indicador em **VERMELHO VIVO** na status bar (`Modo: [VIBE]`).
+  * No modo `vibe-code`, a tecla **`Tab` NÃO cicla etapas** (fica reservada para autocompletar `/comandos` ou `@arquivos`).
+  * Pressionar `Shift + Tab` novamente restaura com precisão o modo `tdd-code` e a última etapa ativa.
+
+### Níveis de Autonomia
+* **`AUTO`:** A ONDA progride autonomamente através das stories enquanto os gates forem aprovados.
+* **`SEMI_AUTO` (Recomendado):** O runtime executa uma story completa, realiza os testes e reviews e pausa para confirmação do desenvolvedor humano antes de prosseguir.
+* **`MANUAL`:** Cada comando e transição requer acionamento explícito.
 
 ---
 
 ## 🧱 Starters & Snippets (LEGO System)
 
-O Bombe Code inclui um motor de scaffolding e um catálogo de componentes reutilizáveis para acelerar o início de novos serviços com arquiteturas corporativas consolidadas.
+O Bombe Code inclui um motor de scaffolding e um catálogo de blocos reutilizáveis para acelerar o desenvolvimento com arquiteturas corporativas consolidadas.
 
 ### Starters de Arquitetura Limpa
 Inicie projetos prontos para produção com um único comando:
@@ -146,48 +235,31 @@ Inicie projetos prontos para produção com um único comando:
 ```
 
 ### Snippets LEGO
-Módulos reutilizáveis e testados que podem ser injetados ou consultados pelas LLMs durante a fase de codificação:
+Módulos reutilizáveis e testados que podem ser consultados e injetados pelas LLMs durante a codificação:
 * `python/jwt_auth`: Autenticação JWT com expiração e claims.
 * `python/healthcheck`: Health check determinístico com liveness e readiness probes.
 * `go/jwt_auth`: Middleware de autenticação JWT idiomático em Go.
 * `node/jwt_auth`: Utilitário de autenticação JWT assíncrono em TypeScript.
 
-As LLMs contam com as ferramentas nativas `snippet_search` e `snippet_get` para incorporar esses blocos diretamente em suas soluções.
-
----
-
-## 🎛️ Modos de Operação & Autonomia
-
-O Bombe Code se adapta ao nível de controle desejado pelo engenheiro de software:
-
-### Modos de Engenharia
-* **`tdd-code` (Padrão):** Rigor máximo. É proibido gerar código de produção sem antes gerar um teste automatizado falhante (`RED`).
-* **`vibe-code`:** Modo exploratório para prototipagem rápida e ideação inicial.
-
-### Níveis de Autonomia
-* **`AUTO`:** A ONDA progride autonomamente através das stories enquanto os gates forem aprovados.
-* **`SEMI-AUTO` (Recomendado):** O runtime executa uma story completa, realiza os testes e reviews e pausa para confirmação do desenvolvedor humano antes de prosseguir.
-* **`MANUAL`:** Cada comando e transição requer acionamento explícito.
-
 ---
 
 ## 🖥️ Experiência de Terminal (TUI) Moderna & Soberana
 
-A TUI do Bombe Code foi desenhada para paridade visual e de desempenho com as ferramentas mais sofisticadas do mercado (como OpenCode original e Claude Code):
+A TUI do Bombe Code foi desenhada para paridade visual e de desempenho com ferramentas de ponta (como OpenCode original e Claude Code):
 
-* **⚡ Streaming Real Token-a-Token:** Pipeline reativo assíncrono via SSE (`text-delta`) que exibe as respostas em tempo real à medida que são geradas pela nuvem ou modelos locais, sem acumular em blocos estáticos.
-* **🧠 Suporte Nativo a Reasoning Stream (`reasoning-delta`):** Para modelos com raciocínio integrado (ex: **GLM-5.3-Flash** da Z.ai, DeepSeek R1, Claude Thinking e OpenAI o1/o3-mini), os pensamentos do modelo fluem na tela ao vivo em painel dedicado antes da resposta final ser produzida.
-* **🛡️ Arquitetura Anti-Freezing (30-60 FPS):** Atualização de alta frequência controlada (*throttled streaming* a ~35ms) que elimina o re-parsing desnecessário de Markdown durante o envio de tokens, garantindo CPU baixa e permitindo que atalhos como `Ctrl+Q` e `Ctrl+C` respondam instantaneamente sem nunca travar a aplicação.
+* **⚡ Streaming Real Token-a-Token:** Pipeline reativo assíncrono via SSE (`text-delta`) que renderiza as respostas progressivamente conforme geradas pela nuvem ou modelos locais, sem acumular em blocos estáticos.
+* **🧠 Suporte Nativo a Reasoning Stream (`reasoning-delta`):** Para modelos com raciocínio analítico integrado (ex: **GLM-5.3-Flash** da Z.ai, DeepSeek R1, Claude 3.7 Sonnet e OpenAI o1/o3-mini), os pensamentos do modelo fluem na tela ao vivo em painel dedicado antes da resposta final ser produzida.
+* **🛡️ Arquitetura Anti-Freezing (30-60 FPS):** Renderização de alta frequência controlada (*throttled streaming* a ~35ms) que elimina re-parsing desnecessário de Markdown durante a recepção de tokens. A TUI nunca trava, mantendo CPU baixa e permitindo que atalhos como `Ctrl+Q` e `Ctrl+C` respondam instantaneamente.
 * **📝 Caixa de Entrada Multilinha com Auto-Grow:** Suporte completo para colar textos extensos (inclusive prompts de ChatGPT, Claude ou especificações complexas) com preservação de quebras de linha. Cresce dinamicamente de 3 a 8 linhas. Pressione `Enter` para enviar ou `Shift+Enter` para nova linha.
-* **⏳ Indicador Dinâmico de Pensamento (`ThinkingWidget`):** Ampulheta animada (`⏳` ➔ `⌛`) e pontinhos de status enquanto a IA prepara a primeira palavra.
-* **🤝 Orientação Didática para Usuários:** Comandos e orquestradores determinísticos fornecem instruções passo a passo se acionados sem argumentos, guiando desenvolvedores e não-devs sobre como iniciar uma ONDA ou refinar um briefing sem suposições.
+* **⏳ Indicador Dinâmico de Pensamento (`ThinkingWidget`):** Ampulheta animada (`⏳` ➔ `⌛`) e pontinhos de status que fornecem feedback visual contínuo enquanto a IA prepara a primeira palavra.
+* **🤝 Orientação Didática para Usuários:** Comandos acionados sem argumentos fornecem instruções passo a passo, orientando como iniciar uma ONDA ou configurar provedores sem suposições.
 
 ---
 
 ## 🔌 Provedores de Inteligência Artificial
 
 O Bombe Code conta com resolução hierárquica e tolerância a falhas:
-* **Z.ai / Zhipu AI (GLM-5.3-Flash):** Provedor prioritário oficial pré-configurado, com suporte a streaming de alta velocidade e cadeias de raciocínio.
+* **Z.ai / Zhipu AI (GLM-5.3-Flash):** Provedor prioritário oficial pré-configurado, com suporte nativo a streaming de altíssima velocidade e cadeias de raciocínio.
 * **Nuvem Padrão:** OpenAI (`gpt-4o`), Anthropic (`claude-3-5-sonnet`), OpenRouter e Groq.
 * **Local-First:** Suporte nativo a `llama.cpp` e `Ollama` com detecção de endereços locais.
 * **Zero Falhas Silenciosas:** Caso nenhum provedor esteja configurado, o Bombe Code não recorre a respostas falsas; ele orienta claramente o usuário através do comando `/connect` na TUI ou CLI.
@@ -220,7 +292,8 @@ bombe
 
 # Ou execute comandos diretamente pela CLI:
 bombe-code init                          # Inicializa o projeto local
-bombe-code wave start ONDA-001          # Inicia uma nova ONDA
+bombe-code wave start ONDA-000          # Inicia a Onda 0 (Lean Inception Macro)
+bombe-code wave start ONDA-001          # Inicia a primeira Onda de Entrega
 bombe-code wave status                  # Exibe o status da ONDA e o Kanban
 ```
 
