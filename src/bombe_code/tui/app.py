@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from typing import Any, ClassVar
 
 import httpx
@@ -110,6 +111,7 @@ class BombeTuiApp(App):
         self._thinking_widget: Static | None = None
         self._sse_task: asyncio.Task | None = None
         self._is_active_turn: bool = False
+        os.environ["BOMBE_TUI_RUNNING"] = "1"
 
     def get_current_wave_stages(self) -> list[str]:
         """Retorna as etapas válidas para o Tab conforme a ontologia da onda ativa (Onda 0 vs Ondas de Entrega)."""
@@ -408,6 +410,7 @@ class BombeTuiApp(App):
             pass
 
     async def on_unmount(self) -> None:
+        os.environ.pop("BOMBE_TUI_RUNNING", None)
         if self._sse_task and not self._sse_task.done():
             self._sse_task.cancel()
 
@@ -462,22 +465,7 @@ class BombeTuiApp(App):
 
         # Roteamento completo dos 28 comandos de barra (/) do OpenCode
         if text.startswith("/"):
-            from .commands import handle_slash_command
-
-            try:
-                await handle_slash_command(self, text)
-            except Exception as exc:
-                from ..errors import record_exception
-
-                err_file = record_exception(exc, context=f"slash_command: {text}")
-                logger.exception("Erro ao processar slash command '%s'", text)
-                await chat.mount(
-                    Static(
-                        f"[{TOKENS['error']} bold]❌ Erro ao executar '{text}':[/{TOKENS['error']} bold] "
-                        f"[{TOKENS['error']}]{exc}[/{TOKENS['error']}]\n"
-                        f"[dim]Detalhes técnicos gravados em: {err_file}[/dim]"
-                    )
-                )
+            self._run_slash_command_worker(text)
             return
 
         await chat.mount(
@@ -505,6 +493,31 @@ class BombeTuiApp(App):
                 err_msg = str(exc).strip() or type(exc).__name__
             await chat.mount(
                 Static(f"[{TOKENS['error']}]Erro ao enviar prompt: {err_msg}[/{TOKENS['error']}]")
+            )
+        finally:
+            self._is_active_turn = False
+            self.update_status()
+
+    @work(exclusive=False)
+    async def _run_slash_command_worker(self, text: str) -> None:
+        from .commands import handle_slash_command
+
+        chat = self.query_one("#chat-view", ChatView)
+        self._is_active_turn = True
+        self.update_status()
+        try:
+            await handle_slash_command(self, text)
+        except Exception as exc:
+            from ..errors import record_exception
+
+            err_file = record_exception(exc, context=f"slash_command: {text}")
+            logger.exception("Erro ao processar slash command '%s'", text)
+            await chat.mount(
+                Static(
+                    f"[{TOKENS['error']} bold]❌ Erro ao executar '{text}':[/{TOKENS['error']} bold] "
+                    f"[{TOKENS['error']}]{exc}[/{TOKENS['error']}]\n"
+                    f"[dim]Detalhes técnicos gravados em: {err_file}[/dim]"
+                )
             )
         finally:
             self._is_active_turn = False
@@ -674,6 +687,12 @@ class BombeTuiApp(App):
     def action_help(self) -> None:
         """Abre o diálogo de ajuda modal."""
         self.push_screen(HelpDialog())
+
+    def action_quit(self) -> None:
+        """Encerra a aplicação garantindo o cancelamento de tarefas em background."""
+        if self._sse_task and not self._sse_task.done():
+            self._sse_task.cancel()
+        self.exit()
 
     def _fatal_error(self) -> None:
         """Encerra a aplicação de forma elegante sem despejar código/locals na tela do usuário."""

@@ -243,7 +243,6 @@ class WaveOrchestrator:
         if (
             not force
             and saved
-            and has_active_tasks
             and not is_greenfield_zero
             and saved.get("state") not in (WaveState.COMPLETED.value, "COMPLETED")
             and saved.get("wave_id") != wave_id
@@ -519,10 +518,11 @@ class WaveOrchestrator:
 
         results: list[dict[str, Any]] = []
         profile = UpstreamProfiler.profile(self.project_dir, self.delivery_target)
-        print(
-            f"🎯 [DISCUSS] Nível: {self.delivery_target.value.upper()} | "
-            f"Origem: {profile.origin.value} | Inception: {profile.inception_level.value}",
-            flush=True,
+        logger.info(
+            "🎯 [DISCUSS] Nível: %s | Origem: %s | Inception: %s",
+            self.delivery_target.value.upper(),
+            profile.origin.value,
+            profile.inception_level.value,
         )
 
         ctx = dict(context or {})

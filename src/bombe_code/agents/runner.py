@@ -111,7 +111,9 @@ class AgentRunner:
 
                 t0 = time.perf_counter()
                 provider_tag = f" via {active_slot.name} ({active_slot.model})" if active_slot else ""
-                print(f"  ⚡ [{self.agent.handle}] Invocando modelo{provider_tag}...", flush=True)
+                if not os.environ.get("BOMBE_TUI_RUNNING"):
+                    print(f"  ⚡ [{self.agent.handle}] Invocando modelo{provider_tag}...", flush=True)
+                logger.info("  ⚡ [%s] Invocando modelo%s...", self.agent.handle, provider_tag)
                 from pydantic_ai.usage import UsageLimits
 
                 limits = UsageLimits(request_limit=15)
@@ -138,7 +140,9 @@ class AgentRunner:
                     raw_result = pydantic_agent.run(exec_prompt)
 
                 duration_seconds = round(time.perf_counter() - t0, 3)
-                print(f"  ✓ [{self.agent.handle}] Resposta recebida em {duration_seconds:.1f}s.", flush=True)
+                if not os.environ.get("BOMBE_TUI_RUNNING"):
+                    print(f"  ✓ [{self.agent.handle}] Resposta recebida em {duration_seconds:.1f}s.", flush=True)
+                logger.info("  ✓ [%s] Resposta recebida em %.1fs.", self.agent.handle, duration_seconds)
 
                 # Extrai telemetria de tokens e custos do Pydantic AI
                 input_tokens = 0
