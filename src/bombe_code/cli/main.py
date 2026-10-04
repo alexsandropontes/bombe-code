@@ -542,6 +542,59 @@ def version() -> None:
     typer.echo(f"bombe-code {__version__}")
 
 
+@app.command("upgrade")
+def upgrade_cmd(
+    branch: Annotated[
+        str | None,
+        typer.Option("--branch", "-b", help="Branch do repositório Git para upgrade (ex: main, dev-working-ia)"),
+    ] = None,
+    tag: Annotated[
+        str | None,
+        typer.Option("--tag", "-t", help="Tag/Release específica do Git (ex: v0.1.2)"),
+    ] = None,
+    git_url: Annotated[
+        str | None,
+        typer.Option("--git-url", "-g", help="URL do repositório Git (padrão: oficial no GitHub)"),
+    ] = None,
+    local: Annotated[
+        bool,
+        typer.Option("--local", "-l", help="Atualiza a partir do diretório local atual"),
+    ] = False,
+    force: Annotated[
+        bool,
+        typer.Option("--force", "-f", help="Força a reinstalação mesmo se a versão for a mesma"),
+    ] = True,
+    check_only: Annotated[
+        bool,
+        typer.Option("--check", "-c", help="Apenas verifica se há novas versões disponíveis no Git sem instalar"),
+    ] = False,
+) -> None:
+    """Atualiza a instalação do Bombe Code via Git usando uv tool install."""
+    from .updater import run_upgrade
+
+    typer.echo("🔄 Verificando atualizações do Bombe Code...")
+    res = run_upgrade(
+        git_url=git_url,
+        branch=branch,
+        tag=tag,
+        local=local,
+        force=force,
+        check_only=check_only,
+    )
+
+    if not res.get("success"):
+        typer.echo(f"❌ Erro durante o upgrade: {res.get('error')}", err=True)
+        raise typer.Exit(code=1)
+
+    if res.get("check_only"):
+        typer.echo(f"ℹ️ {res.get('message')}")
+        return
+
+    typer.echo(f"✅ {res.get('message')}")
+    if res.get("remote_sha"):
+        typer.echo(f"   Commit SHA: {res.get('remote_sha')[:10]}")
+
+
 @app.command("models")
 def models() -> None:
     """Lista catálogo de modelos suportados."""
