@@ -133,6 +133,10 @@ class TuringStateMachine:
         return self._current_state
 
     @property
+    def stage(self) -> WaveState:
+        return self._current_state
+
+    @property
     def current_phase(self) -> WavePhase:
         """Retorna a Fase ativa (UPSTREAM ou DOWNSTREAM)."""
         if self._current_state in (

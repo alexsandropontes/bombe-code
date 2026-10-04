@@ -30,6 +30,9 @@ class PartWidget(Static):
     def on_mount(self) -> None:
         self.update(self._get_renderable())
 
+    def render(self) -> Any:
+        return self._get_renderable()
+
     def update_stream(self, text: str) -> None:
         """Atualização de alta frequência durante streaming contínuo.
         

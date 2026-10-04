@@ -17,8 +17,8 @@ from pathlib import Path
 INVALID_PATH_CHARS_REGEX = re.compile(r'[<>:"|?*\x00-\x1f\r\n]')
 
 
-def validate_safe_relative_path(path: str) -> tuple[bool, str]:
-    """Valida se o caminho é seguro, relativo e livre de artefatos de LLM (tags XML, caracteres proibidos).
+def validate_safe_relative_path(path: str, project_dir: str | None = None) -> tuple[bool, str]:
+    """Valida se o caminho é seguro e livre de artefatos de LLM (tags XML, caracteres proibidos).
 
     Retorna (True, "") se válido, ou (False, mensagem_de_erro) se inválido.
     """
@@ -35,7 +35,7 @@ def validate_safe_relative_path(path: str) -> tuple[bool, str]:
     if cleaned.startswith(("/", "\\")):
         return False, f"Caminho deve ser relativo ao projeto: '{path}'"
 
-    # Previne directory traversal explícito
+    # Previne directory traversal explícito com '..'
     parts = Path(cleaned).parts
     if ".." in parts:
         return False, f"Caminho não pode conter '..': '{path}'"

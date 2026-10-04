@@ -56,22 +56,50 @@ def _check_external(path: str, ctx: ToolContext) -> str | None:
     return None
 
 
+def _normalize_and_validate_path(raw_path: str, ctx: ToolContext) -> tuple[Path | None, str | None]:
+    if not raw_path or not isinstance(raw_path, str) or not raw_path.strip():
+        return None, "Erro: Caminho do arquivo não pode ser vazio."
+    cleaned = raw_path.strip()
+    target = Path(cleaned)
+    if target.is_absolute() and ctx.project_dir:
+        try:
+            rel = target.resolve().relative_to(Path(ctx.project_dir).resolve())
+            is_safe, err = validate_safe_relative_path(str(rel))
+            if not is_safe:
+                return None, f"Erro: {err}"
+            return target, None
+        except ValueError:
+            pass
+
+    if not target.is_absolute():
+        is_safe, err = validate_safe_relative_path(cleaned)
+        if not is_safe:
+            return None, f"Erro: {err}"
+        resolved = Path(ctx.project_dir) / target if ctx.project_dir else target
+        return resolved, None
+
+    return target, None
+
+
 def _read(args: dict, ctx: ToolContext) -> str:
-    is_safe, err_msg = validate_safe_relative_path(args.get("path", ""))
-    if not is_safe:
-        return f"Erro: {err_msg}"
-    target = Path(args["path"])
+    target, err = _normalize_and_validate_path(args.get("path", ""), ctx)
+    if err:
+        return err
     denied = _check_external(str(target), ctx)
     if denied:
         return denied
-    if not target.is_file():
+    if not target or not target.is_file():
         return f"Erro: arquivo nao encontrado: {target}"
     lines = target.read_text(encoding="utf-8", errors="replace").splitlines()
     return "\n".join(f"{index:6}\t{line}" for index, line in enumerate(lines, 1))
 
 
 def _write(args: dict, ctx: ToolContext) -> str:
-    target = Path(args["path"])
+    target, err = _normalize_and_validate_path(args.get("path", ""), ctx)
+    if err:
+        return err
+    if not target:
+        return "Erro: caminho invalido"
     denied = _check_external(str(target), ctx)
     if denied:
         return denied

@@ -14,7 +14,7 @@ from bombe_code.agents.runner import AgentExecutionResult, AgentRunner
 from bombe_code.storage.project_db import ProjectDatabase
 from bombe_code.turing.kanban import KanbanCardStatus
 from bombe_code.turing.orchestrator import WaveOrchestrator
-from bombe_code.turing.state_machine import TuringStage
+from bombe_code.turing.state_machine import TuringStage, WaveState
 
 
 @pytest.fixture
@@ -108,6 +108,7 @@ def test_orchestrator_project_fs_tools(tmp_path: Path):
     """Garante que o orquestrador fornece ferramentas de filesystem vinculadas ao projeto."""
     db = ProjectDatabase(str(tmp_path / "state.db"))
     orch = WaveOrchestrator(project_dir=tmp_path, db=db)
+    orch.state_machine._current_state = WaveState.EXECUTE
     tools = orch._get_project_fs_tools()
     assert len(tools) == 3
 

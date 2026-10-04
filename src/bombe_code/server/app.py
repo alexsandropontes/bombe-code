@@ -12,6 +12,7 @@ from .bus import sse_format
 from .deps import ServerDeps
 from .routes.meta import build_meta_router
 from .routes.session import build_session_router
+from .routes.wave import build_wave_router
 
 
 def _ensure_password() -> str:
@@ -79,5 +80,6 @@ def create_app(adapter, permissions=None, project_dir: str = ".") -> FastAPI:
         return StreamingResponse(generate(), media_type="text/event-stream")
 
     app.include_router(build_session_router(deps), dependencies=auth_dep)
+    app.include_router(build_wave_router(deps), dependencies=auth_dep)
     app.include_router(build_meta_router(deps), dependencies=auth_dep)
     return app

@@ -104,29 +104,108 @@ def build_session_router(deps: ServerDeps) -> APIRouter:
         deps.running.add(session_id)
         deps.bus.publish({"type": "prompt.started", "session_id": session_id})
         try:
-            model_to_use = body.model or session.model
-            if model_to_use and model_to_use != "padrão":
-                try:
-                    from ...providers.resolver import resolve_provider_adapter
+            from pathlib import Path
+            import anyio
+            from ...application.intent.service import IntentApplicationService
+            from ...application.wave.service import WaveApplicationService
+            from ...domain.session.models import Message, Part
+            from ...storage.project_db import ProjectDatabase
 
-                    adapter = resolve_provider_adapter(model_to_use)
-                except (RuntimeError, ValueError, OSError, KeyError) as exc:
-                    logger.warning(
-                        "Falha ao resolver adaptador para %s: %s; usando padrão", model_to_use, exc
+            project_dir = session.directory or deps.project_dir
+            db = ProjectDatabase(project_dir)
+            wave_state = db.load_wave_state() or {}
+            eng_mode = wave_state.get("engineering_mode", "tdd-code")
+
+            handled_by_wave = False
+            text = ""
+
+            # Em modo TDD, passa pelo despachante determinístico do Turing
+            if eng_mode == "tdd-code" and not body.text.startswith(("/model", "/theme", "/help", "/clear", "/exit")):
+                prd_file = Path(project_dir) / "docs" / "briefings" / "PRD.md"
+                is_greenfield = not prd_file.exists()
+                intent_svc = IntentApplicationService()
+                action = anyio.from_thread.run(
+                    intent_svc.attend,
+                    body.text,
+                    session.stage or "DISCUSS",
+                    is_greenfield,
+                )
+
+                if action.command and action.command.startswith("/wave"):
+                    handled_by_wave = True
+                    deps.bus.publish({
+                        "type": "turing.intent",
+                        "session_id": session_id,
+                        "intention": action.intention,
+                        "command": action.command,
+                    })
+
+                    wave_svc = WaveApplicationService(
+                        project_dir=project_dir,
+                        on_event=lambda ev: deps.bus.publish({**ev, "session_id": session_id}),
                     )
-                    adapter = deps.adapter
-            else:
-                adapter = deps.adapter
 
-            text = run_prompt(
-                session,
-                body.text,
-                adapter=adapter,
-                registry=deps.registry,
-                permissions=ask,
-                on_event=lambda event: deps.bus.publish({**event, "session_id": session_id}),
-                abort=interrupt.is_set,
-            )
+                    # Desmembra comando da ONDA
+                    cmd_parts = action.command.split(maxsplit=2)
+                    subcmd = cmd_parts[1].lower() if len(cmd_parts) > 1 else "status"
+                    subarg = cmd_parts[2] if len(cmd_parts) > 2 else ""
+
+                    if subcmd == "start":
+                        res = wave_svc.start_wave(wave_id=subarg or None)
+                        text = f"ONDA iniciada com sucesso: {res.get('wave_id')}"
+                    elif subcmd == "discuss":
+                        topic = subarg or body.text
+                        res = wave_svc.execute_with_auto_cascade("DISCUSS", input_text=topic)
+                        text = "Etapa DISCUSS concluída com @meira e @grace." if res.get("success") else f"Aviso em DISCUSS: {res.get('error')}"
+                    elif subcmd == "plan":
+                        res = wave_svc.execute_with_auto_cascade("PLAN", input_text=subarg)
+                        text = "Etapa PLAN concluída. Backlog e arquitetura definidos." if res.get("success") else f"Aviso em PLAN: {res.get('error')}"
+                    elif subcmd in ("execute", "cycle"):
+                        res = wave_svc.execute_with_auto_cascade("EXECUTE")
+                        text = "Ciclo EXECUTE TDD concluído." if res.get("success") else f"Aviso em EXECUTE: {res.get('error')}"
+                    elif subcmd in ("validate", "review"):
+                        res = wave_svc.execute_with_auto_cascade("VALIDATE")
+                        text = "Etapa VALIDATE concluída com @hoare e @unclebob." if res.get("success") else f"Aviso em VALIDATE: {res.get('error')}"
+                    elif subcmd == "end":
+                        res = wave_svc.end_wave()
+                        text = f"ONDA finalizada com sucesso: {res.get('wave_id')}"
+                    else:
+                        st = wave_svc.get_status()
+                        text = f"Status da ONDA {st.get('wave_id')}: Etapa {st.get('stage')}"
+
+                    # Persiste mensagem do usuário e resposta no histórico
+                    from ...session.models import Message as SessionMessage, TextPart
+                    user_msg = SessionMessage(session_id=session_id, role="user")
+                    crud.save_message(user_msg)
+                    crud.save_part(session_id, TextPart(message_id=user_msg.id, text=body.text))
+                    ast_msg = SessionMessage(session_id=session_id, role="assistant")
+                    crud.save_message(ast_msg)
+                    crud.save_part(session_id, TextPart(message_id=ast_msg.id, text=text))
+
+            if not handled_by_wave:
+                model_to_use = body.model or session.model
+                if model_to_use and model_to_use != "padrão":
+                    try:
+                        from ...providers.resolver import resolve_provider_adapter
+
+                        adapter = resolve_provider_adapter(model_to_use)
+                    except (RuntimeError, ValueError, OSError, KeyError) as exc:
+                        logger.warning(
+                            "Falha ao resolver adaptador para %s: %s; usando padrão", model_to_use, exc
+                        )
+                        adapter = deps.adapter
+                else:
+                    adapter = deps.adapter
+
+                text = run_prompt(
+                    session,
+                    body.text,
+                    adapter=adapter,
+                    registry=deps.registry,
+                    permissions=ask,
+                    on_event=lambda event: deps.bus.publish({**event, "session_id": session_id}),
+                    abort=interrupt.is_set,
+                )
         finally:
             deps.running.discard(session_id)
         deps.bus.publish({"type": "prompt.finished", "session_id": session_id, "text": text})
