@@ -452,21 +452,19 @@ class BombeTuiApp(App):
             if not history:
                 lines = [
                     f"[{TOKENS['primary']} bold]╔════════════════════════════════════════════════════════════════╗[/{TOKENS['primary']} bold]",
-                    f"[{TOKENS['primary']} bold]║               ⚡ BEM-VINDO AO BOMBE CODE ⚡                    ║[/{TOKENS['primary']} bold]",
+                    f"[{TOKENS['primary']} bold]║                    ⚡ BOMBE CODE RUNTIME ⚡                    ║[/{TOKENS['primary']} bold]",
                     f"[{TOKENS['primary']} bold]╚════════════════════════════════════════════════════════════════╝[/{TOKENS['primary']} bold]",
                     "",
-                    f"[bold]Modo Atual:[/] {self.mode} | [bold]Etapa:[/] {self.wave_station} | [bold]Autonomia:[/] AUTO",
-                    f"[bold]Diretório:[/] {self.project_dir}",
+                    f"[bold]Modo:[/] {self.mode} | [bold]Etapa:[/] {self.wave_station} | [bold]Autonomia:[/] AUTO | [bold]Workspace:[/] {self.project_dir}",
                     "",
-                    f"[{TOKENS['secondary']} bold]🎯 Como começar a construir seu produto:[/{TOKENS['secondary']} bold]",
-                    "1. [bold]Informe o que deseja criar[/bold] na caixa de mensagem abaixo.",
-                    "   [dim]Exemplo: 'Quero criar um app de onboarding com quiz financeiro e validação de leads'[/dim]",
-                    "2. Ou use os comandos da ONDA se preferir controlar passo a passo:",
-                    "   • [cyan]/wave start[/cyan]          [dim]- Inicia formalmente a ONDA de engenharia[/dim]",
-                    "   • [cyan]/wave discuss <ideia>[/cyan] [dim]- Avalia viabilidade (@meira) e gera PRD (@grace)[/dim]",
-                    "   • [cyan]/wave status[/cyan]         [dim]- Exibe o status da ONDA, gates e tarefas[/dim]",
+                    f"[{TOKENS['secondary']} bold]Comandos da ONDA de Engenharia:[/{TOKENS['secondary']} bold]",
+                    "  • [cyan]/wave discuss <demanda>[/cyan] [dim]- Concepção, viabilidade (@meira) e PRD (@grace)[/dim]",
+                    "  • [cyan]/wave plan[/cyan]             [dim]- Arquitetura (@ieru, @codd) e decomposição PBB (@caroli)[/dim]",
+                    "  • [cyan]/wave execute[/cyan]          [dim]- Implementação TDD fullstack (@barbara, @ada, @fowler)[/dim]",
+                    "  • [cyan]/wave validate[/cyan]         [dim]- Homologação e testes E2E (@edith, @nina)[/dim]",
+                    "  • [cyan]/wave status[/cyan]           [dim]- Status da ONDA ativa, gates de qualidade e Kanban[/dim]",
                     "",
-                    "[dim]💡 Você não precisa ser desenvolvedor: envie sua ideia e os agentes cuidam do ciclo completo![/dim]",
+                    "[dim]Shift+Tab: alterna modo (TDD/VIBE) | Tab: alterna etapa | /help: lista de comandos[/dim]",
                 ]
                 await chat.mount(Static("\n".join(lines)))
             chat.scroll_to_latest()
