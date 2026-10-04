@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from .classifier import TuringIntentClassifier, TuringIntentResult
+from .waiter import TuringAction, TuringWaiter
 from .gates import (
     ConsumerHandoffGate,
     GateEvaluation,
@@ -31,8 +32,10 @@ __all__ = [
     "SealGate",
     "SealType",
     "TemplateGate",
+    "TuringAction",
     "TuringIntentClassifier",
     "TuringIntentResult",
     "TuringStateMachine",
+    "TuringWaiter",
     "WaveState",
 ]

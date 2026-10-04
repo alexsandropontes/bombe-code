@@ -504,6 +504,45 @@ class BombeTuiApp(App):
         await chat.mount(
             Static(f"\n[{TOKENS['primary']} bold]Você:[/{TOKENS['primary']} bold] {text}")
         )
+
+        # No modo TDD, toda entrada de texto livre passa obrigatoriamente pelo Motor de Intenções do Turing
+        if self.mode == "TDD":
+            from pathlib import Path
+            from ..turing.waiter import TuringWaiter
+            from .commands import handle_slash_command
+
+            waiter = TuringWaiter()
+            prd_file = Path(self.project_dir) / "docs" / "briefings" / "PRD.md"
+            is_greenfield = "DISCOVERY" in self.get_current_wave_stages() or not prd_file.exists()
+            action = await waiter.attend(
+                text, stage=self.wave_station, is_greenfield=is_greenfield
+            )
+
+            if action.command and action.command.startswith("/"):
+                await chat.mount(
+                    Static(
+                        f"[{TOKENS['secondary']} bold]🎯 [TURING MOTOR DE INTENÇÕES - {action.intention.upper()}][/]\n"
+                        f"[dim]Roteando deterministicamente para o comando da ONDA: {action.command}[/dim]"
+                    )
+                )
+                try:
+                    handled = await handle_slash_command(self, action.command)
+                    if handled:
+                        return
+                except Exception as exc:
+                    from ..errors import record_exception
+
+                    err_file = record_exception(exc, context=f"turing_routed: {action.command}")
+                    logger.exception("Erro ao executar comando roteado pelo Turing '%s'", action.command)
+                    await chat.mount(
+                        Static(
+                            f"[{TOKENS['error']} bold]❌ Erro ao executar comando roteado '{action.command}':[/{TOKENS['error']} bold] "
+                            f"[{TOKENS['error']}]{exc}[/{TOKENS['error']}]\n"
+                            f"[dim]Detalhes gravados em: {err_file}[/dim]"
+                        )
+                    )
+                    return
+
         self._is_active_turn = True
         self.update_status()
 

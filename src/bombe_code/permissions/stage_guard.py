@@ -139,6 +139,29 @@ def validate_stage_permission(
                     "Pressione a tecla TAB na TUI para avançar para as próximas etapas quando o escopo estiver alinhado."
                 ),
             )
+
+        # Blindagem canônica: proíbe LLMs de inventar nomes arbitrários para PRD e Viabilidade
+        rel_lower = rel.lower()
+        if "briefings" in rel_lower or "prd" in rel_lower:
+            # Se é um arquivo markdown de PRD ou Viabilidade com nome arbitrário (ex: PRD-foo.md)
+            filename = Path(rel).name.lower()
+            if filename.startswith("prd") and filename not in ("prd.md", "prd.json"):
+                return (
+                    False,
+                    (
+                        f"⛔ [ARTEFATO NÃO-CANÔNICO: {rel}] É estritamente proibido inventar nomes arbitrários de PRD. "
+                        "Pelas regras do framework Bombe Code, o PRD estruturado DEVE ser persistido obrigatoriamente "
+                        "em 'docs/briefings/PRD.md' e produzido sob a autoridade da agente @grace."
+                    ),
+                )
+            if filename.startswith("viability") and filename not in ("viability.md", "viability.json"):
+                return (
+                    False,
+                    (
+                        f"⛔ [ARTEFATO NÃO-CANÔNICO: {rel}] É estritamente proibido inventar nomes arbitrários de Viabilidade. "
+                        "O parecer técnico DEVE ser persistido em 'docs/briefings/VIABILITY.md' sob autoridade do @meira."
+                    ),
+                )
         return True, None
 
     # 2. ETAPA PLAN / INCEPTION / REFINEMENT

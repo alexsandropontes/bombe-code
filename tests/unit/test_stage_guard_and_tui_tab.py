@@ -52,9 +52,19 @@ def test_stage_guard_discuss_blocks_code():
     allowed, _ = validate_stage_permission(STAGE_DISCUSS, "read", "src/main.py")
     assert allowed is True
 
-    # DISCUSS: escrita em docs permitida
+    # DISCUSS: escrita em docs canônico permitida
     allowed, _ = validate_stage_permission(STAGE_DISCUSS, "write", "docs/briefings/PRD.md")
     assert allowed is True
+
+    # DISCUSS: escrita em PRD não-canônico BLOQUEADA
+    allowed, reason = validate_stage_permission(STAGE_DISCUSS, "write", "docs/briefings/PRD-drops-mvp.md")
+    assert allowed is False
+    assert "ARTEFATO NÃO-CANÔNICO" in reason
+
+    # DISCUSS: escrita em Viabilidade não-canônica BLOQUEADA
+    allowed, reason = validate_stage_permission(STAGE_DISCUSS, "write", "docs/briefings/viability-v1.md")
+    assert allowed is False
+    assert "ARTEFATO NÃO-CANÔNICO" in reason
 
 
 def test_stage_guard_plan_blocks_production_code():

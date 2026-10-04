@@ -851,12 +851,26 @@ async def handle_slash_command(app: BombeTuiApp, raw_text: str) -> bool:
             )
             res = await anyio.to_thread.run_sync(orch.run_discuss, topic)
             if res.get("success"):
-                await chat.mount(
-                    Static(
-                        f"[{TOKENS['success']}]✓ Etapa DISCUSS concluída com sucesso com @meira e @grace.[/{TOKENS['success']}]\n"
-                        f"[dim]Artefatos gerados: docs/briefings/VIABILITY.md e docs/briefings/PRD.md. Próxima etapa: /wave plan[/dim]"
+                app.wave_station = "PLAN"
+                app.update_status()
+                saved_state = orch.db.load_wave_state() or {}
+                autonomy = saved_state.get("autonomy_mode", "AUTO")
+                if autonomy == "AUTO":
+                    await chat.mount(
+                        Static(
+                            f"[{TOKENS['success']}]✓ Etapa DISCUSS concluída com sucesso com @meira e @grace.[/{TOKENS['success']}]\n"
+                            f"[dim]Artefatos gerados: docs/briefings/VIABILITY.md e docs/briefings/PRD.md.[/dim]\n"
+                            f"[{TOKENS['primary']} bold]⚡ [TURING DETERMINÍSTICO - MODO AUTO] Encadeando automaticamente para a etapa PLAN...[/{TOKENS['primary']} bold]"
+                        )
                     )
-                )
+                    await handle_slash_command(app, "/wave plan")
+                else:
+                    await chat.mount(
+                        Static(
+                            f"[{TOKENS['success']}]✓ Etapa DISCUSS concluída com sucesso com @meira e @grace.[/{TOKENS['success']}]\n"
+                            f"[dim]Artefatos gerados: docs/briefings/VIABILITY.md e docs/briefings/PRD.md. Próxima etapa: /wave plan[/dim]"
+                        )
+                    )
             else:
                 await chat.mount(
                     Static(
@@ -889,12 +903,26 @@ async def handle_slash_command(app: BombeTuiApp, raw_text: str) -> bool:
             )
             res = await anyio.to_thread.run_sync(orch.run_plan)
             if res.get("success"):
-                await chat.mount(
-                    Static(
-                        f"[{TOKENS['success']}]✓ Etapa PLAN concluída. Backlog e arquitetura prontos para execução.[/{TOKENS['success']}]\n"
-                        f"[dim]Stories registradas no Kanban. Próxima etapa: /wave execute ou /wave cycle[/dim]"
+                app.wave_station = "EXECUTE"
+                app.update_status()
+                saved_state = orch.db.load_wave_state() or {}
+                autonomy = saved_state.get("autonomy_mode", "AUTO")
+                if autonomy == "AUTO":
+                    await chat.mount(
+                        Static(
+                            f"[{TOKENS['success']}]✓ Etapa PLAN concluída. Backlog e arquitetura prontos para execução.[/{TOKENS['success']}]\n"
+                            f"[dim]Stories registradas no Kanban.[/dim]\n"
+                            f"[{TOKENS['primary']} bold]⚡ [TURING DETERMINÍSTICO - MODO AUTO] Encadeando automaticamente para a etapa EXECUTE...[/{TOKENS['primary']} bold]"
+                        )
                     )
-                )
+                    await handle_slash_command(app, "/wave execute")
+                else:
+                    await chat.mount(
+                        Static(
+                            f"[{TOKENS['success']}]✓ Etapa PLAN concluída. Backlog e arquitetura prontos para execução.[/{TOKENS['success']}]\n"
+                            f"[dim]Stories registradas no Kanban. Próxima etapa: /wave execute ou /wave cycle[/dim]"
+                        )
+                    )
             else:
                 await chat.mount(
                     Static(
@@ -946,9 +974,22 @@ async def handle_slash_command(app: BombeTuiApp, raw_text: str) -> bool:
             )
             res = await anyio.to_thread.run_sync(orch.run_execute)
             if res.get("success"):
-                await chat.mount(
-                    Static(f"[{TOKENS['success']}]✓ {res['message']}[/{TOKENS['success']}]")
-                )
+                app.wave_station = "VALIDATE"
+                app.update_status()
+                saved_state = orch.db.load_wave_state() or {}
+                autonomy = saved_state.get("autonomy_mode", "AUTO")
+                if autonomy == "AUTO":
+                    await chat.mount(
+                        Static(
+                            f"[{TOKENS['success']}]✓ {res['message']}[/{TOKENS['success']}]\n"
+                            f"[{TOKENS['primary']} bold]⚡ [TURING DETERMINÍSTICO - MODO AUTO] Encadeando automaticamente para a etapa VALIDATE...[/{TOKENS['primary']} bold]"
+                        )
+                    )
+                    await handle_slash_command(app, "/wave validate")
+                else:
+                    await chat.mount(
+                        Static(f"[{TOKENS['success']}]✓ {res['message']}[/{TOKENS['success']}]")
+                    )
             else:
                 await chat.mount(
                     Static(

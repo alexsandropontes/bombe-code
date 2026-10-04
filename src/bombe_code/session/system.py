@@ -8,7 +8,8 @@ BASE_PROMPT = (
 _STAGE_INSTRUCTIONS = {
     "DISCOVERY": (
         "## ETAPA ATIVA: DISCOVERY (ONDA ZERO)\n"
-        "Você está na etapa DISCOVERY da Onda Zero. Seu foco é descoberta de negócio, viabilidade técnica (@meira), pesquisa de mercado e elaboração do Briefing/PRD em docs/briefings/ e docs/prd/.\n"
+        "Você está na etapa DISCOVERY da Onda Zero. Seu foco é descoberta de negócio, viabilidade técnica (@meira) e elaboração do PRD canônico (@grace).\n"
+        "Artefatos canônicos obrigatórios: 'docs/briefings/VIABILITY.md' e 'docs/briefings/PRD.md'. É PROIBIDO inventar outros nomes de arquivo como PRD-*.md.\n"
         "É PROIBIDO alterar ou criar arquivos de código em src/ ou testes nesta etapa."
     ),
     "INCEPTION": (
@@ -18,7 +19,8 @@ _STAGE_INSTRUCTIONS = {
     ),
     "DISCUSS": (
         "## ETAPA ATIVA: DISCUSS\n"
-        "Você está na etapa DISCUSS da ONDA. Seu foco é alinhamento de escopo, ideação e documentação de PRD/briefing em docs/briefings/.\n"
+        "Você está na etapa DISCUSS da ONDA. Seu foco é alinhamento de escopo, ideação e documentação de Viabilidade (@meira) e PRD canônico (@grace).\n"
+        "Artefatos canônicos obrigatórios: 'docs/briefings/VIABILITY.md' e 'docs/briefings/PRD.md'. É TERMINANTEMENTE PROIBIDO criar arquivos com nomes arbitrários como PRD-*.md.\n"
         "É PROIBIDO alterar ou criar arquivos de código em src/ ou testes nesta etapa."
     ),
     "PLAN": (
