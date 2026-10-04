@@ -37,10 +37,25 @@ def _load_env_file() -> None:
 
 def load_auth() -> dict:
     _load_env_file()
-    data = read_json(_auth_path())
-    result = data if isinstance(data, dict) else {}
+    result: dict[str, Any] = {}
 
-    # Procura arquivos auth.json locais no projeto (.bombe/auth.json ou auth.json)
+    # 1. Fallback de credenciais existentes do OpenCode (~/.local/share/opencode/auth.json)
+    opencode_auth = Path.home() / ".local" / "share" / "opencode" / "auth.json"
+    if opencode_auth.is_file():
+        oc_data = read_json(opencode_auth)
+        if isinstance(oc_data, dict):
+            result.update(oc_data)
+
+    # 2. Dados globais do Bombe Code (~/.local/share/bombe-code/auth.json)
+    data = read_json(_auth_path())
+    if isinstance(data, dict):
+        for k, v in data.items():
+            if isinstance(v, dict) and isinstance(result.get(k), dict):
+                result[k].update(v)
+            else:
+                result[k] = v
+
+    # 3. Procura arquivos auth.json locais no projeto (.bombe/auth.json ou auth.json)
     cwd = Path.cwd()
     for local_path in (cwd / ".bombe" / "auth.json", cwd / "auth.json"):
         if local_path.is_file():

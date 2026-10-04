@@ -164,51 +164,8 @@ def resolve_provider_adapter(model_ref: str | None = None) -> Any:
                 api_key="ollama", model=model_name or "llama3", base_url=base_url
             )
 
-    # 2. Resolução sem modelo explícito (apenas provedores configurados explicitamente)
-    # A) llama.cpp explicitamente configurado no ambiente ou auth.json
-    if "LLAMA_CPP_BASE_URL" in os.environ or "llama.cpp" in auth_data:
-        llama_url = os.environ.get("LLAMA_CPP_BASE_URL") or auth_data.get("llama.cpp", {}).get(
-            "base_url", "http://127.0.0.1:8080/v1"
-        )
-        return OpenAICompatAdapter(api_key="local", model="local", base_url=llama_url)
-
-    # B) Ollama explicitamente configurado no ambiente ou auth.json
-    if "OLLAMA_BASE_URL" in os.environ or "ollama" in auth_data:
-        ollama_url = os.environ.get("OLLAMA_BASE_URL") or auth_data.get("ollama", {}).get(
-            "base_url", "http://127.0.0.1:11434/v1"
-        )
-        return OpenAICompatAdapter(api_key="ollama", model="llama3", base_url=ollama_url)
-
-    # C) Chaves remotas no ambiente ou auth.json
-    openai_key = os.environ.get("OPENAI_API_KEY") or auth_data.get("openai", {}).get("api_key")
-    if openai_key:
-        return OpenAICompatAdapter(api_key=openai_key, model="gpt-4o")
-
-    anthropic_key = os.environ.get("ANTHROPIC_API_KEY") or auth_data.get("anthropic", {}).get(
-        "api_key"
-    )
-    if anthropic_key:
-        return AnthropicAdapter(api_key=anthropic_key, model="claude-3-5-sonnet-20241022")
-
-    openrouter_key = os.environ.get("OPENROUTER_API_KEY") or auth_data.get("openrouter", {}).get(
-        "api_key"
-    )
-    if openrouter_key:
-        return OpenAICompatAdapter(
-            api_key=openrouter_key,
-            model="anthropic/claude-3.5-sonnet",
-            base_url="https://openrouter.ai/api/v1",
-        )
-
-    groq_key = os.environ.get("GROQ_API_KEY") or auth_data.get("groq", {}).get("api_key")
-    if groq_key:
-        return OpenAICompatAdapter(
-            api_key=groq_key,
-            model="llama-3.3-70b-versatile",
-            base_url="https://api.groq.com/openai/v1",
-        )
-
-    # Z.ai / Zhipu AI / GLM
+    # 2. Resolução sem modelo explícito (ordem de prioridade dos provedores configurados)
+    # A) Z.ai / Zhipu AI / GLM (provedor oficial prioritário do Bombe Code)
     zai_key = (
         os.environ.get("ZAI_API_KEY")
         or os.environ.get("ZHIPU_API_KEY")
@@ -231,6 +188,52 @@ def resolve_provider_adapter(model_ref: str | None = None) -> Any:
             model="glm-5.3-flash",
             base_url=zai_url,
         )
+
+    # B) OpenAI
+    openai_key = os.environ.get("OPENAI_API_KEY") or auth_data.get("openai", {}).get("api_key")
+    if openai_key:
+        return OpenAICompatAdapter(api_key=openai_key, model="gpt-4o")
+
+    # C) Anthropic
+    anthropic_key = os.environ.get("ANTHROPIC_API_KEY") or auth_data.get("anthropic", {}).get(
+        "api_key"
+    )
+    if anthropic_key:
+        return AnthropicAdapter(api_key=anthropic_key, model="claude-3-5-sonnet-20241022")
+
+    # D) OpenRouter
+    openrouter_key = os.environ.get("OPENROUTER_API_KEY") or auth_data.get("openrouter", {}).get(
+        "api_key"
+    )
+    if openrouter_key:
+        return OpenAICompatAdapter(
+            api_key=openrouter_key,
+            model="anthropic/claude-3.5-sonnet",
+            base_url="https://openrouter.ai/api/v1",
+        )
+
+    # E) Groq
+    groq_key = os.environ.get("GROQ_API_KEY") or auth_data.get("groq", {}).get("api_key")
+    if groq_key:
+        return OpenAICompatAdapter(
+            api_key=groq_key,
+            model="llama-3.3-70b-versatile",
+            base_url="https://api.groq.com/openai/v1",
+        )
+
+    # F) Provedores locais: llama.cpp (apenas se explicitamente configurado no ambiente ou auth.json)
+    if "LLAMA_CPP_BASE_URL" in os.environ or "llama.cpp" in auth_data:
+        llama_url = os.environ.get("LLAMA_CPP_BASE_URL") or auth_data.get("llama.cpp", {}).get(
+            "base_url", "http://127.0.0.1:8080/v1"
+        )
+        return OpenAICompatAdapter(api_key="local", model="local", base_url=llama_url)
+
+    # G) Ollama (apenas se explicitamente configurado no ambiente ou auth.json)
+    if "OLLAMA_BASE_URL" in os.environ or "ollama" in auth_data:
+        ollama_url = os.environ.get("OLLAMA_BASE_URL") or auth_data.get("ollama", {}).get(
+            "base_url", "http://127.0.0.1:11434/v1"
+        )
+        return OpenAICompatAdapter(api_key="ollama", model="llama3", base_url=ollama_url)
 
     # D) Se nenhum provedor configurado
     instructions = (
