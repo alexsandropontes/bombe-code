@@ -98,8 +98,8 @@ app.add_typer(wave_cli, name="wave")
 @wave_cli.command("start")
 def wave_start(
     wave_id: Annotated[
-        str, typer.Argument(help="Identificador da ONDA (ex: ONDA-004)")
-    ] = "ONDA-004",
+        str | None, typer.Argument(help="Identificador da ONDA (ex: ONDA-001)")
+    ] = None,
     mode: Annotated[
         str, typer.Option("--mode", "-m", help="Modo de autonomia (auto, semi-auto, manual)")
     ] = "auto",
@@ -115,7 +115,14 @@ def wave_start(
     from bombe_code.turing.orchestrator import WaveOrchestrator
 
     orch = WaveOrchestrator(project_dir=project_dir)
-    res = orch.start_wave(wave_id, force=force, delivery_target=target)
+    target_wave = wave_id
+    if not target_wave:
+        saved = orch.db.load_wave_state()
+        if saved and saved.get("wave_id"):
+            target_wave = str(saved["wave_id"])
+        else:
+            target_wave = "ONDA-001"
+    res = orch.start_wave(target_wave, force=force, delivery_target=target)
     if mode:
         orch.set_mode(mode)
     typer.echo(res["message"])

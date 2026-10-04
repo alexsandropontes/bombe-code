@@ -765,7 +765,7 @@ async def handle_slash_command(app: BombeTuiApp, raw_text: str) -> bool:
             clean_tokens = [t for t in tokens if t != "--force"]
 
             autonomy = "AUTO"
-            wave_id = "ONDA-004"
+            wave_id = None
             for t in clean_tokens:
                 t_lower = t.lower()
                 if t_lower in ("auto", "semi", "semi-auto", "semi_auto", "manual"):
@@ -774,6 +774,16 @@ async def handle_slash_command(app: BombeTuiApp, raw_text: str) -> bool:
                     wave_id = t.upper()
                 else:
                     wave_id = t
+
+            if not wave_id:
+                allowed = app.get_current_wave_stages()
+                saved = orch.db.load_wave_state()
+                if "DISCOVERY" in allowed:
+                    wave_id = "ONDA-000"
+                elif saved and saved.get("wave_id"):
+                    wave_id = str(saved["wave_id"])
+                else:
+                    wave_id = "ONDA-001"
 
             res = orch.start_wave(wave_id=wave_id, autonomy_mode=autonomy, force=force)
             if res.get("success"):

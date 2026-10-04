@@ -383,3 +383,23 @@ def test_wave_orchestrator_run_execute_auto_discovers_cards_and_skips_done(proje
     res_forced = orchestrator.run_execute(force=True)
     assert res_forced["success"] is True
     assert orchestrator.run_cycle.call_count == 2
+
+
+def test_start_wave_greenfield_and_zero_tasks_transition(project_env):
+    tmp_path, db = project_env
+    orchestrator = WaveOrchestrator(project_dir=str(tmp_path), db=db)
+
+    # 1. Simula Greenfield: estado salvo como ONDA-000 em DISCOVERY
+    db.save_wave_state(
+        wave_id="ONDA-000",
+        state="DISCOVERY",
+        autonomy_mode="AUTO",
+        engineering_mode="tdd-code",
+    )
+
+    # 2. Iniciar ONDA-001 sem tarefas pendentes deve suceder (transição natural de discovery para delivery)
+    res = orchestrator.start_wave("ONDA-001")
+    assert res["success"] is True
+    assert res["wave_id"] == "ONDA-001"
+    assert orchestrator.state_machine.wave_id == "ONDA-001"
+

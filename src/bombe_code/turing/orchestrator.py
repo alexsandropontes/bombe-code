@@ -19,6 +19,7 @@ from bombe_code.llm.pydantic_factory import PydanticAiFactory
 from bombe_code.storage.project_db import ProjectDatabase
 from bombe_code.turing.gates import SealGate, TemplateGate
 from bombe_code.turing.kanban import KanbanCardStatus, KanbanManager
+from bombe_code.turing.pbb import AtomicTask, AtomicTaskType
 from bombe_code.turing.prompt_assembler import DeliveryTarget, TuringPromptAssembler
 from bombe_code.turing.review_gate import TuringReviewGate
 from bombe_code.turing.state_machine import (
@@ -37,7 +38,6 @@ from bombe_code.turing.upstream_gates import (
     StoryDoRGate,
     ViabilityQualityGate,
 )
-from bombe_code.turing.pbb import AtomicTask, AtomicTaskType
 from bombe_code.turing.upstream_profiler import UpstreamProfiler
 
 logger = logging.getLogger(__name__)
@@ -232,9 +232,19 @@ class WaveOrchestrator:
     ) -> dict[str, Any]:
         """Inicializa formalmente uma nova ONDA, resetando checkpoints para a etapa DISCUSS."""
         saved = self.db.load_wave_state()
+        is_greenfield_zero = bool(
+            saved
+            and str(saved.get("wave_id", "")).upper()
+            in ("ONDA-0", "ONDA-00", "ONDA-000", "WAVE-0", "WAVE-00", "WAVE-000")
+        )
+        tasks = self.db.list_tasks()
+        has_active_tasks = len(tasks) > 0
+
         if (
             not force
             and saved
+            and has_active_tasks
+            and not is_greenfield_zero
             and saved.get("state") not in (WaveState.COMPLETED.value, "COMPLETED")
             and saved.get("wave_id") != wave_id
         ):
