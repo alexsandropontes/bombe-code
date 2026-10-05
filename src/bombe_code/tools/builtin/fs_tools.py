@@ -104,7 +104,7 @@ def _write(args: dict, ctx: ToolContext) -> str:
     if denied:
         return denied
     allowed, stage_reason = validate_stage_permission(
-        getattr(ctx, "stage", "DISCUSS"), "write", str(target), ctx.project_dir
+        getattr(ctx, "stage", "DISCOVERY"), "write", str(target), ctx.project_dir
     )
     if not allowed:
         return stage_reason or "Erro: operacao bloqueada pelas regras da etapa atual"
@@ -122,7 +122,7 @@ def _edit(args: dict, ctx: ToolContext) -> str:
     if denied:
         return denied
     allowed, stage_reason = validate_stage_permission(
-        getattr(ctx, "stage", "DISCUSS"), "edit", str(target), ctx.project_dir
+        getattr(ctx, "stage", "DISCOVERY"), "edit", str(target), ctx.project_dir
     )
     if not allowed:
         return stage_reason or "Erro: operacao bloqueada pelas regras da etapa atual"

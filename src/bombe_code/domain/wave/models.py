@@ -11,27 +11,41 @@ from typing import Any
 class WaveState(str, Enum):
     """Estágios determinísticos do ciclo de vida da ONDA."""
 
-    DISCUSS = "DISCUSS"
+    # Onda Zero (Upstream Greenfield)
+    DISCOVERY = "DISCOVERY"
+    INCEPTION = "INCEPTION"
+
+    # Ondas de Entrega (1..N e Brownfield)
     PLAN = "PLAN"
+    REFINEMENT = "REFINEMENT"
     EXECUTE = "EXECUTE"
     VALIDATE = "VALIDATE"
     COMPLETED = "COMPLETED"
     BLOCKED = "BLOCKED"
 
+    # Aliases de compatibilidade
+    DISCUSS = "DISCUSS"
+    CYCLE = "CYCLE"
+    REVIEW = "REVIEW"
+
     @classmethod
     def from_str(cls, val: str) -> WaveState:
         v = (val or "").strip().upper()
         if v in ("DISCOVERY", "DISCUSS"):
-            return cls.DISCUSS
-        if v in ("INCEPTION", "PLAN"):
+            return cls.DISCOVERY if v == "DISCOVERY" else cls.DISCUSS
+        if v == "INCEPTION":
+            return cls.INCEPTION
+        if v == "REFINEMENT":
+            return cls.REFINEMENT
+        if v == "PLAN":
             return cls.PLAN
-        if v in ("REFINEMENT", "EXECUTE", "CYCLE"):
+        if v in ("EXECUTE", "CYCLE"):
             return cls.EXECUTE
-        if v in ("REVIEW", "VALIDATE"):
+        if v in ("VALIDATE", "REVIEW"):
             return cls.VALIDATE
         if v in ("END", "DONE", "COMPLETED"):
             return cls.COMPLETED
-        return cls.DISCUSS
+        return cls.DISCOVERY
 
 
 class AutonomyMode(str, Enum):
@@ -159,14 +173,18 @@ class Wave:
     telemetry: dict[str, Any] = field(default_factory=dict)
 
     def can_transition_to(self, target_state: WaveState) -> bool:
-        """Regra de Invariante de Domínio: transições de estado permitidas."""
+        # Suporta tanto o fluxo da Onda Zero (DISCOVERY -> INCEPTION -> COMPLETED)
+        # quanto o fluxo das Ondas de Entrega (PLAN -> REFINEMENT -> EXECUTE -> VALIDATE -> COMPLETED)
         allowed_transitions: dict[WaveState, set[WaveState]] = {
-            WaveState.DISCUSS: {WaveState.PLAN, WaveState.BLOCKED, WaveState.COMPLETED},
-            WaveState.PLAN: {WaveState.EXECUTE, WaveState.DISCUSS, WaveState.BLOCKED, WaveState.COMPLETED},
-            WaveState.EXECUTE: {WaveState.VALIDATE, WaveState.PLAN, WaveState.BLOCKED, WaveState.COMPLETED},
+            WaveState.DISCOVERY: {WaveState.INCEPTION, WaveState.PLAN, WaveState.COMPLETED, WaveState.BLOCKED},
+            WaveState.DISCUSS: {WaveState.PLAN, WaveState.INCEPTION, WaveState.COMPLETED, WaveState.BLOCKED},
+            WaveState.INCEPTION: {WaveState.COMPLETED, WaveState.DISCOVERY, WaveState.PLAN, WaveState.BLOCKED},
+            WaveState.PLAN: {WaveState.REFINEMENT, WaveState.EXECUTE, WaveState.COMPLETED, WaveState.DISCUSS, WaveState.BLOCKED},
+            WaveState.REFINEMENT: {WaveState.EXECUTE, WaveState.PLAN, WaveState.BLOCKED},
+            WaveState.EXECUTE: {WaveState.VALIDATE, WaveState.REFINEMENT, WaveState.PLAN, WaveState.BLOCKED, WaveState.COMPLETED},
             WaveState.VALIDATE: {WaveState.COMPLETED, WaveState.EXECUTE, WaveState.BLOCKED},
-            WaveState.COMPLETED: {WaveState.DISCUSS},  # Permite iniciar nova onda
-            WaveState.BLOCKED: {WaveState.DISCUSS, WaveState.PLAN, WaveState.EXECUTE, WaveState.VALIDATE},
+            WaveState.COMPLETED: {WaveState.DISCOVERY, WaveState.DISCUSS, WaveState.PLAN, WaveState.EXECUTE},
+            WaveState.BLOCKED: {WaveState.DISCOVERY, WaveState.INCEPTION, WaveState.PLAN, WaveState.REFINEMENT, WaveState.EXECUTE, WaveState.VALIDATE},
         }
         return target_state in allowed_transitions.get(self.state, set())
 

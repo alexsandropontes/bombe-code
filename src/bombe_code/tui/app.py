@@ -94,7 +94,6 @@ class BombeTuiApp(App):
         "REFINEMENT",
         "EXECUTE",
         "VALIDATE",
-        "DISCUSS",
     ]
     WAVE_STATIONS = WAVE_STAGES
 

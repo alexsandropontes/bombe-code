@@ -45,7 +45,7 @@ class Session:
     parent_id: str | None = None
     agent: str = "build"
     model: str = "padrão"
-    stage: str = "DISCUSS"
+    stage: str = "DISCOVERY"
     created_at: str = field(
         default_factory=lambda: datetime.now(timezone.utc).isoformat()
     )

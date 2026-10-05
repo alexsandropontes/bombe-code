@@ -66,16 +66,20 @@ def build_wave_router(deps: ServerDeps) -> APIRouter:
             )
         else:
             stage_norm = body.stage.strip().upper()
-            if stage_norm in ("DISCUSS", "DISCOVERY"):
-                res = service.discuss_stage(topic=body.input_text, context=body.context)
-            elif stage_norm in ("PLAN", "INCEPTION"):
+            if stage_norm in ("DISCOVERY", "DISCUSS"):
+                res = service.discovery_stage(topic=body.input_text, context=body.context)
+            elif stage_norm == "INCEPTION":
+                res = service.inception_stage(context=body.context)
+            elif stage_norm == "PLAN":
                 res = service.plan_stage(context=body.context)
+            elif stage_norm == "REFINEMENT":
+                res = service.refinement_stage(context=body.context)
             elif stage_norm in ("EXECUTE", "CYCLE"):
                 res = service.execute_stage(context=body.context)
             elif stage_norm in ("VALIDATE", "REVIEW"):
                 res = service.validate_stage(context=body.context)
             else:
-                raise HTTPException(400, f"Estágio desconhecido: '{body.stage}'")
+                raise HTTPException(400, f"Estágio desconhecido: '{body.stage}'. Use: DISCOVERY, INCEPTION, PLAN, REFINEMENT, EXECUTE, VALIDATE.")
         return res
 
     @router.post("/api/wave/end")

@@ -69,7 +69,7 @@ def _prepare_turn(
     abort,
     project_instructions: str | None,
 ):
-    stage = getattr(session, "stage", "DISCUSS") or "DISCUSS"
+    stage = getattr(session, "stage", "DISCOVERY") or "DISCOVERY"
     system = build_system_prompt(session.agent or "build", project_instructions, stage=stage)
     disabled = permissions.disabled_tools() if permissions is not None else set()
     tools_meta = [

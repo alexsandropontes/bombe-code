@@ -351,8 +351,9 @@ def test_wave_orchestrator_caroli_dor_disk_inspection(project_env):
 
     res = orchestrator.run_plan()
     assert res["success"] is True
-    assert (tmp_path / "docs" / "stories" / "ST-001.md").exists()
-    assert "INVEST" in (tmp_path / "docs" / "stories" / "ST-001.md").read_text(encoding="utf-8")
+    wave_story = tmp_path / "docs" / "waves" / "ONDA-006" / "stories" / "ST-001.md"
+    assert wave_story.exists()
+    assert "INVEST" in wave_story.read_text(encoding="utf-8")
 
 
 def test_wave_orchestrator_run_execute_auto_discovers_cards_and_skips_done(project_env):

@@ -97,7 +97,7 @@ class TuringStateMachine:
     def __init__(
         self,
         wave_id: str,
-        initial_state: WaveState = WaveState.DISCUSS,
+        initial_state: WaveState | None = None,
         autonomy_mode: AutonomyMode = AutonomyMode.AUTO,
         engineering_mode: EngineeringMode = EngineeringMode.TDD_CODE,
         on_state_change: Callable[[WaveState, WaveState], None] | None = None,
@@ -119,7 +119,13 @@ class TuringStateMachine:
         else:
             self._wave_type = WaveType.DELIVERY_WAVE
 
-        self._current_state = initial_state
+        if initial_state is not None:
+            self._current_state = initial_state
+        elif self._wave_type == WaveType.WAVE_ZERO:
+            self._current_state = WaveState.DISCOVERY
+        else:
+            self._current_state = WaveState.DISCUSS
+
         self._autonomy_mode = autonomy_mode
         self._engineering_mode = engineering_mode
         self._on_state_change = on_state_change

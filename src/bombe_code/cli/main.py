@@ -138,71 +138,109 @@ def wave_run(
 ) -> None:
     """Executa o pipeline completo da ONDA ativa de acordo com seu modo de autonomia."""
     from bombe_code.turing.orchestrator import WaveOrchestrator
+    from bombe_code.domain.wave.sequencer import WaveSequencer
+    from bombe_code.turing.state_machine import WaveType
 
-    orch = WaveOrchestrator(project_dir=project_dir)
-    st = orch.get_status()
-    typer.echo(
-        f"🚀 Iniciando execução governada da ONDA {st['wave_id']} no modo {st['autonomy_mode']}..."
-    )
+    while True:
+        orch = WaveOrchestrator(project_dir=project_dir)
+        st = orch.get_status()
+        is_wave_zero = orch.state_machine.wave_type == WaveType.WAVE_ZERO
+        typer.echo(
+            f"\n🚀 [TURING AUTO] Executando ONDA {st['wave_id']} (Modo: {st['autonomy_mode']} | Etapa: {st['stage']})..."
+        )
 
-    # 1. DISCUSS (se necessário)
-    if st["stage"] == "DISCUSS":
-        final_topic = topic
-        if not final_topic:
-            prd_file = Path(project_dir) / "docs" / "briefings" / "PRD.md"
-            if prd_file.exists():
-                final_topic = "Execução baseada no PRD existente"
+        # 1. DISCOVERY / DISCUSS
+        if st["stage"] in ("DISCOVERY", "DISCUSS"):
+            final_topic = topic
+            if not final_topic:
+                # Checa se existe briefing humano prévio em docs/briefings/
+                briefing_dir = Path(project_dir) / "docs" / "briefings"
+                human_briefings = list(briefing_dir.glob("*.md")) if briefing_dir.exists() else []
+                human_briefings = [b for b in human_briefings if b.name not in ("VIABILITY.md", "PRD.md")]
+                if human_briefings:
+                    final_topic = human_briefings[0].read_text(encoding="utf-8")
+                else:
+                    prd_file = Path(project_dir) / "docs" / "briefings" / "PRD.md"
+                    if prd_file.exists():
+                        final_topic = "Execução baseada no PRD existente"
+                    else:
+                        typer.echo(
+                            "⚠️ Nenhum tópico informado e nenhum briefing prévio encontrado em docs/briefings/.\n"
+                            "Para iniciar a execução, informe a missão usando:\n"
+                            "  bombe-code wave run --topic \"Descreva sua ideia aqui\"",
+                            err=True,
+                        )
+                        raise typer.Exit(code=1)
+
+            typer.echo(f"📋 Executando DISCOVERY para: {final_topic[:80]}...")
+            res_disc = orch.run_discovery(final_topic)
+            if not res_disc.get("success"):
+                typer.echo(f"❌ Falha em DISCOVERY: {res_disc.get('error')}", err=True)
+                return
+            typer.echo("✅ DISCOVERY concluído com sucesso e PRD gerado.")
+
+        # 2. INCEPTION / PLAN
+        st = orch.get_status()
+        if st["stage"] in ("DISCOVERY", "DISCUSS", "INCEPTION", "PLAN"):
+            stage_to_run = "INCEPTION" if is_wave_zero else "PLAN"
+            typer.echo(f"📐 Executando {stage_to_run} e arquitetura de upstream...")
+            res_plan = orch.run_inception() if is_wave_zero else orch.run_plan()
+            if not res_plan.get("success"):
+                typer.echo(f"❌ Falha em {stage_to_run}: {res_plan.get('error')}", err=True)
+                return
+            typer.echo(f"✅ {stage_to_run} concluído.")
+
+        # Na Onda Zero, concluímos aqui e passamos para a Onda 1
+        if is_wave_zero:
+            res_end = orch.end_wave()
+            typer.echo(f"🎉 Onda Zero concluída: {res_end.get('message', 'Upstream OK')}")
+            if st["autonomy_mode"] == "AUTO":
+                typer.echo("⚡ [TURING MODO AUTO] Encadeando automaticamente para a ONDA-001...")
+                orch.start_wave("ONDA-001", autonomy_mode="AUTO", force=True)
+                continue
             else:
-                typer.echo(
-                    "⚠️ Nenhum tópico informado e nenhum PRD prévio encontrado em docs/briefings/PRD.md.\n"
-                    "Para iniciar a execução, informe a missão usando:\n"
-                    "  bombe-code wave run --topic \"Descreva sua ideia aqui\"",
-                    err=True,
-                )
-                raise typer.Exit(code=1)
+                break
 
-        typer.echo(f"📋 Executando DISCUSS: {final_topic}...")
-        res_disc = orch.run_discuss(final_topic)
-        if not res_disc.get("success"):
-            typer.echo(f"❌ Falha em DISCUSS: {res_disc.get('error')}", err=True)
-            return
-        typer.echo("✅ DISCUSS concluído e PRD gerado.")
+        # 3. EXECUTE (Ondas de Entrega)
+        st = orch.get_status()
+        if st["stage"] in ("PLAN", "REFINEMENT", "EXECUTE"):
+            typer.echo("⚡ Executando ciclo de engenharia TDD...")
+            cards = orch.kanban.list_cards(wave_id=st["wave_id"])
+            stories = [c["story_id"] for c in cards] if cards else ["ST-001"]
+            res_exec = orch.run_execute(stories=stories)
+            if not res_exec.get("success"):
+                typer.echo(f"❌ Falha em EXECUTE: {res_exec.get('error')}", err=True)
+                return
+            typer.echo("✅ Ciclos de engenharia concluídos (DEV_DONE).")
 
-    # 2. PLAN (se necessário)
-    st = orch.get_status()
-    if st["stage"] in ("DISCUSS", "PLAN"):
-        typer.echo("📐 Executando PLAN e arquitetura de upstream...")
-        res_plan = orch.run_plan()
-        if not res_plan.get("success"):
-            typer.echo(f"❌ Falha em PLAN: {res_plan.get('error')}", err=True)
-            return
-        typer.echo("✅ PLAN concluído e stories catalogadas.")
+        # 4. VALIDATE (Ondas de Entrega)
+        st = orch.get_status()
+        if st["stage"] in ("EXECUTE", "VALIDATE"):
+            typer.echo(f"🔍 Executando VALIDATE para {st['wave_id']}...")
+            res_val = orch.run_validate()
+            if not res_val.get("success"):
+                typer.echo(f"❌ Falha em VALIDATE: {res_val.get('error')}", err=True)
+                return
+            typer.echo(f"✅ VALIDATE aprovado com sucesso para {st['wave_id']}! Stories marcadas como DONE.")
 
-    # 3. EXECUTE
-    st = orch.get_status()
-    if st["stage"] in ("PLAN", "EXECUTE"):
-        typer.echo("⚡ Executando ciclo de engenharia (TDD + Review)...")
-        cards = orch.kanban.list_cards(wave_id=st["wave_id"])
-        stories = [c["story_id"] for c in cards] if cards else ["ST-001"]
-        res_exec = orch.run_execute(stories=stories)
-        if not res_exec.get("success"):
-            typer.echo(f"❌ Falha em EXECUTE: {res_exec.get('error')}", err=True)
-            return
-        typer.echo("✅ Ciclos de engenharia concluídos (DEV_DONE).")
+        # 5. END / COMPLETED
+        res_end = orch.end_wave()
+        typer.echo(f"🎉 {res_end.get('message', 'ONDA concluída!')}")
 
-    # 4. VALIDATE
-    st = orch.get_status()
-    if st["stage"] in ("EXECUTE", "VALIDATE"):
-        typer.echo("🔍 Executando VALIDATE (homologação de produto e governança)...")
-        res_val = orch.run_validate()
-        if not res_val.get("success"):
-            typer.echo(f"❌ Falha em VALIDATE: {res_val.get('error')}", err=True)
-            return
-        typer.echo("✅ VALIDATE aprovado com sucesso! Stories marcadas como DONE.")
+        # Checa se há ondas futuras mapeadas no Sequenciador do PRD
+        prd_file = Path(project_dir) / "docs" / "briefings" / "PRD.md"
+        prd_content = prd_file.read_text(encoding="utf-8") if prd_file.exists() else ""
+        sequencer = WaveSequencer.from_markdown(prd_content)
 
-    # 5. END / COMPLETED
-    res_end = orch.end_wave()
-    typer.echo(f"🎉 {res_end.get('message', 'ONDA concluída!')}")
+        if st["autonomy_mode"] == "AUTO" and sequencer.has_future_waves(st["wave_id"]):
+            current_idx = sequencer.get_plan_index(st["wave_id"])
+            next_plan = sequencer.plans[current_idx + 1]
+            typer.echo(f"\n⚡ [TURING MODO AUTO] Encadeando para a próxima onda: {next_plan.wave_id} ({next_plan.name})...")
+            orch.start_wave(next_plan.wave_id, autonomy_mode="AUTO", force=True)
+            continue
+        else:
+            typer.echo(f"\n🏆 Ciclo completo de todas as ondas finalizado com sucesso!")
+            break
 
 
 @wave_cli.command("status")

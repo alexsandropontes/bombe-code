@@ -37,7 +37,9 @@ class KanbanManager:
     ) -> None:
         self.project_dir = Path(project_dir).resolve()
         self.db = db or ProjectDatabase(str(self.project_dir))
-        self.stories_dir = self.project_dir / "docs" / "backlog" / "stories"
+        from bombe_code.domain.wave.workspace import WaveWorkspace
+        self.workspace = WaveWorkspace(project_dir=self.project_dir)
+        self.stories_dir = self.workspace.docs_dir / "backlog" / "stories"
 
     def add_card(
         self,
@@ -150,50 +152,60 @@ class KanbanManager:
         blocked_reason: str = "",
     ) -> bool:
         """Atualiza a linha de status e blocked no arquivo markdown correspondente."""
-        if not self.stories_dir.exists():
+        target_path = self.workspace.find_story_file(story_id)
+        if not target_path or not target_path.exists():
             return False
 
-        # Procura arquivos que iniciem com o story_id
-        for path in self.stories_dir.glob(f"{story_id}*.md"):
-            try:
-                content = path.read_text(encoding="utf-8")
-                updated = content
-                if new_status is not None:
+        try:
+            content = target_path.read_text(encoding="utf-8")
+            updated = content
+            if new_status is not None:
+                updated = re.sub(
+                    r">\s*\*\*Status:\*\*.*",
+                    f"> **Status:** {new_status}",
+                    updated,
+                )
+            if blocked is not None:
+                blocked_str = (
+                    f"True ({blocked_reason})" if blocked and blocked_reason else str(blocked)
+                )
+                if re.search(r">\s*\*\*Blocked:\*\*.*", updated):
                     updated = re.sub(
-                        r">\s*\*\*Status:\*\*.*",
-                        f"> **Status:** {new_status}",
+                        r">\s*\*\*Blocked:\*\*.*",
+                        f"> **Blocked:** {blocked_str}",
                         updated,
                     )
-                if blocked is not None:
-                    blocked_str = (
-                        f"True ({blocked_reason})" if blocked and blocked_reason else str(blocked)
+                else:
+                    # Insere após o Status
+                    updated = re.sub(
+                        r"(>\s*\*\*Status:\*\*.*)",
+                        rf"\1\n> **Blocked:** {blocked_str}",
+                        updated,
                     )
-                    if re.search(r">\s*\*\*Blocked:\*\*.*", updated):
-                        updated = re.sub(
-                            r">\s*\*\*Blocked:\*\*.*",
-                            f"> **Blocked:** {blocked_str}",
-                            updated,
-                        )
-                    else:
-                        # Insere após o Status
-                        updated = re.sub(
-                            r"(>\s*\*\*Status:\*\*.*)",
-                            rf"\1\n> **Blocked:** {blocked_str}",
-                            updated,
-                        )
-                path.write_text(updated, encoding="utf-8")
-                return True
-            except Exception as e:  # noqa: BLE001
-                logger.warning("Falha ao sincronizar arquivo %s: %s", path, e)
-        return False
+            target_path.write_text(updated, encoding="utf-8")
+            return True
+        except Exception as e:  # noqa: BLE001
+            logger.warning("Falha ao sincronizar arquivo %s: %s", target_path, e)
+            return False
 
     def scan_and_sync_directory(self, wave_id: str = "ONDA-006") -> list[dict[str, Any]]:
         """Lê os arquivos físicos de stories e cataloga no banco SQLite."""
-        if not self.stories_dir.exists():
+        dirs_to_check = [
+            self.workspace.wave_stories_dir(wave_id),
+            self.stories_dir,
+            self.workspace.docs_dir / "stories",
+        ]
+        target_dir = None
+        for d in dirs_to_check:
+            if d.exists() and any(d.glob("ST-*.md")):
+                target_dir = d
+                break
+
+        if not target_dir:
             return []
 
         synced_cards: list[dict[str, Any]] = []
-        for path in sorted(self.stories_dir.glob("ST-*.md")):
+        for path in sorted(target_dir.glob("ST-*.md")):
             try:
                 content = path.read_text(encoding="utf-8")
                 # Extrai ID (ex: ST-001)

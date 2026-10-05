@@ -79,6 +79,8 @@ class WaveOrchestrator:
         self.db_gate = DatabaseQualityGate()
         self.story_dor_gate = story_dor_gate or StoryDoRGate()
         self.review_gate = review_gate or TuringReviewGate()
+        from bombe_code.domain.wave.workspace import WaveWorkspace
+        self.workspace = WaveWorkspace(project_dir=self.project_dir)
         self.kanban = kanban or KanbanManager(project_dir=str(self.project_dir), db=self.db)
         self._gate_evaluations: dict[str, Any] = {}
         self.config_mgr = ProjectConfigManager(str(self.project_dir))
@@ -117,11 +119,26 @@ class WaveOrchestrator:
                 "duration_seconds": 0.0,
             }
         stg = self.telemetry["stages"][stage]
-        in_tok = getattr(result, "input_tokens", 0) or 0
-        out_tok = getattr(result, "output_tokens", 0) or 0
-        tot_tok = getattr(result, "total_tokens", 0) or (in_tok + out_tok)
-        c = getattr(result, "cost", 0.0) or 0.0
-        dur = getattr(result, "duration_seconds", 0.0) or 0.0
+        try:
+            in_tok = int(getattr(result, "input_tokens", 0) or 0)
+        except (ValueError, TypeError):
+            in_tok = 0
+        try:
+            out_tok = int(getattr(result, "output_tokens", 0) or 0)
+        except (ValueError, TypeError):
+            out_tok = 0
+        try:
+            tot_tok = int(getattr(result, "total_tokens", 0) or (in_tok + out_tok))
+        except (ValueError, TypeError):
+            tot_tok = in_tok + out_tok
+        try:
+            c = float(getattr(result, "cost", 0.0) or 0.0)
+        except (ValueError, TypeError):
+            c = 0.0
+        try:
+            dur = float(getattr(result, "duration_seconds", 0.0) or 0.0)
+        except (ValueError, TypeError):
+            dur = 0.0
 
         stg["agents"].append({
             "agent": agent,
@@ -148,15 +165,19 @@ class WaveOrchestrator:
         self._save_telemetry_files()
 
     def _save_telemetry_files(self) -> None:
-        """Persiste os arquivos telemetry.json e telemetria.md sob docs/."""
+        """Persiste os arquivos telemetry.json e telemetria.md sob docs/ e na ONDA ativa."""
         try:
             docs_dir = self.project_dir / "docs"
             docs_dir.mkdir(parents=True, exist_ok=True)
 
+            telemetry_data = json.dumps(self.telemetry, indent=2, ensure_ascii=False)
             telemetry_json = docs_dir / "telemetry.json"
-            telemetry_json.write_text(
-                json.dumps(self.telemetry, indent=2, ensure_ascii=False), encoding="utf-8"
-            )
+            telemetry_json.write_text(telemetry_data, encoding="utf-8")
+
+            if hasattr(self, "workspace") and hasattr(self, "state_machine"):
+                wave_telemetry = self.workspace.wave_telemetry_path(self.state_machine.wave_id)
+                wave_telemetry.parent.mkdir(parents=True, exist_ok=True)
+                wave_telemetry.write_text(telemetry_data, encoding="utf-8")
 
             tot = self.telemetry["total"]
             speed = round(tot["total_tokens"] / max(tot["duration_seconds"], 0.001), 1)
@@ -198,14 +219,14 @@ class WaveOrchestrator:
         saved = self.db.load_wave_state()
         if saved:
             wave_id = saved.get("wave_id", "ONDA-001")
-            raw_state = saved.get("state", WaveState.DISCUSS.value)
+            raw_state = saved.get("state", WaveState.DISCOVERY.value)
             raw_autonomy = saved.get("autonomy_mode", AutonomyMode.AUTO.value)
             raw_eng = saved.get("engineering_mode", EngineeringMode.TDD_CODE.value)
 
             try:
                 state = WaveState(raw_state)
             except ValueError:
-                state = WaveState.DISCUSS
+                state = WaveState.DISCOVERY
 
             try:
                 autonomy = AutonomyMode(raw_autonomy)
@@ -224,7 +245,7 @@ class WaveOrchestrator:
                 engineering_mode=eng,
             )
 
-        return TuringStateMachine(wave_id="ONDA-001", initial_state=WaveState.DISCUSS)
+        return TuringStateMachine(wave_id="ONDA-001", initial_state=WaveState.DISCOVERY)
 
     def start_wave(
         self,
@@ -283,16 +304,27 @@ class WaveOrchestrator:
         except ValueError:
             eng = EngineeringMode.TDD_CODE
 
+        initial_stage = WaveState.DISCUSS
+        norm_id = wave_id.upper().strip()
+        if norm_id in ("ONDA-000", "ONDA-0", "WAVE-000", "WAVE-0") or norm_id.startswith(("ONDA-000-", "WAVE-000-", "ONDA-0-")):
+            initial_stage = WaveState.DISCOVERY
+        elif (self.project_dir / "docs" / "briefings" / "PRD.md").exists():
+            cards = self.kanban.list_cards(wave_id=wave_id)
+            if cards:
+                initial_stage = WaveState.EXECUTE
+            else:
+                initial_stage = WaveState.PLAN
+
         self.state_machine = TuringStateMachine(
             wave_id=wave_id,
-            initial_state=WaveState.DISCUSS,
+            initial_state=initial_stage,
             autonomy_mode=autonomy,
             engineering_mode=eng,
         )
 
         self.db.save_wave_state(
             wave_id=wave_id,
-            state=WaveState.DISCUSS,
+            state=initial_stage,
             autonomy_mode=autonomy,
             engineering_mode=eng,
         )
@@ -300,10 +332,10 @@ class WaveOrchestrator:
         return {
             "success": True,
             "wave_id": wave_id,
-            "stage": TuringStage.DISCUSS.value,
+            "stage": initial_stage.value,
             "autonomy_mode": autonomy.value,
             "engineering_mode": eng.value,
-            "message": f"ONDA {wave_id} inicializada com sucesso na etapa DISCUSS.",
+            "message": f"ONDA {wave_id} inicializada com sucesso na etapa {initial_stage.value}.",
         }
 
     def get_status(self) -> dict[str, Any]:
@@ -485,12 +517,17 @@ class WaveOrchestrator:
     ) -> tuple[bool, str]:
         """REGRA INEGOCIÁVEL 2: Valida se todas as entradas essenciais do agente existem fisicamente no disco antes de chamá-lo."""
         reqs = self.AGENT_REQUIRED_INPUTS.get(agent_handle, [])
+        wave_id = getattr(self.state_machine, "wave_id", None) if hasattr(self, "state_machine") else None
+        target_sid = story_id or "ST-001"
         for rel_template, desc in reqs:
-            rel_path = rel_template.replace("{story_id}", story_id or "ST-001")
+            rel_path = rel_template.replace("{story_id}", target_sid)
             target = self.project_dir / rel_path
             if not target.exists() and "stories" in rel_path:
-                alt = self.project_dir / "docs" / "backlog" / "stories" / f"{story_id or 'ST-001'}.md"
-                if alt.exists():
+                if "_test_plan.md" in rel_path:
+                    alt = self.workspace.find_test_plan_file(target_sid, wave_id=wave_id)
+                else:
+                    alt = self.workspace.find_story_file(target_sid, wave_id=wave_id)
+                if alt and alt.exists():
                     target = alt
             if not target.exists():
                 return False, f"Pré-requisito ausente para {agent_handle}: O arquivo '{rel_path}' ({desc}) não existe no disco."
@@ -520,21 +557,21 @@ class WaveOrchestrator:
         self.kanban.block_card(target_story, reason=reason, blocked_by=agent_handle)
 
     def run_discuss(self, topic: str, context: dict[str, Any] | None = None) -> dict[str, Any]:
-        """Executa a etapa DISCUSS com @meira (viabilidade) e @grace (PRD)."""
+        """Executa a etapa DISCOVERY / DISCUSS com @meira (viabilidade) e @grace (PRD)."""
         if not topic or not str(topic).strip():
             return {
                 "success": False,
                 "error": "missing_topic",
                 "message": (
-                    "⚠️ Nenhuma demanda ou briefing informado para a etapa DISCUSS. "
+                    "⚠️ Nenhuma demanda ou briefing informado para a etapa DISCOVERY / DISCUSS. "
                     "Informe a ideia ou escopo do produto (ex: /wave discuss <ideia>) para iniciar a viabilidade com @meira e o PRD com @grace."
                 ),
             }
 
-        if self.state_machine.current_state != WaveState.DISCUSS:
+        if self.state_machine.current_state not in (WaveState.DISCUSS, WaveState.DISCOVERY):
             return {
                 "success": False,
-                "error": f"Etapa atual é {self.state_machine.current_state.value}, esperado DISCUSS.",
+                "error": f"Etapa atual é {self.state_machine.current_state.value}, esperado DISCOVERY ou DISCUSS.",
             }
 
         results: list[dict[str, Any]] = []
@@ -641,7 +678,16 @@ class WaveOrchestrator:
                 f"## Problema\n"
                 f"## Personas\n"
                 f"## Critérios RICE\n"
-                f"## Escopo da Entrega ({self.delivery_target.value.upper()})\n\n"
+                f"## Escopo da Entrega ({self.delivery_target.value.upper()})\n"
+                f"## Sequenciador de Ondas do MVP (Lean Inception)\n"
+                f"Estruture o fatiamento em Ondas de Entrega seguindo as 4 Regras da Lean Inception:\n"
+                f"1. Fatias Verticais (End-to-End Tracing): Toda onda corta todas as camadas necessárias.\n"
+                f"2. Semáforo de Risco: Classifique cada onda em VERMELHO, AMARELO ou VERDE (max 1 item VERMELHO por onda; o maior risco deve ser na 1ª onda).\n"
+                f"3. Capacidade Finita: Máximo de 3 a 4 fatias verticais por onda.\n"
+                f"4. Hipótese de Negócio: Cada onda valida uma hipótese central de produto (Onda 1: Core Value Loop; Ondas seguintes: Retenção/Sinais; Onda Final: Automação/Release).\n"
+                f"NÃO gere stories antecipadas para ondas futuras. Formate estritamente a tabela:\n"
+                f"| Onda | Nome da Onda | Hipótese de Negócio | Fatias Verticais / Features | Risco | Final |\n"
+                f"| ONDA-001 | ... | ... | ... | VERMELHO | Não |\n\n"
                 f"Ao concluir com sucesso, declare explicitamente no seu parecer: 'Status: APROVADO'."
             )
             grace_prompt = self._assemble_prompt("@grace", raw_prompt, context)
@@ -711,15 +757,17 @@ class WaveOrchestrator:
         }
 
     def run_plan(self, context: dict[str, Any] | None = None) -> dict[str, Any]:
-        """Executa a etapa PLAN com arquitetos de Upstream com FAIL-FAST estrito e validação de pré-requisitos."""
-        if self.state_machine.current_state != WaveState.PLAN:
-            if self.state_machine.current_state == WaveState.DISCUSS:
-                if not self.transition_to(TuringStage.PLAN):
-                    return {"success": False, "error": "Não foi possível transitar para PLAN."}
+        """Executa a etapa PLAN / INCEPTION / REFINEMENT com arquitetos de Upstream."""
+        if self.state_machine.current_state not in (WaveState.PLAN, WaveState.INCEPTION, WaveState.REFINEMENT):
+            if self.state_machine.current_state in (WaveState.DISCUSS, WaveState.DISCOVERY):
+                from .state_machine import WaveType
+                target = TuringStage.INCEPTION if self.state_machine.wave_type == WaveType.WAVE_ZERO else TuringStage.PLAN
+                if not self.transition_to(target):
+                    return {"success": False, "error": f"Não foi possível transitar para {target.value}."}
             else:
                 return {
                     "success": False,
-                    "error": f"Etapa atual é {self.state_machine.current_state.value}, esperado PLAN.",
+                    "error": f"Etapa atual é {self.state_machine.current_state.value}, esperado PLAN, INCEPTION ou REFINEMENT.",
                 }
 
         results: list[dict[str, Any]] = []
@@ -739,12 +787,40 @@ class WaveOrchestrator:
 
         runner_alan = self._get_runner("@alan")
         if runner_alan:
-            raw_prompt = (
-                f"Mapeie a jornada do usuário e telas para a demanda da ONDA {self.state_machine.wave_id}.\n"
-                f"Consulte o PRD em 'docs/briefings/PRD.md'.\n"
-                f"Mapeie estritamente os fluxos e telas da demanda solicitada, sem inventar telas acessórias ou escopos extras.\n"
-                f"É OBRIGATÓRIO incluir as seções: '## Entry Points', '## Fluxo de Navegação', '## Telas'."
-            )
+            from bombe_code.domain.wave.sequencer import WaveSequencer
+            prd_file = self.workspace.prd_path
+            prd_content = prd_file.read_text(encoding="utf-8") if prd_file.exists() else ""
+            sequencer = WaveSequencer.from_markdown(prd_content)
+            plan = sequencer.get_plan(self.state_machine.wave_id)
+            plan_context = ""
+            if plan:
+                plan_context = (
+                    f"\nESCOPO/FATIAS DA ONDA ({self.state_machine.wave_id}):\n"
+                    f"- Nome da Onda: {plan.name}\n"
+                    f"- Hipótese de Negócio: {plan.business_hypothesis}\n"
+                    f"- Features da Onda: {', '.join(plan.features)}\n"
+                )
+
+            master_journey = self.workspace.journey_master_path
+            has_master = master_journey.exists() and master_journey.stat().st_size >= 50
+
+            if has_master:
+                raw_prompt = (
+                    f"Você está atuando no planejamento da ONDA {self.state_machine.wave_id}.\n"
+                    f"A Jornada Global do Usuário do projeto já está consolidada em 'docs/architecture/journey.md'.\n"
+                    f"{plan_context}\n"
+                    f"Sua missão é gerar o RECORTE DE JORNADA (Journey Slice) específico para esta onda:\n"
+                    f"- Mapeie os fluxos de navegação, telas e entry points estritamente pertinentes às fatias/épicos desta onda.\n"
+                    f"É OBRIGATÓRIO incluir as seções: '## Entry Points da Onda', '## Fluxo de Navegação desta Fatia', '## Telas da Onda'."
+                )
+            else:
+                raw_prompt = (
+                    f"Mapeie a jornada do usuário e telas para o projeto e a demanda da ONDA {self.state_machine.wave_id}.\n"
+                    f"Consulte o PRD em 'docs/briefings/PRD.md'.\n"
+                    f"{plan_context}\n"
+                    f"Mapeie estritamente os fluxos e telas da demanda solicitada, sem inventar telas acessórias ou escopos extras.\n"
+                    f"É OBRIGATÓRIO incluir as seções: '## Entry Points', '## Fluxo de Navegação', '## Telas'."
+                )
             alan_prompt = self._assemble_prompt("@alan", raw_prompt, context)
             res_alan = runner_alan.run(prompt=alan_prompt, context=context)
             self._record_telemetry("PLAN", "@alan", res_alan)
@@ -766,16 +842,20 @@ class WaveOrchestrator:
                     "results": results,
                 }
 
-            # Salva journey no disco se ainda não existir
+            # Salva o journey slice da onda e a jornada mestre do projeto
             try:
-                journeys_dir = self.project_dir / "docs" / "architecture"
-                journeys_dir.mkdir(parents=True, exist_ok=True)
-                journey_file = journeys_dir / "journey.md"
-                if not journey_file.exists() or journey_file.stat().st_size < 50:
-                    journey_file.write_text(res_alan.output, encoding="utf-8")
-                art_content = journey_file.read_text(encoding="utf-8") if journey_file.exists() else ""
+                slice_path = self.workspace.wave_journey_slice_path(self.state_machine.wave_id)
+                slice_path.parent.mkdir(parents=True, exist_ok=True)
+                slice_path.write_text(res_alan.output, encoding="utf-8")
+
+                master_path = self.workspace.journey_master_path
+                master_path.parent.mkdir(parents=True, exist_ok=True)
+                if not master_path.exists() or master_path.stat().st_size < 50:
+                    master_path.write_text(res_alan.output, encoding="utf-8")
+
+                art_content = slice_path.read_text(encoding="utf-8")
             except OSError as e:
-                logger.warning("Falha ao salvar journey.md: %s", e)
+                logger.warning("Falha ao salvar journey slice: %s", e)
                 art_content = ""
 
             # Gate de Jornada
@@ -929,13 +1009,34 @@ class WaveOrchestrator:
 
         runner_caroli = self._get_runner("@caroli")
         if runner_caroli:
+            from bombe_code.domain.wave.sequencer import WaveSequencer
+            prd_file = self.project_dir / "docs" / "briefings" / "PRD.md"
+            prd_content = prd_file.read_text(encoding="utf-8") if prd_file.exists() else ""
+            sequencer = WaveSequencer.from_markdown(prd_content)
+            plan = sequencer.get_plan(self.state_machine.wave_id)
+            plan_context = ""
+            if plan:
+                feats_str = ", ".join(plan.features)
+                plan_context = (
+                    f"\nESCOPO CONTRATADO PARA ESTA ONDA NO SEQUENCIADOR ({self.state_machine.wave_id}):\n"
+                    f"- Nome da Onda: {plan.name}\n"
+                    f"- Hipótese de Negócio: {plan.business_hypothesis}\n"
+                    f"- Fatias Verticais / Features desta onda: {feats_str}\n"
+                    f"- Nível de Risco: {plan.risk_level.value}\n"
+                    f"DIRETRIZ LEAN MANDATÓRIA (ZERO SPEC WASTE):\n"
+                    f"Gere ai-stories JUST-IN-TIME EXCLUSIVAMENTE para as fatias desta onda ({feats_str}).\n"
+                    f"NÃO gere stories detalhadas para as próximas ondas agora — elas serão geradas nas suas respectivas ondas futuras.\n"
+                )
+
             raw_prompt = (
                 f"Decomponha e gere as ai-stories completas para a demanda da ONDA {self.state_machine.wave_id}.\n"
-                f"Consulte o PRD em 'docs/briefings/PRD.md', a Jornada em 'docs/architecture/journey.md' "
-                f"e a Arquitetura em 'docs/architecture/SYSTEM_ARCHITECTURE.md'.\n"
+                f"{plan_context}\n"
+                f"Consulte o PRD em 'docs/briefings/PRD.md', o recorte de jornada em 'docs/waves/{self.state_machine.wave_id}/journey-slice.md' "
+                f"(ou jornada global em 'docs/architecture/journey.md') e a Arquitetura em 'docs/architecture/SYSTEM_ARCHITECTURE.md'.\n"
                 f"Aplique o método PBB (Product Backlog Building) conforme o nível de Inception {profile.inception_level.value}:\n"
                 f"- Granularidade PBB: {profile.pbb_granularity}\n"
                 f"- Diretriz técnica: {profile.technical_debt_tolerance}\n"
+                f"As stories pertencem a esta onda e serão salvas em 'docs/waves/{self.state_machine.wave_id}/stories/ST-XXX.md'.\n"
                 f"Crie histórias verticais estritamente para o escopo pedido, sem inventar módulos ou cobranças extras.\n"
                 f"É OBRIGATÓRIO incluir:\n"
                 f"# STORY ST-001: Implementação da Funcionalidade\n"
@@ -969,16 +1070,15 @@ class WaveOrchestrator:
                     "results": results,
                 }
 
-            # Preserva stories no disco e avalia conformidade física
+            # Preserva stories no disco da ONDA e avalia conformidade física
             try:
-                stories_dir = self.project_dir / "docs" / "stories"
-                stories_dir.mkdir(parents=True, exist_ok=True)
-                st1_file = stories_dir / "ST-001.md"
+                wave_stories_dir = self.workspace.wave_stories_dir(self.state_machine.wave_id)
+                wave_stories_dir.mkdir(parents=True, exist_ok=True)
+                st1_file = wave_stories_dir / "ST-001.md"
 
-                # Procura por ST-001 em docs/backlog/stories ou docs/operational
-                all_st1 = list(self.project_dir.glob("docs/**/ST-001.md"))
-                alt_st1 = next((p for p in all_st1 if p != st1_file), None)
-                if alt_st1 and (not st1_file.exists() or st1_file.stat().st_size < 50):
+                # Procura por ST-001 se já existir em outro lugar
+                alt_st1 = self.workspace.find_story_file("ST-001", wave_id=self.state_machine.wave_id)
+                if alt_st1 and alt_st1 != st1_file and (not st1_file.exists() or st1_file.stat().st_size < 50):
                     st1_file.write_text(alt_st1.read_text(encoding="utf-8"), encoding="utf-8")
                 elif not st1_file.exists() or st1_file.stat().st_size < 50:
                     st1_file.write_text(res_caroli.output, encoding="utf-8")
@@ -1150,22 +1250,27 @@ class WaveOrchestrator:
                 "message": f"Story {target_story} bloqueada no QA por falta de entrada: {pre_err}",
             }
 
+        story_file = self.workspace.find_story_file(target_story, wave_id=self.state_machine.wave_id)
+        story_rel = story_file.relative_to(self.project_dir).as_posix() if story_file else f"docs/waves/{self.state_machine.wave_id}/stories/{target_story}.md"
+        plan_file = self.workspace.wave_qa_dir(self.state_machine.wave_id) / f"{target_story}_test_plan.md"
+        plan_rel = plan_file.relative_to(self.project_dir).as_posix()
+
         runner_aniche = self._get_runner("@aniche")
         test_plan_res = None
         if runner_aniche:
             raw_aniche_prompt = (
                 f"Elabore o Plano de Testes e escreva a suíte de testes automatizados para a story {target_story}.\n"
-                f"Consulte os requisitos e os cenários BDD no arquivo 'docs/stories/{target_story}.md'.\n"
+                f"Consulte os requisitos e os cenários BDD no arquivo '{story_rel}'.\n"
                 f"Gere e salve os testes de unidade/slice na pasta 'tests/' (ou retorne-a no seu parecer).\n"
             )
             aniche_prompt = self._assemble_prompt("@aniche", raw_aniche_prompt)
             test_plan_res = runner_aniche.run(prompt=aniche_prompt)
             self._record_telemetry("EXECUTE", "@aniche (QA Plan)", test_plan_res)
 
-            # Persiste o plano no disco para consultas downstream
+            # Persiste o plano no disco da ONDA para consultas downstream
             if test_plan_res and getattr(test_plan_res, "output", None):
                 try:
-                    plan_file = self.project_dir / "docs" / "stories" / f"{target_story}_test_plan.md"
+                    plan_file.parent.mkdir(parents=True, exist_ok=True)
                     plan_file.write_text(test_plan_res.output, encoding="utf-8")
                     self._extract_and_write_project_files(test_plan_res.output)
                 except OSError as e:
@@ -1189,7 +1294,7 @@ class WaveOrchestrator:
         if runner_dev:
             raw_dev_prompt = (
                 f"Implemente o código estritamente necessário para fazer a suíte de testes passar para a story {target_story}.\n"
-                f"Consulte os requisitos em 'docs/stories/{target_story}.md' e o plano/testes em 'docs/stories/{target_story}_test_plan.md' (e pasta 'tests/').\n"
+                f"Consulte os requisitos em '{story_rel}' e o plano/testes em '{plan_rel}' (e pasta 'tests/').\n"
                 f"Siga TDD (GREEN) e refatore com Clean Code. Salve os arquivos de código de produção nos caminhos relativos apropriados (ex: 'js/logic.js', 'index.html').\n"
             )
             dev_prompt = self._assemble_prompt("@valim", raw_dev_prompt)
@@ -1654,14 +1759,42 @@ class WaveOrchestrator:
         prd_content = prd_file.read_text(encoding="utf-8") if prd_file.exists() else ""
         file_summary = ", ".join(f.name for f in code_files[:15]) or "Nenhum"
 
-        # 2. Homologação de Produto: @edith audita o entregável integrado contra o PRD
+        # 2. Homologação de Produto: @edith audita o entregável integrado
         runner_edith = self._get_runner("@edith")
         edith_res = None
         if runner_edith:
-            raw_edith_prompt = (
-                "Audite o entregável integrado da ONDA consultando o PRD em 'docs/briefings/PRD.md' e inspecionando os arquivos de código e testes do projeto.\n"
-                "Se aprovado, declare explicitamente: 'Homologação: APROVADO'. Caso contrário, aponte os bloqueios ou faltas.\n"
-            )
+            from bombe_code.domain.wave.sequencer import WaveSequencer
+            sequencer = WaveSequencer.from_markdown(prd_content)
+            current_wave_id = self.state_machine.wave_id
+            current_plan = sequencer.get_plan(current_wave_id)
+            has_future = sequencer.has_future_waves(current_wave_id)
+            is_final = sequencer.is_final_wave(current_wave_id)
+
+            cards = self.kanban.list_cards(wave_id=current_wave_id)
+            wave_story_ids = [c.get("story_id", "") for c in cards]
+            story_list_str = ", ".join(wave_story_ids) or "stories da onda atual"
+
+            if has_future and not is_final:
+                # ONDA INTERMEDIÁRIA: Valida a fatia vertical contratada
+                raw_edith_prompt = (
+                    f"Você está auditando a ONDA INTERMEDIÁRIA '{current_wave_id}' de um MVP fatiado via Lean Inception.\n"
+                    f"O PRD em 'docs/briefings/PRD.md' formalizou que existem ondas futuras para os épicos e funcionalidades subsequentes.\n"
+                    f"Seu dever como Auditora de Homologação nesta onda é verificar EXCLUSIVAMENTE o incremento entregue nesta fatia:\n"
+                    f"- Histórias sob escopo desta onda: {story_list_str}\n"
+                    f"- Hipótese de negócio da onda: '{current_plan.business_hypothesis if current_plan else 'Fatia vertical da onda'}'\n"
+                    f"- Inspecione os arquivos de código e testes do projeto.\n"
+                    f"REGRA MANDATÓRIA DE FINOPS E GOVERNANÇA: NÃO reprove nem bloqueie esta onda por falta de módulos ou funcionalidades que estão formalmente agendadas para as ondas futuras no Sequenciador do PRD.\n"
+                    f"Se as histórias desta onda ({story_list_str}) foram implementadas com testes passando e arquitetura íntegra, declare explicitamente: 'Homologação: APROVADO'. Caso contrário, aponte os bloqueios da fatia atual.\n"
+                )
+            else:
+                # ONDA FINAL: Validação de Release de Produção
+                raw_edith_prompt = (
+                    f"Você está auditando a ONDA FINAL DE RELEASE ('{current_wave_id}') do MVP.\n"
+                    f"Como esta é a última onda planejada no Sequenciador do PRD (ou onda única de escopo completo), "
+                    f"audite o entregável integrado completo contra TODOS os requisitos funcionais e não-funcionais do PRD em 'docs/briefings/PRD.md'.\n"
+                    f"Verifique se o produto está íntegro de ponta a ponta para homologação de produção.\n"
+                    f"Se aprovado para release, declare explicitamente: 'Homologação: APROVADO'. Caso contrário, aponte os bloqueios ou faltas para o MVP.\n"
+                )
             edith_prompt = self._assemble_prompt("@edith", raw_edith_prompt)
             edith_res = runner_edith.run(edith_prompt)
             self._record_telemetry("VALIDATE", "@edith (Product Homologation)", edith_res)
@@ -1704,6 +1837,29 @@ class WaveOrchestrator:
         if not nina_approved:
             reasons.append(f"@nina: {nina_reason}")
 
+        # Salva o relatório de validação formal no workspace da ONDA
+        try:
+            val_path = self.workspace.wave_validation_report_path(self.state_machine.wave_id)
+            val_path.parent.mkdir(parents=True, exist_ok=True)
+            report_lines = [
+                f"# 📋 Relatório de Validação da ONDA {self.state_machine.wave_id}",
+                f"- **Resultado Final:** {'APROVADO' if success else 'REPROVADO'}",
+                f"- **Testes de Integração:** {'PASSOU' if integration_tests_info['all_passed'] else 'FALHOU'}",
+                f"- **Homologação de Produto (@edith):** {'APROVADO' if edith_approved else 'REPROVADO'}",
+                f"- **Governança e FinOps (@nina):** {'APROVADO' if nina_approved else 'REPROVADO'}",
+                "",
+                "## 🔍 Homologação de Produto (@edith)",
+                getattr(edith_res, "output", "") if edith_res else "Não executado.",
+                "",
+                "## ⚖️ Auditoria de Governança e Custos (@nina)",
+                getattr(nina_res, "output", "") if nina_res else "Não executado.",
+            ]
+            if reasons:
+                report_lines.extend(["", "## ⚠️ Apontamentos e Bloqueios"] + [f"- {r}" for r in reasons])
+            val_path.write_text("\n".join(report_lines) + "\n", encoding="utf-8")
+        except OSError as exc:
+            logger.warning("Falha ao salvar validation_report.md: %s", exc)
+
         return {
             "success": success,
             "stage": TuringStage.VALIDATE.value,
@@ -1715,10 +1871,14 @@ class WaveOrchestrator:
 
     def end_wave(self) -> dict[str, Any]:
         """Finaliza e arquiva a ONDA como COMPLETED."""
-        if self.state_machine.current_state != WaveState.VALIDATE:
+        from .state_machine import WaveType
+        is_wave_zero = self.state_machine.wave_type == WaveType.WAVE_ZERO
+        valid_end_states = (WaveState.VALIDATE, WaveState.PLAN) if is_wave_zero else (WaveState.VALIDATE,)
+        if self.state_machine.current_state not in valid_end_states:
+            expected = "VALIDATE ou PLAN (Onda Zero)" if is_wave_zero else "VALIDATE"
             return {
                 "success": False,
-                "error": f"Etapa atual é {self.state_machine.current_state.value}, esperado VALIDATE para encerrar.",
+                "error": f"Etapa atual é {self.state_machine.current_state.value}, esperado {expected} para encerrar.",
             }
 
         if not self.transition_to(TuringStage.COMPLETED):
@@ -1864,6 +2024,10 @@ class WaveOrchestrator:
             "kanban_cards": status.get("kanban_cards", []),
             "config": cfg.model_dump(),
         }
+
+    run_discovery = run_discuss
+    run_inception = run_plan
+    run_refinement = run_plan
 
 
 TuringWaveOrchestrator = WaveOrchestrator

@@ -12,25 +12,31 @@ _STAGE_INSTRUCTIONS = {
         "Artefatos canônicos obrigatórios: 'docs/briefings/VIABILITY.md' e 'docs/briefings/PRD.md'. É PROIBIDO inventar outros nomes de arquivo como PRD-*.md.\n"
         "É PROIBIDO alterar ou criar arquivos de código em src/ ou testes nesta etapa."
     ),
+    "DISCOVERY": (
+        "## ETAPA ATIVA: DISCOVERY (ONDA ZERO)\n"
+        "Você está na etapa DISCOVERY da Onda Zero. Seu foco é alinhamento de problema, ideação, pesquisa de mercado e viabilidade técnica/estratégica com @meira e @demarco.\n"
+        "Artefatos canônicos obrigatórios: 'docs/briefings/VIABILITY.md'.\n"
+        "É PROIBIDO alterar ou criar arquivos de código em src/ ou testes nesta etapa."
+    ),
     "INCEPTION": (
         "## ETAPA ATIVA: INCEPTION (ONDA ZERO)\n"
-        "Você está na etapa INCEPTION da Onda Zero (Lean Inception Macro). Seu foco é conduzir os alinhamentos de visão de produto (@grace, @caroli), mapear jornadas do usuário (@alan), desenhar o Canvas MVP e estruturar o Sequenciador de Ondas em docs/.\n"
+        "Você está na etapa INCEPTION da Onda Zero (Lean Inception Macro). Seu foco é conduzir os alinhamentos de visão de produto (@grace, @caroli), mapear jornadas do usuário (@alan), desenhar o Canvas MVP e estruturar o PRD canônico em docs/briefings/PRD.md.\n"
         "É PROIBIDO criar código de produção em src/ nesta etapa."
     ),
     "DISCUSS": (
-        "## ETAPA ATIVA: DISCUSS\n"
-        "Você está na etapa DISCUSS da ONDA. Seu foco é alinhamento de escopo, ideação e documentação de Viabilidade (@meira) e PRD canônico (@grace).\n"
+        "## ETAPA ATIVA: DISCOVERY / DISCUSS\n"
+        "Você está na etapa de alinhamento de escopo, ideação e documentação de Viabilidade (@meira) e PRD canônico (@grace).\n"
         "Artefatos canônicos obrigatórios: 'docs/briefings/VIABILITY.md' e 'docs/briefings/PRD.md'. É TERMINANTEMENTE PROIBIDO criar arquivos com nomes arbitrários como PRD-*.md.\n"
         "É PROIBIDO alterar ou criar arquivos de código em src/ ou testes nesta etapa."
     ),
     "PLAN": (
         "## ETAPA ATIVA: PLAN\n"
-        "Você está na etapa PLAN da ONDA. Seu foco é arquitetura de software, jornadas de usuário e especificação de ai-stories em docs/stories/.\n"
+        "Você está na etapa PLAN da ONDA. Seu foco é arquitetura de software, jornadas de usuário e especificação de ai-stories no workspace da onda em docs/waves/{wave_id}/stories/ (ou docs/backlog/stories/).\n"
         "É PROIBIDO criar código de produção em src/ nesta etapa."
     ),
     "REFINEMENT": (
         "## ETAPA ATIVA: REFINEMENT (ONDAS DE ENTREGA)\n"
-        "Você está na etapa REFINEMENT da Onda de Entrega. Seu foco é o refinamento PBB (Product Backlog Building) liderado por @caroli, decompondo ai-stories em tarefas atômicas especializadas (DATABASE, CONTRACT, BACKEND_TDD, FRONTEND_UI, E2E_INTEGRATION) em docs/backlog/stories/.\n"
+        "Você está na etapa REFINEMENT da Onda de Entrega. Seu foco é o refinamento PBB (Product Backlog Building) liderado por @caroli, decompondo ai-stories em tarefas atômicas especializadas (DATABASE, CONTRACT, BACKEND_TDD, FRONTEND_UI, E2E_INTEGRATION) no workspace da onda em docs/waves/{wave_id}/stories/ (ou docs/backlog/stories/).\n"
         "É PROIBIDO criar código de produção em src/ nesta etapa."
     ),
     "EXECUTE": (

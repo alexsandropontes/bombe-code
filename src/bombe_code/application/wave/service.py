@@ -80,22 +80,46 @@ class WaveApplicationService:
         self._emit("wave.ended", {"result": res})
         return res
 
-    def discuss_stage(
-        self, topic: str, context: dict[str, Any] | None = None
+    def discovery_stage(
+        self, topic: str = "", context: dict[str, Any] | None = None
     ) -> dict[str, Any]:
-        """Executa a etapa DISCUSS (Viabilidade com @meira e PRD com @grace)."""
-        self._emit("wave.stage_started", {"stage": "DISCUSS", "topic": topic})
+        """Executa a etapa DISCOVERY / DISCUSS (Viabilidade com @meira e alinhamento preliminar)."""
+        self._emit("wave.stage_started", {"stage": "DISCOVERY", "topic": topic})
         res = self.orch.run_discuss(topic=topic, context=context)
-        self._emit("wave.stage_completed", {"stage": "DISCUSS", "result": res})
+        self._emit("wave.stage_completed", {"stage": "DISCOVERY", "result": res})
+        return res
+
+    def discuss_stage(
+        self, topic: str = "", context: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
+        """Alias para discovery_stage."""
+        return self.discovery_stage(topic=topic, context=context)
+
+    def inception_stage(
+        self, context: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
+        """Executa a etapa INCEPTION (Lean Inception completa com @caroli, @grace, @alan e PRD Canônico)."""
+        self._emit("wave.stage_started", {"stage": "INCEPTION"})
+        res = self.orch.run_plan(context=context)
+        self._emit("wave.stage_completed", {"stage": "INCEPTION", "result": res})
         return res
 
     def plan_stage(
         self, context: dict[str, Any] | None = None
     ) -> dict[str, Any]:
-        """Executa a etapa PLAN (@alan, @norman, @codd e @david)."""
+        """Executa a etapa PLAN (Arquitetura com @ieru e modelagem com @codd)."""
         self._emit("wave.stage_started", {"stage": "PLAN"})
         res = self.orch.run_plan(context=context)
         self._emit("wave.stage_completed", {"stage": "PLAN", "result": res})
+        return res
+
+    def refinement_stage(
+        self, context: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
+        """Executa a etapa REFINEMENT (PBB, Step Map, quebra de stories INVEST e DoR com @caroli)."""
+        self._emit("wave.stage_started", {"stage": "REFINEMENT"})
+        res = self.orch.run_plan(context=context)
+        self._emit("wave.stage_completed", {"stage": "REFINEMENT", "result": res})
         return res
 
     def execute_stage(
@@ -106,7 +130,8 @@ class WaveApplicationService:
     ) -> dict[str, Any]:
         """Executa o ciclo de implementação TDD (EXECUTE)."""
         self._emit("wave.stage_started", {"stage": "EXECUTE", "story_id": story_id})
-        res = self.orch.run_execute(story_id=story_id)
+        stories = [story_id] if story_id else None
+        res = self.orch.run_execute(stories=stories)
         self._emit("wave.stage_completed", {"stage": "EXECUTE", "result": res})
         return res
 
@@ -128,39 +153,74 @@ class WaveApplicationService:
         """Executa um estágio e, se a ONDA estiver em modo AUTO, encadeia autonomamente os próximos."""
         stage_norm = stage.strip().upper()
         res: dict[str, Any] = {"success": False, "stage": stage_norm}
+        saved = self.orch.db.load_wave_state() or {}
+        is_wave_zero = str(saved.get("wave_id", "")).upper() in ("ONDA-000", "ONDA-0", "WAVE-000", "WAVE-0")
 
-        if stage_norm in ("DISCUSS", "DISCOVERY"):
-            res = self.discuss_stage(topic=input_text, context=context)
+        # 1. Onda Zero: DISCOVERY (ou DISCUSS)
+        if stage_norm in ("DISCOVERY", "DISCUSS"):
+            res = self.discovery_stage(topic=input_text, context=context)
             if not res.get("success"):
                 return res
 
-            saved = self.orch.db.load_wave_state() or {}
+            if saved.get("autonomy_mode") == "AUTO":
+                next_stage = "INCEPTION" if is_wave_zero else "PLAN"
+                self._emit(
+                    "wave.cascade_advancing",
+                    {"from_stage": stage_norm, "to_stage": next_stage},
+                )
+                return self.execute_with_auto_cascade(next_stage, context=context)
+
+        # 2. Onda Zero: INCEPTION
+        elif stage_norm == "INCEPTION":
+            res = self.inception_stage(context=context)
+            if not res.get("success"):
+                return res
+
             if saved.get("autonomy_mode") == "AUTO":
                 self._emit(
                     "wave.cascade_advancing",
-                    {"from_stage": "DISCUSS", "to_stage": "PLAN"},
+                    {"from_stage": "INCEPTION", "to_stage": "COMPLETED"},
                 )
-                return self.execute_with_auto_cascade("PLAN", context=context)
+                end_res = self.end_wave()
+                res["wave_ended"] = end_res
 
-        elif stage_norm in ("PLAN", "INCEPTION"):
+        # 3. Onda de Entrega: PLAN
+        elif stage_norm == "PLAN":
             res = self.plan_stage(context=context)
             if not res.get("success"):
                 return res
 
-            saved = self.orch.db.load_wave_state() or {}
+            if saved.get("autonomy_mode") == "AUTO":
+                next_stage = "REFINEMENT" if not is_wave_zero else "COMPLETED"
+                self._emit(
+                    "wave.cascade_advancing",
+                    {"from_stage": "PLAN", "to_stage": next_stage},
+                )
+                if is_wave_zero:
+                    end_res = self.end_wave()
+                    res["wave_ended"] = end_res
+                else:
+                    return self.execute_with_auto_cascade(next_stage, context=context)
+
+        # 4. Onda de Entrega: REFINEMENT
+        elif stage_norm == "REFINEMENT":
+            res = self.refinement_stage(context=context)
+            if not res.get("success"):
+                return res
+
             if saved.get("autonomy_mode") == "AUTO":
                 self._emit(
                     "wave.cascade_advancing",
-                    {"from_stage": "PLAN", "to_stage": "EXECUTE"},
+                    {"from_stage": "REFINEMENT", "to_stage": "EXECUTE"},
                 )
                 return self.execute_with_auto_cascade("EXECUTE", context=context)
 
+        # 5. Onda de Entrega: EXECUTE / CYCLE
         elif stage_norm in ("EXECUTE", "CYCLE"):
             res = self.execute_stage(context=context)
             if not res.get("success"):
                 return res
 
-            saved = self.orch.db.load_wave_state() or {}
             if saved.get("autonomy_mode") == "AUTO":
                 self._emit(
                     "wave.cascade_advancing",
@@ -168,12 +228,12 @@ class WaveApplicationService:
                 )
                 return self.execute_with_auto_cascade("VALIDATE", context=context)
 
+        # 6. Onda de Entrega: VALIDATE / REVIEW
         elif stage_norm in ("VALIDATE", "REVIEW"):
             res = self.validate_stage(context=context)
             if not res.get("success"):
                 return res
 
-            saved = self.orch.db.load_wave_state() or {}
             if saved.get("autonomy_mode") == "AUTO":
                 self._emit(
                     "wave.cascade_advancing",
