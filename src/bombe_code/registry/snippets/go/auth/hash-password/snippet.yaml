@@ -1,0 +1,25 @@
+name: hash-password
+description: Hash de senha usando bcrypt com salt automático
+category: auth
+type: function
+platform: go
+version: 1.0.0
+author: '@barbara'
+tags:
+- password
+- hash
+- bcrypt
+- security
+- auth
+dependencies:
+- golang.org/x/crypto/bcrypt
+tests: tests/hash_password_test.go
+invariants:
+- constant time comparison
+- salt generation
+- 100k iterations
+exports:
+- hash_password
+- verify_password
+- HashPassword
+- VerifyPassword

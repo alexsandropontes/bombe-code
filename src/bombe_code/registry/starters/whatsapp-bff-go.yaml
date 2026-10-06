@@ -1,0 +1,27 @@
+name: whatsapp-bff-go
+blueprint: whatsapp-bff-go
+category: Communication
+type: server
+description: WhatsApp BFF (Backend for Frontend) - Go 1.24 + WhatsApp Cloud API
+tech_stack:
+  backend: "Go 1.24"
+  integration: "WhatsApp Cloud API"
+structure:
+  - src/backend/app/
+  - src/backend/main.go
+  - src/backend/models.go
+  - src/backend/services/
+  - src/backend/services/whatsapp_service.go
+  - src/backend/services/message_handler.go
+  - src/backend/webhook/
+  - src/backend/webhook/verify.go
+  - src/backend/webhook/incoming.go
+  - src/backend/go.mod
+  - src/backend/.env.example
+  - src/backend/README.md
+required_agents:
+  - Barbara
+primary_skills:
+  - go-elite
+  - backend-security
+  - api-design

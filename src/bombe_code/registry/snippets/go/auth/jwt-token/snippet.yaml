@@ -1,0 +1,19 @@
+name: jwt-token
+description: Geração e validação de tokens JWT HMAC-SHA256 em Go 1.24
+category: auth
+type: function
+platform: go
+version: 1.0.0
+author: '@barbara'
+tags:
+- jwt
+- token
+- auth
+dependencies: []
+invariants:
+- constant time verification
+- expiration check
+exports:
+- GenerateToken
+- ValidateToken
+tests: tests/jwt_test.go

@@ -1,0 +1,22 @@
+name: tenant-middleware-logical
+description: ContextVar e Middleware ASGI para gerenciamento de Tenant Lógico
+category: multitenancy
+type: class
+platform: python
+version: 1.0.0
+author: '@barbara'
+tags:
+- multitenancy
+- fastapi
+- tenant
+- contextvar
+dependencies: []
+invariants:
+- ContextVar isolation
+- header extraction
+- fallback default
+exports:
+- get_current_tenant
+- set_current_tenant
+- TenantMiddleware
+tests: tests/test_tenant.py

@@ -1,0 +1,11 @@
+# 🏛️ Arquitetura do Projeto (Forge Core SaaS)
+
+Este projeto segue o padrão **Physical Schema Isolation (Vault Pattern)**.
+
+## 🧱 Camadas
+- **Frontend:** React 19 + Material Design 3.
+- **Backend:** Node.js (Express) com suporte a isolamento por Schema.
+- **Banco de Dados:** PostgreSQL (Schemas `admin` e `op_{tenant}`).
+
+## 🛡️ Protocolo de Segurança
+Todo acesso operacional é precedido por um `SET search_path` dinâmico baseado no claim do JWT.

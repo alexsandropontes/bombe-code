@@ -1,0 +1,36 @@
+using Forge.DotNetMultiLogical.Domain.Entities;
+using Forge.DotNetMultiLogical.Infrastructure.Data;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+
+namespace Forge.DotNetMultiLogical.Controllers;
+
+[ApiController]
+[Route("api/[controller]")]
+public class TenantsController : ControllerBase
+{
+    private readonly TenantDbContext _dbContext;
+
+    public TenantsController(TenantDbContext dbContext)
+    {
+        _dbContext = dbContext;
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> GetAll()
+    {
+        var tenants = await _dbContext.Tenants.ToListAsync();
+        return Ok(tenants);
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> Create([FromBody] CreateTenantRequest request)
+    {
+        var tenant = new Tenant { Id = request.Id, Name = request.Name };
+        _dbContext.Tenants.Add(tenant);
+        await _dbContext.SaveChangesAsync();
+        return CreatedAtAction(nameof(GetAll), new { id = tenant.Id }, tenant);
+    }
+}
+
+public record CreateTenantRequest(string Id, string Name);

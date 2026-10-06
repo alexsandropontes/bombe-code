@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# Hook local pre-push do Bombe Code — Versionamento Semântico Automático
+
+set -e
+
+# Se for disparo interno recursivo, permite o push passar direto
+if [ -n "$_BOMBE_INTERNAL_PUSH" ]; then
+    exit 0
+fi
+
+# Executa o bump de versão automático
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+if [ -f "$REPO_ROOT/scripts/bump_version.py" ]; then
+    OUTPUT=$(python3 "$REPO_ROOT/scripts/bump_version.py")
+    echo "$OUTPUT"
+
+    # Se uma nova versão foi gerada e commitada, dispara o push com a tag e encerra este
+    if echo "$OUTPUT" | grep -q "tagueada com sucesso"; then
+        echo "🚀 Enviando commits e tags atualizados para o remoto..."
+        REMOTE_NAME="${1:-origin}"
+        _BOMBE_INTERNAL_PUSH=1 git push --no-verify --follow-tags "$REMOTE_NAME" HEAD
+        exit 1 # Aborta o push original não versionado, pois o push versionado já foi enviado!
+    fi
+fi
+
+exit 0

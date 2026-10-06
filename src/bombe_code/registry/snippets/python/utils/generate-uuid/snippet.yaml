@@ -1,0 +1,21 @@
+name: generate-uuid
+description: Gera UUID v4 único
+category: utils
+type: function
+platform: python
+version: 1.0.0
+author: '@barbara'
+tags:
+- uuid
+- guid
+- unique
+- id
+dependencies: []
+tests: tests/test_generate_uuid.py
+invariants:
+- uuid v4 random generation
+- rfc 4122 compliant
+exports:
+- generate_uuid
+- GenerateUUID
+- generateUuid

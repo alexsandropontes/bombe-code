@@ -1,0 +1,17 @@
+name: node-mono
+blueprint: node-react-fullstack
+category: SaaS
+type: fullstack
+description: Fullstack SaaS Node.js (Monotenant)
+tech_stack:
+  backend: "Node.js (TypeScript)"
+  frontend: "React 19"
+  database: "PostgreSQL"
+composition:
+  - node-multi-logical-e-mono-backend
+  - react-portal
+structure:
+  - docs/produto
+  - src/backend/node-mono.env.example
+  - src/run.ps1
+  - src/run.sh

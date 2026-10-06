@@ -1,0 +1,23 @@
+name: node-multi-physical-backend
+blueprint: node-multi-physical
+category: Backend
+type: server
+description: Node.js Multi-Tenant (Physical Isolation)
+tech_stack:
+  backend: "Node.js (TypeScript)"
+  database: "PostgreSQL"
+structure:
+  - src/backend/database/
+  - src/backend/middleware/
+  - src/backend/models/
+  - src/backend/repositories/
+  - src/backend/routes/
+  - src/backend/services/
+  - src/backend/app.ts
+  - src/backend/types.d.ts
+  - src/backend/init-db.ts
+  - src/backend/package.json
+  - src/backend/tsconfig.json
+  - src/backend/.env.example
+required_agents:
+  - Barbara

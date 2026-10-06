@@ -1,0 +1,39 @@
+package routes
+
+import (
+	"encoding/json"
+	"net/http"
+	"../service"
+)
+
+type AuthHandler struct {
+	Service *service.AuthService
+}
+
+func (h *AuthHandler) Discovery(w http.ResponseWriter, r *http.Request) {
+	var req struct { Email string }
+	json.NewDecoder(r.Body).Decode(&req)
+	
+	slug, err := h.Service.Discovery(req.Email)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"tenant_slug": slug})
+}
+
+func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
+	var req struct { Email string; Password string; TenantSlug string }
+	json.NewDecoder(r.Body).Decode(&req)
+	
+	res, err := h.Service.Login(req.Email, req.Password, req.TenantSlug)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
+	
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(res)
+}

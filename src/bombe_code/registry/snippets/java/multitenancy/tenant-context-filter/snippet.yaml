@@ -1,0 +1,23 @@
+name: tenant-context-filter
+description: Filtro de contexto de Tenant ThreadLocal para Spring Boot 3.4+
+category: multitenancy
+type: class
+platform: java
+version: 1.0.0
+author: '@james'
+tags:
+- multitenancy
+- spring
+- tenant
+- threadlocal
+- filter
+dependencies: []
+invariants:
+- ThreadLocal cleanup in finally
+- header extraction
+- fallback default
+exports:
+- TenantContext.getCurrentTenant
+- TenantContext.setCurrentTenant
+- TenantContext.clear
+tests: tests/TenantContextTest.java

@@ -1,0 +1,23 @@
+name: whatsapp-meta-webhook
+description: Validador criptográfico de webhooks Meta Cloud API WhatsApp para FastAPI
+  / Starlette
+category: omnichannel
+type: function
+platform: python
+version: 1.0.0
+author: '@barbara'
+tags:
+- whatsapp
+- meta
+- webhook
+- hmac
+- omnichannel
+dependencies: []
+invariants:
+- HMAC SHA-256 signature
+- constant-time comparison
+- verify token challenge
+exports:
+- verify_signature
+- verify_challenge
+tests: tests/test_webhook.py

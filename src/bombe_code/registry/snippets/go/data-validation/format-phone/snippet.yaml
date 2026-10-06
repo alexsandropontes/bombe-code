@@ -1,0 +1,21 @@
+name: format-phone
+description: Formata telefone brasileiro no padrão (XX) XXXXX-XXXX
+category: data-validation
+type: function
+platform: go
+version: 1.0.0
+author: '@barbara'
+tags:
+- phone
+- telefone
+- formatacao
+- brasil
+dependencies: []
+tests: tests/format_phone_test.go
+invariants:
+- ddd area code check
+- format br phone
+exports:
+- format_phone
+- FormatPhone
+- formatPhone

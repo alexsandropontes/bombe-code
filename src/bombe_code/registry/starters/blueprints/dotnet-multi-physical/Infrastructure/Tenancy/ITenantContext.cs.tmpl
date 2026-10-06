@@ -1,0 +1,7 @@
+namespace Forge.DotNetMultiPhysical.Infrastructure.Tenancy;
+
+public interface ITenantContext
+{
+    string? CurrentTenantId { get; set; }
+    string? CurrentSchema { get; set; }
+}

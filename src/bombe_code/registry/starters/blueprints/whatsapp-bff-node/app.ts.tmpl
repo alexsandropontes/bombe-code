@@ -1,0 +1,95 @@
+import express, { Request, Response, NextFunction } from 'express';
+import dotenv from 'dotenv';
+import { verifyWebhook } from './webhook/verify';
+import { handleWebhook } from './webhook/incoming';
+import { WhatsAppCloudAPI } from './services/whatsappService';
+
+dotenv.config();
+
+const app = express();
+const PORT = process.env.PORT || 8000;
+
+// Initialize WhatsApp Cloud API client
+const whatsappAPI = new WhatsAppCloudAPI(
+  process.env.WHATSAPP_ACCESS_TOKEN!,
+  process.env.WHATSAPP_PHONE_NUMBER_ID!,
+  process.env.WHATSAPP_API_VERSION || 'v18.0'
+);
+
+// Middleware
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// Health check endpoint
+app.get('/health', (_req: Request, res: Response) => {
+  res.json({
+    status: 'UP',
+    service: 'WhatsApp BFF',
+    version: '1.0.0'
+  });
+});
+
+// Webhook verification endpoint (Meta)
+app.get('/webhook', verifyWebhook);
+
+// Webhook endpoint to receive messages
+app.post('/webhook', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    // Process webhook asynchronously to respond quickly to Meta
+    handleWebhook(req.body, whatsappAPI).catch((error) => {
+      console.error('Error processing webhook:', error);
+    });
+
+    res.status(200).json({ status: 'accepted' });
+  } catch (error) {
+    console.error('Error in webhook endpoint:', error);
+    next(error);
+  }
+});
+
+// Send message endpoint
+app.post('/api/send', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { to, type, content } = req.body;
+
+    const result = await whatsappAPI.sendMessage(to, type, content);
+    res.status(200).json(result);
+  } catch (error) {
+    console.error('Error sending message:', error);
+    next(error);
+  }
+});
+
+// Send template endpoint
+app.post('/api/send-template', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { to, template_name, language_code, components } = req.body;
+
+    const result = await whatsappAPI.sendTemplate(
+      to,
+      template_name,
+      language_code || 'pt_BR',
+      components || []
+    );
+
+    res.status(200).json(result);
+  } catch (error) {
+    console.error('Error sending template:', error);
+    next(error);
+  }
+});
+
+// Error handler
+app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
+  console.error('Unhandled error:', err);
+  res.status(500).json({ error: err.message });
+});
+
+// Start server
+app.listen(PORT, () => {
+  console.log(`🚀 WhatsApp BFF Server running on port ${PORT}`);
+  console.log(`📡 Webhook URL: http://localhost:${PORT}/webhook`);
+  console.log(`🔍 Health check: http://localhost:${PORT}/health`);
+});
+
+export default app;

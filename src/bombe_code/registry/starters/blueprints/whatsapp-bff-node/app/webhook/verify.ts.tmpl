@@ -1,0 +1,24 @@
+import { Request, Response } from 'express';
+
+export function verifyWebhook(req: Request, res: Response): void {
+  const verifyToken = process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN;
+
+  if (!verifyToken) {
+    console.error('❌ WHATSAPP_WEBHOOK_VERIFY_TOKEN not configured');
+    res.status(500).json({ error: 'Verify token not configured' });
+    return;
+  }
+
+  const mode = req.query['hub.mode'];
+  const challenge = req.query['hub.challenge'];
+  const token = req.query['hub.verify_token'];
+
+  // Verify the token
+  if (mode === 'subscribe' && token === verifyToken) {
+    console.log('✅ Webhook verified successfully');
+    res.status(200).send(challenge);
+  } else {
+    console.warn(`⚠️  Webhook verification failed: mode=${mode}, token=${token}`);
+    res.status(403).json({ error: 'Verification failed' });
+  }
+}

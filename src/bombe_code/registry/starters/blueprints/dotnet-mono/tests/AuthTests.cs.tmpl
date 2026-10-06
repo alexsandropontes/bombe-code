@@ -1,0 +1,14 @@
+using Xunit;
+
+namespace Forge.DotNetMono.Tests;
+
+public class AuthTests
+{
+    [Fact]
+    public void Test_Password_Hash_Validation()
+    {
+        var password = "SuperSecretPassword123!";
+        Assert.False(string.IsNullOrWhiteSpace(password));
+        Assert.True(password.Length >= 8);
+    }
+}

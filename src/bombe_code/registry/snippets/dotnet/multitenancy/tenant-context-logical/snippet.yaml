@@ -1,0 +1,24 @@
+name: tenant-context-logical
+description: Contexto de Tenant Lógico assíncrono com middleware para ASP.NET Core
+  e EF Core
+category: multitenancy
+type: class
+platform: dotnet
+version: 1.0.0
+author: '@scott'
+tags:
+- multitenancy
+- tenant
+- logico
+- middleware
+- efcore
+dependencies: []
+invariants:
+- AsyncLocal isolation
+- header extraction
+- fail-safe empty fallback
+exports:
+- ITenantContext
+- TenantContext
+- TenantMiddleware
+tests: tests/TenantContextTests.cs

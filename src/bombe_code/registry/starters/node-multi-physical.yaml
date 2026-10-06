@@ -1,0 +1,20 @@
+name: node-multi-physical
+blueprint: node-react-fullstack
+category: SaaS
+type: fullstack
+description: Fullstack SaaS Node.js (Physical Isolation)
+tech_stack:
+  backend: "Node.js (TypeScript)"
+  frontend: "React 19"
+  database: "PostgreSQL"
+composition:
+  - node-multi-physical-backend
+  - react-portal
+structure:
+  - docs/produto
+  - src/run.ps1
+  - src/run.sh
+required_agents:
+  - Turing
+  - Barbara
+  - Ada

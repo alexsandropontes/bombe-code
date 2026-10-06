@@ -1,0 +1,25 @@
+name: hash-password
+description: Hash de senha usando bcrypt com salt automático
+category: auth
+type: function
+platform: python
+version: 1.0.0
+author: '@barbara'
+tags:
+- password
+- hash
+- bcrypt
+- security
+- auth
+dependencies:
+- bcrypt
+tests: tests/test_hash_password.py
+invariants:
+- constant time comparison
+- salt generation
+- 100k iterations
+exports:
+- hash_password
+- verify_password
+- HashPassword
+- VerifyPassword

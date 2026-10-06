@@ -1,0 +1,20 @@
+import { Request, Response, NextFunction } from 'express';
+import { db } from '../database/connection';
+import jwt from 'jsonwebtoken';
+
+export const tenantContextMiddleware = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const token = req.headers.authorization?.split(' ')[1];
+    if (!token) throw new Error('Token missing');
+    
+    const decoded: any = jwt.verify(token, process.env.JWT_SECRET || 'secret');
+    req.user = decoded; // Injeta na Request
+    
+    await db.query(`SET search_path TO op_${decoded.tenant_slug}`);
+    next();
+  } catch (err) {
+    return res.status(401).json({ error: 'Contexto de inquilino inválido.' });
+  }
+};
+
+declare global { namespace Express { interface Request { user?: any; } } }

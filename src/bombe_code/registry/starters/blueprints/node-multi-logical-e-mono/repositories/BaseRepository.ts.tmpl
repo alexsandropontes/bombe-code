@@ -1,0 +1,19 @@
+import { db } from '../database/connection';
+
+/**
+ * Enterprise Standard: Base Repository (Logical Isolation)
+ * Rule: All queries MUST include tenant_id context.
+ */
+export class BaseRepository<T> {
+  constructor(protected tableName: string) {}
+
+  async findAll(tenantId: string): Promise<T[]> {
+    const { rows } = await db.query(`SELECT * FROM ${this.tableName} WHERE tenant_id = $1`, [tenantId]);
+    return rows;
+  }
+
+  async findById(tenantId: string, id: string): Promise<T | null> {
+    const { rows } = await db.query(`SELECT * FROM ${this.tableName} WHERE tenant_id = $1 AND id = $2`, [tenantId, id]);
+    return rows[0] || null;
+  }
+}

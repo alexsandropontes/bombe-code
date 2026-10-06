@@ -1,0 +1,10 @@
+name: "chatbot-py-streamlit"
+blueprint: chatbot-py-streamlit
+category: "Chatbot"
+description: "Chatbot AI: Python + Streamlit"
+tech_stack:
+  backend: "Python 3.13"
+  frontend: "Streamlit"
+structure:
+  - "src/backend/app"
+  - "src/frontend/app.py"

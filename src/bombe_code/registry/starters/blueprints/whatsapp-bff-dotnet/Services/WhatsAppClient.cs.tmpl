@@ -1,0 +1,52 @@
+using System.Net.Http.Headers;
+using System.Text;
+using System.Text.Json;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
+
+namespace Forge.WhatsAppBffDotNet.Services;
+
+public class WhatsAppClient
+{
+    private readonly HttpClient _httpClient;
+    private readonly IConfiguration _configuration;
+    private readonly ILogger<WhatsAppClient> _logger;
+
+    public WhatsAppClient(HttpClient httpClient, IConfiguration configuration, ILogger<WhatsAppClient> logger)
+    {
+        _httpClient = httpClient;
+        _configuration = configuration;
+        _logger = logger;
+    }
+
+    public async Task<bool> SendTextMessageAsync(string toPhoneNumber, string text)
+    {
+        var phoneNumberId = _configuration["WhatsApp:PhoneNumberId"] ?? "100000000000";
+        var accessToken = _configuration["WhatsApp:AccessToken"] ?? "";
+
+        var url = $"https://graph.facebook.com/v21.0/{phoneNumberId}/messages";
+
+        var payload = new
+        {
+            messaging_product = "whatsapp",
+            recipient_type = "individual",
+            to = toPhoneNumber,
+            type = "text",
+            text = new { body = text }
+        };
+
+        var request = new HttpRequestMessage(HttpMethod.Post, url);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+        request.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+
+        var response = await _httpClient.SendAsync(request);
+        if (!response.IsSuccessStatusCode)
+        {
+            var err = await response.Content.ReadAsStringAsync();
+            _logger.LogError("Falha ao enviar mensagem WhatsApp Meta API: {Error}", err);
+            return false;
+        }
+
+        return true;
+    }
+}

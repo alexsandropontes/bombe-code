@@ -1,0 +1,28 @@
+package com.forge.multilogical.domain;
+
+import com.forge.multilogical.tenancy.TenantContext;
+import jakarta.persistence.Column;
+import jakarta.persistence.MappedSuperclass;
+import jakarta.persistence.PrePersist;
+import lombok.Getter;
+import lombok.Setter;
+
+@MappedSuperclass
+@Getter
+@Setter
+public abstract class TenantAwareEntity {
+
+    @Column(name = "tenant_id", nullable = false, updatable = false)
+    private String tenantId;
+
+    @PrePersist
+    public void prePersist() {
+        if (this.tenantId == null) {
+            String current = TenantContext.getTenantId();
+            if (current == null || current.isBlank()) {
+                throw new IllegalStateException("Operação de persistência bloqueada: TenantContext não definido.");
+            }
+            this.tenantId = current;
+        }
+    }
+}

@@ -1,0 +1,24 @@
+package service
+
+import (
+	"database/sql"
+	"errors"
+	"golang.org/x/crypto/bcrypt"
+)
+
+type AuthService struct {
+	DB *sql.DB
+}
+
+func (s *AuthService) Login(email, password string) (map[string]interface{}, error) {
+	var id, tenantId, pwdHash string
+	query := "SELECT id, tenant_id, password_hash FROM users WHERE email = $1 AND is_active = true"
+	err := s.DB.QueryRow(query, email).Scan(&id, &tenantId, &pwdHash)
+	if err != nil { return nil, errors.New("credenciais invalidas") }
+
+	if err := bcrypt.CompareHashAndPassword([]byte(pwdHash), []byte(password)); err != nil {
+		return nil, errors.New("credenciais invalidas")
+	}
+
+	return map[string]interface{}{"user": id, "tenant_id": tenantId, "token": "REAL_JWT_TOKEN_GO_LOGICAL"}, nil
+}

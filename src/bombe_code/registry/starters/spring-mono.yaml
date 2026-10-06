@@ -1,0 +1,20 @@
+name: spring-mono
+blueprint: spring-react-fullstack
+category: SaaS
+type: fullstack
+description: Fullstack SaaS Java 21 / Spring Boot 3.4 (Backend + React Portal)
+tech_stack:
+  backend: "Java 21 (Spring Boot 3.4)"
+  frontend: "React 19"
+  database: "PostgreSQL"
+composition:
+  - spring-mono-backend
+  - react-portal
+structure:
+  - docs/produto
+  - src/run.ps1
+  - src/run.sh
+required_agents:
+  - Turing
+  - James
+  - Ada

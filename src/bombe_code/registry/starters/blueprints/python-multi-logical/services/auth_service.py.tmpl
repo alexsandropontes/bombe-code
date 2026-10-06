@@ -1,0 +1,27 @@
+from sqlalchemy.orm import Session
+from sqlalchemy import text
+import bcrypt
+import jwt
+import os
+from datetime import datetime, timedelta
+
+class AuthService:
+    def __init__(self, db: Session):
+        self.db = db
+
+    def login(self, email: str, password: str):
+        """Login real: Busca por email e valida password + tenant_id"""
+        query = text("SELECT id, tenant_id, email, password_hash, first_name FROM users WHERE email = :email AND is_active = true")
+        user = self.db.execute(query, {"email": email}).fetchone()
+        if not user: raise Exception("Credenciais inválidas.")
+
+        if not bcrypt.checkpw(password.encode('utf-8'), user.password_hash.encode('utf-8')):
+            raise Exception("Credenciais inválidas.")
+
+        token = jwt.encode({
+            "id": user.id,
+            "tenant_id": str(user.tenant_id),
+            "exp": datetime.utcnow() + timedelta(days=1)
+        }, os.getenv("JWT_SECRET", "secret"), algorithm="HS256")
+
+        return {"user": {"email": user.email, "tenant_id": str(user.tenant_id)}, "token": token}

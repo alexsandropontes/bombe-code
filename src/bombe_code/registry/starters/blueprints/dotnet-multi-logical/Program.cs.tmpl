@@ -1,0 +1,63 @@
+using Forge.DotNetMultiLogical.Infrastructure.Data;
+using Forge.DotNetMultiLogical.Infrastructure.Tenancy;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.OpenApi.Models;
+
+var builder = WebApplication.CreateBuilder(args);
+
+// Tenancy
+builder.Services.AddScoped<ITenantContext, TenantContext>();
+
+// Banco de Dados com Filtro de Tenancy
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") 
+    ?? "Host=localhost;Port=5432;Database=forge_logical_db;Username=postgres;Password=postgres";
+
+builder.Services.AddDbContext<TenantDbContext>(options =>
+    options.UseNpgsql(connectionString));
+
+builder.Services.AddControllers();
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen(c =>
+{
+    c.SwaggerDoc("v1", new OpenApiInfo { Title = "Forge DotNet Multi-Tenant Logical API", Version = "v1" });
+    c.AddSecurityDefinition("TenantHeader", new OpenApiSecurityScheme
+    {
+        Description = "Header com o identificador do Tenant (ex: 'tenant-acme')",
+        Name = "X-Tenant-ID",
+        In = ParameterLocation.Header,
+        Type = SecuritySchemeType.ApiKey
+    });
+    c.AddSecurityRequirement(new OpenApiSecurityRequirement
+    {
+        {
+            new OpenApiSecurityScheme
+            {
+                Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = "TenantHeader" }
+            },
+            Array.Empty<string>()
+        }
+    });
+});
+
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowAll", policy =>
+        policy.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader());
+});
+
+var app = builder.Build();
+
+app.UseCors("AllowAll");
+
+// Middleware de Resolução de Tenant
+app.UseMiddleware<TenantResolverMiddleware>();
+
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
+
+app.MapControllers();
+
+app.Run();

@@ -1,0 +1,129 @@
+import axios, { AxiosInstance } from 'axios';
+
+export class WhatsAppCloudAPI {
+  private client: AxiosInstance;
+  private phoneNumberID: string;
+
+  constructor(
+    accessToken: string,
+    phoneNumberID: string,
+    apiVersion: string = 'v18.0'
+  ) {
+    this.phoneNumberID = phoneNumberID;
+
+    this.client = axios.create({
+      baseURL: `https://graph.facebook.com/${apiVersion}`,
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json'
+      },
+      timeout: 30000
+    });
+  }
+
+  /**
+   * Send a message to a WhatsApp number
+   */
+  async sendMessage(
+    to: string,
+    messageType: string = 'text',
+    content: Record<string, unknown> = {}
+  ): Promise<Record<string, unknown>> {
+    const url = `/${this.phoneNumberID}/messages`;
+
+    const payload: Record<string, unknown> = {
+      messaging_product: 'whatsapp',
+      recipient_type: 'individual',
+      to,
+      type: messageType
+    };
+
+    // Add content based on message type
+    if (messageType === 'text') {
+      payload.text = {
+        body: content.body || '',
+        preview_url: content.preview_url || false
+      };
+    } else if (['image', 'document', 'audio', 'video'].includes(messageType)) {
+      payload[messageType] = {
+        link: content.link
+      };
+
+      if (content.caption) {
+        (payload[messageType] as Record<string, unknown>).caption = content.caption;
+      }
+
+      if (content.filename) {
+        (payload[messageType] as Record<string, unknown>).filename = content.filename;
+      }
+    }
+
+    try {
+      const response = await this.client.post(url, payload);
+      console.log(`✅ Message sent successfully to ${to}`);
+      return response.data;
+    } catch (error) {
+      console.error('❌ Error sending message:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Send a message template (for out-of-session messages)
+   */
+  async sendTemplate(
+    to: string,
+    templateName: string,
+    languageCode: string = 'pt_BR',
+    components: Array<Record<string, unknown>> = []
+  ): Promise<Record<string, unknown>> {
+    const url = `/${this.phoneNumberID}/messages`;
+
+    const payload = {
+      messaging_product: 'whatsapp',
+      recipient_type: 'individual',
+      to,
+      type: 'template',
+      template: {
+        name: templateName,
+        language: {
+          code: languageCode
+        }
+      }
+    };
+
+    if (components.length > 0) {
+      (payload.template as Record<string, unknown>).components = components;
+    }
+
+    try {
+      const response = await this.client.post(url, payload);
+      console.log(`✅ Template '${templateName}' sent successfully to ${to}`);
+      return response.data;
+    } catch (error) {
+      console.error('❌ Error sending template:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Mark a message as read
+   */
+  async markAsRead(messageId: string): Promise<Record<string, unknown>> {
+    const url = `/${this.phoneNumberID}/messages`;
+
+    const payload = {
+      messaging_product: 'whatsapp',
+      status: 'read',
+      message_id: messageId
+    };
+
+    try {
+      const response = await this.client.post(url, payload);
+      return response.data;
+    } catch (error) {
+      console.error('❌ Error marking message as read:', error);
+      throw error;
+    }
+  }
+}

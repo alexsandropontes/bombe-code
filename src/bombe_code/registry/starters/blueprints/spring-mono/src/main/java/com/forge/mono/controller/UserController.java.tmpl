@@ -1,0 +1,30 @@
+package com.forge.mono.controller;
+
+import com.forge.mono.domain.User;
+import com.forge.mono.service.UserService;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+
+@RestController
+@RequestMapping("/api/users")
+@RequiredArgsConstructor
+public class UserController {
+
+    private final UserService userService;
+
+    @GetMapping
+    public ResponseEntity<List<User>> getAll() {
+        return ResponseEntity.ok(userService.findAll());
+    }
+
+    @PostMapping
+    public ResponseEntity<User> create(@RequestBody CreateUserRequest request) {
+        User user = userService.register(request.name(), request.email(), request.password());
+        return ResponseEntity.ok(user);
+    }
+
+    public record CreateUserRequest(String name, String email, String password) {}
+}

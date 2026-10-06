@@ -1,0 +1,21 @@
+name: whatsapp-bff-dotnet
+blueprint: whatsapp-bff-dotnet
+category: BFF
+type: bff
+description: BFF WhatsApp Meta Cloud API em .NET 10 (Webhooks, Mensageria, HMAC SHA256)
+tech_stack:
+  backend: "Dotnet 10 (C# 13)"
+structure:
+  - src/backend/Services/
+  - src/backend/Models/
+  - src/backend/Controllers/
+  - src/backend/WhatsAppBff.csproj
+  - src/backend/Program.cs
+  - src/backend/appsettings.json
+  - src/backend/.env.example
+  - src/backend/Dockerfile
+  - tests/WhatsAppBff.Tests.csproj
+  - tests/WebhookValidationTests.cs
+required_agents:
+  - Scott
+  - Turing

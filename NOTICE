@@ -1,0 +1,21 @@
+NOTICE — Bombe Code
+====================
+
+Bombe Code é uma redeclaração de derivação: uma reimplementação própria, em
+Python, do projeto open source OpenCode (https://github.com/opencode-ai/opencode),
+licenciado sob a MIT License. O projeto NUNCA nega sua genealogia — esta
+atribuição é permanente e deve acompanhar todas as distribuições.
+
+- Projeto original de referência: OpenCode (TypeScript/Go)
+  Copyright (c) os contribuidores do OpenCode — MIT License
+- Reimplementação e extensões: Bombe Code (Python)
+  Copyright (c) 2026 Alexsandro Pontes — MIT License
+
+Extensões proprietárias de metodologia autorais do Bombe Code (não presentes
+no original): Metodologia ONDA, Turing Runtime Engine (máquina de estados,
+quality gates determinísticos, Kanban, VetoReworkEngine), catálogo de 23
+agentes especialistas e sistema LEGO de starters/snippets.
+
+As personas de agentes homenageiam pioneiros da computação (ver
+docs/architecture/agents-homage.md). Os nomes têm finalidade exclusivamente
+honorífica e não implicam participação ou endosso das pessoas homenageadas.

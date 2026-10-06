@@ -1,0 +1,50 @@
+package com.forge.whatsapp.controller;
+
+import com.forge.whatsapp.service.SignatureVerifier;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+@RestController
+@RequestMapping("/api/webhook")
+public class WebhookController {
+
+    @Value("${whatsapp.verify-token:forge-webhook-secret-token}")
+    private String verifyToken;
+
+    @Value("${whatsapp.app-secret:}")
+    private String appSecret;
+
+    private final SignatureVerifier signatureVerifier;
+
+    public WebhookController(SignatureVerifier signatureVerifier) {
+        this.signatureVerifier = signatureVerifier;
+    }
+
+    @GetMapping
+    public ResponseEntity<String> verify(
+            @RequestParam("hub.mode") String mode,
+            @RequestParam("hub.verify_token") String token,
+            @RequestParam("hub.challenge") String challenge) {
+
+        if ("subscribe".equals(mode) && verifyToken.equals(token)) {
+            return ResponseEntity.ok(challenge);
+        }
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+    }
+
+    @PostMapping
+    public ResponseEntity<Void> handleEvent(
+            @RequestBody String body,
+            @RequestHeader(value = "X-Hub-Signature-256", required = false) String signature) {
+
+        if (appSecret != null && !appSecret.isBlank()) {
+            if (!signatureVerifier.verify(body, signature, appSecret)) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+            }
+        }
+
+        return ResponseEntity.ok().build();
+    }
+}

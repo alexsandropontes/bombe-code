@@ -1,0 +1,21 @@
+name: data-table
+description: Componente DataTable acessível e responsivo com ordenação e busca
+category: components
+type: component
+platform: react
+version: 1.0.0
+author: '@ada'
+tags:
+- react
+- componente
+- table
+- ui
+- acessibilidade
+dependencies: []
+invariants:
+- semantic HTML table
+- keyboard navigation
+- empty state handling
+exports:
+- DataTable
+tests: tests/DataTable.test.tsx

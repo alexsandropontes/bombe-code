@@ -1,0 +1,24 @@
+name: formatters
+description: Formatadores utilitários de CPF, CNPJ, Telefone e Moeda BRL em TypeScript
+  para React
+category: utils
+type: function
+platform: react
+version: 1.0.0
+author: '@ada'
+tags:
+- formatters
+- react
+- cpf
+- cnpj
+- moeda
+dependencies: []
+invariants:
+- pure functions
+- handle null/undefined gracefully
+exports:
+- formatCpf
+- formatCnpj
+- formatCurrencyBrl
+- formatPhoneBr
+tests: tests/formatters.test.ts

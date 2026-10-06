@@ -1,0 +1,17 @@
+name: validar-email
+description: Validador de e-mail RFC 5322 em C# 13
+category: data-validation
+type: class
+platform: dotnet
+version: 1.0.0
+author: '@scott'
+tags:
+- email
+- validacao
+dependencies: []
+invariants:
+- regex check
+- no consecutive dots
+exports:
+- EmailValidator.Validar
+tests: tests/EmailValidatorTests.cs

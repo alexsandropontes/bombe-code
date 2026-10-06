@@ -1,0 +1,185 @@
+# WhatsApp BFF - Node.js
+
+WhatsApp Backend for Frontend (BFF) com integração ao WhatsApp Cloud API usando Express + TypeScript.
+
+## 🚀 Funcionalidades
+
+- ✅ Webhook para receber mensagens do WhatsApp Cloud API
+- ✅ Verificação automática de webhook
+- ✅ Envio de mensagens de texto
+- ✅ Envio de mensagens com mídia (imagem, áudio, vídeo, documento)
+- ✅ Envio de templates de mensagem
+- ✅ Marcação de mensagens como lidas
+- ✅ Suporte a mensagens interativas (botões, listas)
+
+## 📋 Pré-requisitos
+
+- Node.js 20+
+- TypeScript 5+
+- Conta no WhatsApp Business API
+- Access Token e Phone Number ID do WhatsApp Cloud API
+- Webhook público (ngrok, localtunnel, ou domínio com HTTPS)
+
+## 🔧 Configuração
+
+1. **Instale as dependências:**
+   ```bash
+   npm install
+   ```
+
+2. **Configure as variáveis de ambiente:**
+   ```bash
+   cp .env.example .env
+   ```
+
+3. **Edite o arquivo `.env`:**
+   ```env
+   WHATSAPP_ACCESS_TOKEN=seu_access_token_aqui
+   WHATSAPP_PHONE_NUMBER_ID=seu_phone_number_id_aqui
+   WHATSAPP_API_VERSION=v18.0
+   WHATSAPP_WEBHOOK_VERIFY_TOKEN=seu_token_de_verificacao_aqui
+   PORT=8000
+   ```
+
+## 🎯 Como obter credenciais do WhatsApp Cloud API
+
+1. Acesse o [Meta for Developers](https://developers.facebook.com/)
+2. Crie um aplicativo ou use um existente
+3. Adicione o produto "WhatsApp"
+4. Configure um número de telefone
+5. Copie o **Access Token** (Temporary Access Token)
+6. Copie o **Phone Number ID** (na seção WhatsApp > API Setup)
+
+## 🚀 Executar
+
+**Modo desenvolvimento:**
+```bash
+npm run dev
+```
+
+**Compilar para produção:**
+```bash
+npm run build
+npm start
+```
+
+## 📡 Configurar Webhook
+
+1. **Expose seu servidor localmente (teste):**
+   ```bash
+   ngrok http 8000
+   ```
+
+2. **Configure o webhook no Meta:**
+   - URL: `https://seu-dominio.com/webhook`
+   - Verify Token: use o mesmo valor de `WHATSAPP_WEBHOOK_VERIFY_TOKEN`
+
+3. **Subscribe aos eventos:**
+   - ✅ Messages
+   - ✅ Messaging Postbacks (opcional)
+
+## 🔌 API Endpoints
+
+### Health Check
+```http
+GET /health
+```
+
+### Webhook Verification (Meta)
+```http
+GET /webhook?hub.verify_token=seu_token
+```
+
+### Webhook (Receber Mensagens)
+```http
+POST /webhook
+```
+
+### Enviar Mensagem de Texto
+```http
+POST /api/send
+Content-Type: application/json
+
+{
+  "to": "5511999999999",
+  "type": "text",
+  "content": {
+    "body": "Olá, mundo!",
+    "preview_url": false
+  }
+}
+```
+
+### Enviar Imagem
+```http
+POST /api/send
+Content-Type: application/json
+
+{
+  "to": "5511999999999",
+  "type": "image",
+  "content": {
+    "link": "https://exemplo.com/imagem.jpg",
+    "caption": "Legenda da imagem"
+  }
+}
+```
+
+### Enviar Template
+```http
+POST /api/send-template
+Content-Type: application/json
+
+{
+  "to": "5511999999999",
+  "template_name": "hello_world",
+  "language_code": "pt_BR"
+}
+```
+
+## 📚 Estrutura do Projeto
+
+```
+whatsapp-bff-node/
+├── app.ts                    # Express app & routes
+├── types.ts                  # TypeScript types
+├── services/
+│   ├── whatsappService.ts    # WhatsApp Cloud API client
+│   └── messageHandler.ts     # Business logic handler
+├── webhook/
+│   ├── verify.ts             # Webhook verification
+│   └── incoming.ts           # Webhook message handler
+├── package.json
+├── tsconfig.json
+├── .env.example
+└── README.md
+```
+
+## 🔐 Boas Práticas
+
+1. **Nunca commite o `.env`** no versionamento
+2. **Use variáveis de ambiente** para credenciais
+3. **Implemente rate limiting** para produção (ex: express-rate-limit)
+4. **Adicione autenticação** nos endpoints de envio
+5. **Log todas as mensagens** para auditoria
+6. **Valide números de telefone** antes de enviar
+
+## 📖 Documentação Oficial
+
+- [WhatsApp Cloud API](https://developers.facebook.com/docs/whatsapp/cloud-api)
+- [Webhooks](https://developers.facebook.com/docs/whatsapp/cloud-api/webhooks)
+- [Send Messages](https://developers.facebook.com/docs/whatsapp/cloud-api/messages)
+
+## ⚠️ Limitações
+
+- **Janela de 24h:** Mensagens gratuitas só podem ser enviadas dentro de 24h após a última mensagem do usuário
+- **Templates:** Fora da janela, use templates de mensagem aprovados
+- **Rate Limits:** Respeite os limites da API
+
+## 📝 Licença
+
+MIT
+
+## 👥 Suporte
+
+Para dúvidas sobre o WhatsApp Cloud API, consulte a [documentação oficial](https://developers.facebook.com/docs/whatsapp/cloud-api).

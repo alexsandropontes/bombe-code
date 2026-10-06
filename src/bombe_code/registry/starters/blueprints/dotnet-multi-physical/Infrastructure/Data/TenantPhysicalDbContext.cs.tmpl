@@ -1,0 +1,43 @@
+using Forge.DotNetMultiPhysical.Domain.Entities;
+using Forge.DotNetMultiPhysical.Infrastructure.Tenancy;
+using Microsoft.EntityFrameworkCore;
+
+namespace Forge.DotNetMultiPhysical.Infrastructure.Data;
+
+public class TenantPhysicalDbContext : DbContext
+{
+    private readonly ITenantContext _tenantContext;
+
+    public TenantPhysicalDbContext(DbContextOptions<TenantPhysicalDbContext> options, ITenantContext tenantContext)
+        : base(options)
+    {
+        _tenantContext = tenantContext;
+    }
+
+    public DbSet<Tenant> Tenants => Set<Tenant>();
+    public DbSet<Customer> Customers => Set<Customer>();
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        base.OnModelCreating(modelBuilder);
+
+        // A tabela global de Tenants reside no schema public
+        modelBuilder.Entity<Tenant>(entity =>
+        {
+            entity.ToTable("tenants", "public");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Name).HasMaxLength(150).IsRequired();
+            entity.Property(e => e.SchemaName).HasMaxLength(100).IsRequired();
+        });
+
+        // A entidade Customer reside no schema isolado do tenant ativo
+        modelBuilder.Entity<Customer>(entity =>
+        {
+            var schema = string.IsNullOrWhiteSpace(_tenantContext.CurrentSchema) ? "public" : _tenantContext.CurrentSchema;
+            entity.ToTable("customers", schema);
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Name).HasMaxLength(200).IsRequired();
+            entity.Property(e => e.Email).HasMaxLength(255).IsRequired();
+        });
+    }
+}

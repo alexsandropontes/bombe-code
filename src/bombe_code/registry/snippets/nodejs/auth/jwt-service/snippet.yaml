@@ -1,0 +1,21 @@
+name: jwt-service
+description: Geração e validação de tokens JWT em Node.js com Web Crypto / crypto
+  nativo
+category: auth
+type: class
+platform: nodejs
+version: 1.0.0
+author: '@ryan'
+tags:
+- jwt
+- token
+- auth
+- nodejs
+dependencies: []
+invariants:
+- constant time check
+- expiry check
+exports:
+- JwtService.sign
+- JwtService.verify
+tests: tests/jwt.test.js

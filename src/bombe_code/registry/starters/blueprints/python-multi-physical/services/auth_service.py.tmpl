@@ -1,0 +1,37 @@
+from sqlalchemy.orm import Session
+from sqlalchemy import text
+import bcrypt
+import jwt
+import os
+from datetime import datetime, timedelta
+
+class AuthService:
+    def __init__(self, db: Session):
+        self.db = db
+
+    def discovery(self, email: str) -> str:
+        """Step 1: Global lookup for tenant_slug"""
+        query = text("SELECT t.tenant_slug FROM admin.global_users gu JOIN admin.tenants t ON gu.tenant_id = t.id WHERE gu.email = :email AND t.is_active = true")
+        result = self.db.execute(query, {"email": email}).fetchone()
+        if not result: raise Exception("Inquilino não localizado.")
+        return result[0]
+
+    def login(self, email: str, password: str, tenant_slug: str):
+        """Step 2: Local validation in tenant vault"""
+        schema_name = f"op_{tenant_slug}"
+        self.db.execute(text(f"SET search_path TO {schema_name}"))
+        
+        query = text("SELECT id, email, password_hash, first_name, roles FROM users WHERE email = :email AND is_active = true")
+        user = self.db.execute(query, {"email": email}).fetchone()
+        if not user: raise Exception("Credenciais inválidas.")
+
+        if not bcrypt.checkpw(password.encode('utf-8'), user.password_hash.encode('utf-8')):
+            raise Exception("Credenciais inválidas.")
+
+        token = jwt.encode({
+            "id": user.id,
+            "tenant_slug": tenant_slug,
+            "exp": datetime.utcnow() + timedelta(days=1)
+        }, os.getenv("JWT_SECRET", "secret"), algorithm="HS256")
+
+        return {"user": {"id": user.id, "email": user.email, "first_name": user.first_name}, "token": token}

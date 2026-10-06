@@ -1,0 +1,17 @@
+package repository
+
+import (
+	"database/sql"
+	"fmt"
+)
+
+type BaseRepository struct {
+	DB        *sql.DB
+	TableName string
+}
+
+func (r *BaseRepository) FindAll() (*sql.Rows, error) {
+	// Query relies on the physical search_path already set by middleware
+	query := fmt.Sprintf("SELECT * FROM %s", r.TableName)
+	return r.DB.Query(query)
+}

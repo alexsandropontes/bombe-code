@@ -1,0 +1,45 @@
+package main
+
+import (
+	"net/http"
+
+	"github.com/gin-gonic/gin"
+)
+
+// sendMessage handles POST /api/send
+func sendMessage(c *gin.Context) {
+	var req SendMessageRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	result, err := whatsappAPI.SendMessage(req.To, req.Type, req.Content)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, result)
+}
+
+// sendTemplate handles POST /api/send-template
+func sendTemplate(c *gin.Context) {
+	var req SendTemplateRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if req.LanguageCode == "" {
+		req.LanguageCode = "pt_BR"
+	}
+
+	result, err := whatsappAPI.SendTemplate(req.To, req.TemplateName, req.LanguageCode, req.Components)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, result)
+}

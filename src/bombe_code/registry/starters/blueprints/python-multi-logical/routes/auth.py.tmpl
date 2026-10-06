@@ -1,0 +1,19 @@
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+from database.db import get_db
+from services.auth_service import AuthService
+from pydantic import BaseModel
+
+router = APIRouter()
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+@router.post("/login")
+def login(request: LoginRequest, db: Session = Depends(get_db)):
+    try:
+        service = AuthService(db)
+        return service.login(request.email, request.password)
+    except Exception as e:
+        raise HTTPException(status_code=401, detail=str(e))

@@ -1,0 +1,21 @@
+name: python-multi-logical-backend
+blueprint: python-multi-logical
+category: Backend
+type: server
+description: Python Multi-Tenant (Logical Isolation)
+tech_stack:
+  backend: "Python 3.13 (FastAPI)"
+  database: "PostgreSQL"
+structure:
+  - src/backend/database/
+  - src/backend/middleware/
+  - src/backend/models/
+  - src/backend/repositories/
+  - src/backend/routes/
+  - src/backend/services/
+  - src/backend/main.py
+  - src/backend/init-db.py
+  - src/backend/pyproject.toml
+  - src/backend/.env.example
+required_agents:
+  - Barbara

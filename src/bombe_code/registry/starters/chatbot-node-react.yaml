@@ -1,0 +1,9 @@
+name: "chatbot-node-react"
+blueprint: chatbot-node-react
+category: "Chatbot"
+description: "Chatbot WhatsApp Enterprise: Node.js BFF"
+tech_stack:
+  backend: "Node.js (TypeScript)"
+  integration: "WhatsApp Cloud API"
+composition:
+  - "whatsapp-bff-node"

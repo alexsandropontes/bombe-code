@@ -1,0 +1,22 @@
+name: whatsapp-meta-webhook
+description: Validador HMAC SHA-256 de webhooks WhatsApp Meta Cloud API em Java 21
+category: omnichannel
+type: class
+platform: java
+version: 1.0.0
+author: '@james'
+tags:
+- whatsapp
+- meta
+- webhook
+- hmac
+- omnichannel
+dependencies: []
+invariants:
+- HMAC SHA-256 signature
+- constant-time comparison
+- verify token challenge
+exports:
+- WhatsAppWebhookValidator.verifySignature
+- WhatsAppWebhookValidator.verifyChallenge
+tests: tests/WhatsAppWebhookValidatorTest.java

@@ -1,0 +1,35 @@
+package models
+
+import (
+	"time"
+)
+
+/**
+ * Enterprise Standard: User Model (Tenant Schema)
+ * Matches 'users' table in op_{tenant_slug}
+ */
+type User struct {
+	ID           string     `json:"id"`
+	Email        string     `json:"email"`
+	PasswordHash string     `json:"-"` // Hacker-proof: Never expose password hashes
+	FirstName    string     `json:"first_name"`
+	LastName     string     `json:"last_name"`
+	Roles        []string   `json:"roles"`       // RBAC: ["ADMIN", "USER"]
+	TenantSlug   string     `json:"tenant_slug"` // Context identifier
+	IsActive     bool       `json:"is_active"`
+	CreatedAt    time.Time  `json:"created_at"`
+	UpdatedAt    time.Time  `json:"updated_at"`
+	DeletedAt    *time.Time `json:"deleted_at,omitempty"` // Soft Delete mandatory
+}
+
+/**
+ * Enterprise Standard: Tenant Model (Admin Schema)
+ * Matches 'tenants' table in admin
+ */
+type Tenant struct {
+	ID         string    `json:"id"`
+	Name       string    `json:"name"`
+	TenantSlug string    `json:"tenant_slug"`
+	IsActive   bool      `json:"is_active"`
+	CreatedAt  time.Time `json:"created_at"`
+}

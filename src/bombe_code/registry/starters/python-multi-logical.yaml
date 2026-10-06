@@ -1,0 +1,20 @@
+name: python-multi-logical
+blueprint: python-react-fullstack
+category: SaaS
+type: fullstack
+description: Fullstack SaaS Python (Logical Isolation)
+tech_stack:
+  backend: "Python 3.13"
+  frontend: "React 19"
+  database: "PostgreSQL"
+composition:
+  - python-multi-logical-backend
+  - react-portal
+structure:
+  - docs/produto
+  - src/run.ps1
+  - src/run.sh
+required_agents:
+  - Turing
+  - Barbara
+  - Ada

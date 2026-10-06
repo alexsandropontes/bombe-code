@@ -1,0 +1,247 @@
+"""Resolvedor enterprise de provedores e modelos LLM para o Bombe Code (paridade com OpenCode)."""
+
+from __future__ import annotations
+
+import logging
+import os
+from typing import Any
+
+from .adapters.anthropic import AnthropicAdapter
+from .adapters.openai_compat import OpenAICompatAdapter
+from .auth import load_auth
+
+logger = logging.getLogger(__name__)
+
+
+class ProviderConfigurationError(RuntimeError):
+    """Lançada quando nenhum provedor de IA compatível está configurado."""
+
+
+class UnconfiguredProviderAdapter:
+    """Adaptador de alerta em runtime quando nenhuma credencial ou servidor local foi configurado."""
+
+    provider = "unconfigured"
+    model = "none"
+
+    def __init__(self, message: str) -> None:
+        self.message = message
+
+    def stream(
+        self, messages: list[dict], tools: list[dict] | None = None, system: str | None = None
+    ) -> Any:
+        msg = (
+            f"⚠️ Provedor não configurado.\n\n{self.message}\n\n"
+            "Execute o comando /connect no chat para configurar suas credenciais ou endereço local."
+        )
+        yield {"type": "text-delta", "text": msg}
+        yield {"type": "finish", "reason": "stop"}
+
+
+def resolve_provider_adapter(model_ref: str | None = None) -> Any:
+    """Resolve o adaptador de IA apropriado consultando auth.json, variáveis de ambiente e configurações explícitas."""
+    auth_data = load_auth()
+    ref = (model_ref or "").strip()
+
+    # 1. Requisição explícita por provedor/modelo
+    if ref:
+        provider, _, model_name = ref.partition("/")
+        if not model_name:
+            known_providers = (
+                "zai",
+                "zhipu",
+                "zhipuai",
+                "zai-coding-plan",
+                "openai",
+                "anthropic",
+                "openrouter",
+                "groq",
+                "llama.cpp",
+                "llamacpp",
+                "ollama",
+                "local",
+            )
+            if provider.lower() in known_providers:
+                model_name = ""
+            else:
+                model_name = provider
+                provider = ""
+
+        # OpenAI
+        if provider == "openai" or model_name.startswith("gpt-"):
+            key = os.environ.get("OPENAI_API_KEY") or auth_data.get("openai", {}).get("api_key")
+            if not key:
+                raise ProviderConfigurationError(
+                    "Chave OPENAI_API_KEY não encontrada no ambiente ou auth.json."
+                )
+            return OpenAICompatAdapter(api_key=key, model=model_name or "gpt-4o")
+
+        # Anthropic
+        if provider == "anthropic" or model_name.startswith("claude-"):
+            key = os.environ.get("ANTHROPIC_API_KEY") or auth_data.get("anthropic", {}).get(
+                "api_key"
+            )
+            if not key:
+                raise ProviderConfigurationError(
+                    "Chave ANTHROPIC_API_KEY não encontrada no ambiente ou auth.json."
+                )
+            return AnthropicAdapter(api_key=key, model=model_name or "claude-3-5-sonnet-20241022")
+
+        # OpenRouter
+        if provider == "openrouter":
+            key = os.environ.get("OPENROUTER_API_KEY") or auth_data.get("openrouter", {}).get(
+                "api_key"
+            )
+            if not key:
+                raise ProviderConfigurationError(
+                    "Chave OPENROUTER_API_KEY não encontrada no ambiente ou auth.json."
+                )
+            return OpenAICompatAdapter(
+                api_key=key, model=model_name, base_url="https://openrouter.ai/api/v1"
+            )
+
+        # Groq
+        if provider == "groq":
+            key = os.environ.get("GROQ_API_KEY") or auth_data.get("groq", {}).get("api_key")
+            if not key:
+                raise ProviderConfigurationError(
+                    "Chave GROQ_API_KEY não encontrada no ambiente ou auth.json."
+                )
+            return OpenAICompatAdapter(
+                api_key=key,
+                model=model_name or "llama-3.3-70b-versatile",
+                base_url="https://api.groq.com/openai/v1",
+            )
+
+        # Z.ai / Zhipu AI / GLM
+        if provider in ("zai", "zhipu", "zhipuai", "zai-coding-plan") or model_name.startswith(
+            "glm-"
+        ):
+            key = (
+                os.environ.get("ZAI_API_KEY")
+                or os.environ.get("ZHIPU_API_KEY")
+                or auth_data.get("zai-coding-plan", {}).get("key")
+                or auth_data.get("zai-coding-plan", {}).get("api_key")
+                or auth_data.get("zai", {}).get("key")
+                or auth_data.get("zai", {}).get("api_key")
+            )
+            base_url = (
+                os.environ.get("ZAI_BASE_URL")
+                or auth_data.get("zai-coding-plan", {}).get("base_url")
+                or auth_data.get("zai-coding-plan", {}).get("url")
+                or auth_data.get("zai", {}).get("base_url")
+                or auth_data.get("zai", {}).get("url")
+                or "https://api.z.ai/api/coding/paas/v4"
+            )
+            if not key:
+                raise ProviderConfigurationError(
+                    "Chave ZAI_API_KEY / zai-coding-plan não encontrada no ambiente ou auth.json."
+                )
+            return OpenAICompatAdapter(
+                api_key=key,
+                model=model_name or "glm-5.3-flash",
+                base_url=base_url,
+            )
+
+        # llama.cpp explícito
+        if provider in ("llama.cpp", "llamacpp", "local"):
+            base_url = (
+                os.environ.get("LLAMA_CPP_BASE_URL")
+                or auth_data.get("llama.cpp", {}).get("base_url")
+                or "http://127.0.0.1:8080/v1"
+            )
+            return OpenAICompatAdapter(
+                api_key="local", model=model_name or "local", base_url=base_url
+            )
+
+        # Ollama explícito
+        if provider == "ollama":
+            base_url = (
+                os.environ.get("OLLAMA_BASE_URL")
+                or auth_data.get("ollama", {}).get("base_url")
+                or "http://127.0.0.1:11434/v1"
+            )
+            return OpenAICompatAdapter(
+                api_key="ollama", model=model_name or "llama3", base_url=base_url
+            )
+
+    # 2. Resolução sem modelo explícito (ordem de prioridade dos provedores configurados)
+    # A) Z.ai / Zhipu AI / GLM (provedor oficial prioritário do Bombe Code)
+    zai_key = (
+        os.environ.get("ZAI_API_KEY")
+        or os.environ.get("ZHIPU_API_KEY")
+        or auth_data.get("zai-coding-plan", {}).get("key")
+        or auth_data.get("zai-coding-plan", {}).get("api_key")
+        or auth_data.get("zai", {}).get("key")
+        or auth_data.get("zai", {}).get("api_key")
+    )
+    if zai_key:
+        zai_url = (
+            os.environ.get("ZAI_BASE_URL")
+            or auth_data.get("zai-coding-plan", {}).get("base_url")
+            or auth_data.get("zai-coding-plan", {}).get("url")
+            or auth_data.get("zai", {}).get("base_url")
+            or auth_data.get("zai", {}).get("url")
+            or "https://api.z.ai/api/coding/paas/v4"
+        )
+        return OpenAICompatAdapter(
+            api_key=zai_key,
+            model="glm-5.3-flash",
+            base_url=zai_url,
+        )
+
+    # B) OpenAI
+    openai_key = os.environ.get("OPENAI_API_KEY") or auth_data.get("openai", {}).get("api_key")
+    if openai_key:
+        return OpenAICompatAdapter(api_key=openai_key, model="gpt-4o")
+
+    # C) Anthropic
+    anthropic_key = os.environ.get("ANTHROPIC_API_KEY") or auth_data.get("anthropic", {}).get(
+        "api_key"
+    )
+    if anthropic_key:
+        return AnthropicAdapter(api_key=anthropic_key, model="claude-3-5-sonnet-20241022")
+
+    # D) OpenRouter
+    openrouter_key = os.environ.get("OPENROUTER_API_KEY") or auth_data.get("openrouter", {}).get(
+        "api_key"
+    )
+    if openrouter_key:
+        return OpenAICompatAdapter(
+            api_key=openrouter_key,
+            model="anthropic/claude-3.5-sonnet",
+            base_url="https://openrouter.ai/api/v1",
+        )
+
+    # E) Groq
+    groq_key = os.environ.get("GROQ_API_KEY") or auth_data.get("groq", {}).get("api_key")
+    if groq_key:
+        return OpenAICompatAdapter(
+            api_key=groq_key,
+            model="llama-3.3-70b-versatile",
+            base_url="https://api.groq.com/openai/v1",
+        )
+
+    # F) Provedores locais: llama.cpp (apenas se explicitamente configurado no ambiente ou auth.json)
+    if "LLAMA_CPP_BASE_URL" in os.environ or "llama.cpp" in auth_data:
+        llama_url = os.environ.get("LLAMA_CPP_BASE_URL") or auth_data.get("llama.cpp", {}).get(
+            "base_url", "http://127.0.0.1:8080/v1"
+        )
+        return OpenAICompatAdapter(api_key="local", model="local", base_url=llama_url)
+
+    # G) Ollama (apenas se explicitamente configurado no ambiente ou auth.json)
+    if "OLLAMA_BASE_URL" in os.environ or "ollama" in auth_data:
+        ollama_url = os.environ.get("OLLAMA_BASE_URL") or auth_data.get("ollama", {}).get(
+            "base_url", "http://127.0.0.1:11434/v1"
+        )
+        return OpenAICompatAdapter(api_key="ollama", model="llama3", base_url=ollama_url)
+
+    # D) Se nenhum provedor configurado
+    instructions = (
+        "Nenhum provedor de IA configurado.\n"
+        "Execute /connect no terminal para conectar um provedor:\n"
+        "  • Remoto: export OPENAI_API_KEY='sk-...' ou export ANTHROPIC_API_KEY='...'\n"
+        "  • Local (llama.cpp): export LLAMA_CPP_BASE_URL='http://127.0.0.1:8080/v1'\n"
+        "  • Local (Ollama): export OLLAMA_BASE_URL='http://127.0.0.1:11434/v1'\n"
+        "  • Ou configure via '/connect' dentro da TUI."
+    )
+    return UnconfiguredProviderAdapter(instructions)

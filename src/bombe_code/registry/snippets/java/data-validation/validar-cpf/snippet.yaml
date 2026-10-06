@@ -1,0 +1,23 @@
+name: validar-cpf
+description: Validador e formatador de CPF brasileiro com algoritmo mod 11 e rejeição
+  de sequências
+category: data-validation
+type: class
+platform: java
+version: 1.0.0
+author: '@james'
+tags:
+- cpf
+- validacao
+- brasil
+- documento
+dependencies: []
+invariants:
+- 11 digits check
+- reject all same digits
+- check digits mod 11
+- sanitize non-digits
+exports:
+- CpfValidator.validar
+- CpfValidator.formatar
+tests: tests/CpfValidatorTest.java

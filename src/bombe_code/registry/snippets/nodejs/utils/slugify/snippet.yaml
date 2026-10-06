@@ -1,0 +1,21 @@
+name: slugify
+description: 'Converte texto em slug para URLs (ex: ''Olá Mundo!'' -> ''ola-mundo'')'
+category: utils
+type: function
+platform: nodejs
+version: 1.0.0
+author: '@barbara'
+tags:
+- slug
+- url
+- seo
+- texto
+dependencies:
+- slugify
+tests: tests/slugify.test.js
+invariants:
+- remove accents and diacritics
+- lowercase and hyphen separated
+exports:
+- slugify
+- Slugify

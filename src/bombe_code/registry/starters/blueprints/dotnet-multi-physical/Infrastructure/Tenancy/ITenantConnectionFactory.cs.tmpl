@@ -1,0 +1,9 @@
+using System.Data.Common;
+
+namespace Forge.DotNetMultiPhysical.Infrastructure.Tenancy;
+
+public interface ITenantConnectionFactory
+{
+    DbConnection CreateConnection();
+    string GetCurrentSchema();
+}

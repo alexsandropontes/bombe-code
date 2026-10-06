@@ -1,0 +1,25 @@
+name: validar-cpf
+description: Valida CPF brasileiro com dígitos verificadores
+category: data-validation
+type: function
+platform: go
+version: 1.0.0
+author: '@barbara'
+tags:
+- cpf
+- validacao
+- brasil
+- data-quality
+dependencies: []
+tests: tests/validar_cpf_test.go
+invariants:
+- 11 digits check
+- reject all same digits
+- check digits mod 11
+exports:
+- validar_cpf
+- ValidarCPF
+- validarCPF
+- CpfValidator
+- ValidateCPF
+- is_valid_cpf

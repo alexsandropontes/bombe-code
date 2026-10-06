@@ -1,0 +1,17 @@
+using Forge.DotNetMultiLogical.Infrastructure.Tenancy;
+using Xunit;
+
+namespace Forge.DotNetMultiLogical.Tests;
+
+public class LogicalTenancyFilterTests
+{
+    [Fact]
+    public void Test_Tenant_Context_Assignment()
+    {
+        var context = new TenantContext();
+        Assert.Null(context.CurrentTenantId);
+
+        context.CurrentTenantId = "tenant-alpha";
+        Assert.Equal("tenant-alpha", context.CurrentTenantId);
+    }
+}

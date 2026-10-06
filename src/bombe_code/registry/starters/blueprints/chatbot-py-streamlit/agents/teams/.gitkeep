@@ -1,0 +1,22 @@
+# Agent Teams Directory
+
+Times de agentes criados pelo wizard do Forge Core.
+
+Cada time é uma pasta contendo:
+- `*.yaml` - Definição do agente (wizard)
+- `*.md` - Prompt completo (workflow @andrej)
+- `orchestrator.py` - Orquestração do time
+
+## Estrutura
+
+```
+teams/
+├── team-suporte/
+│   ├── atena.yaml
+│   ├── ares.yaml
+│   ├── atena.md
+│   ├── ares.md
+│   └── orchestrator.py
+└── team-vendas/
+    └── agente1.md
+```

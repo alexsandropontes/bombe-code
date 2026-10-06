@@ -1,0 +1,32 @@
+using Microsoft.AspNetCore.Http;
+
+namespace Forge.DotNetMultiPhysical.Infrastructure.Tenancy;
+
+public class TenantSchemaResolverMiddleware
+{
+    private readonly RequestDelegate _next;
+
+    public TenantSchemaResolverMiddleware(RequestDelegate next)
+    {
+        _next = next;
+    }
+
+    public async Task InvokeAsync(HttpContext context, ITenantContext tenantContext)
+    {
+        if (context.Request.Headers.TryGetValue("X-Tenant-ID", out var tenantHeader) && !string.IsNullOrWhiteSpace(tenantHeader))
+        {
+            var rawTenant = tenantHeader.ToString().Trim().ToLowerInvariant();
+            // Sanitiza nome do schema (apenas alfanumerico e underscore)
+            var cleanSchema = System.Text.RegularExpressions.Regex.Replace(rawTenant, @"[^a-z0-9_]", "_");
+            tenantContext.CurrentTenantId = rawTenant;
+            tenantContext.CurrentSchema = $"tenant_{cleanSchema}";
+        }
+        else
+        {
+            tenantContext.CurrentTenantId = "default";
+            tenantContext.CurrentSchema = "public";
+        }
+
+        await _next(context);
+    }
+}

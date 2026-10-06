@@ -1,0 +1,20 @@
+name: dotnet-multi-physical
+blueprint: dotnet-react-fullstack
+category: SaaS
+type: fullstack
+description: Fullstack SaaS .NET 10 Multi-Tenant Físico (Web API + React Portal)
+tech_stack:
+  backend: "Dotnet 10 (C# 13)"
+  frontend: "React 19"
+  database: "PostgreSQL"
+composition:
+  - dotnet-multi-physical-backend
+  - react-portal
+structure:
+  - docs/produto
+  - src/run.ps1
+  - src/run.sh
+required_agents:
+  - Turing
+  - Scott
+  - Ada

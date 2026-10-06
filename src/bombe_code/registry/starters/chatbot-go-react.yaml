@@ -1,0 +1,10 @@
+name: "chatbot-go-react"
+blueprint: chatbot-go-react
+category: "Chatbot"
+description: "Chatbot High-Performance: Go + React 19"
+tech_stack:
+  backend: "Go 1.24"
+  frontend: "React 19"
+composition:
+  - "go-mono-backend"
+  - "react-portal"

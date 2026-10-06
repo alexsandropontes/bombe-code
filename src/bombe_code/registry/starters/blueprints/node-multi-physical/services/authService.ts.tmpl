@@ -1,0 +1,25 @@
+import { db } from '../database/connection';
+import bcrypt from 'bcrypt';
+import jwt from 'jsonwebtoken';
+
+export class AuthService {
+  async discovery(email: string): Promise<string> {
+    const query = `SELECT t.tenant_slug FROM admin.global_users gu JOIN admin.tenants t ON gu.tenant_id = t.id WHERE gu.email = $1 AND t.is_active = true`;
+    const { rows } = await db.query(query, [email]);
+    if (rows.length === 0) throw new Error('Inquilino não localizado.');
+    return rows[0].tenant_slug;
+  }
+
+  async login(email: string, password: string, tenantSlug: string) {
+    await db.query(`SET search_path TO op_${tenantSlug}`);
+    const { rows } = await db.query(`SELECT id, email, password_hash, first_name, roles FROM users WHERE email = $1 AND is_active = true`, [email]);
+    if (rows.length === 0) throw new Error('Credenciais inválidas.');
+
+    const user = rows[0];
+    if (!(await bcrypt.compare(password, user.password_hash))) throw new Error('Credenciais inválidas.');
+
+    const token = jwt.sign({ id: user.id, tenant_slug: tenantSlug, roles: user.roles }, process.env.JWT_SECRET || 'secret', { expiresIn: '1d' });
+    delete user.password_hash;
+    return { user, token };
+  }
+}

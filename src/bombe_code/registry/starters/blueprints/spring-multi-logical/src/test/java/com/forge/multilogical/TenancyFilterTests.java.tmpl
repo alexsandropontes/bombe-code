@@ -1,0 +1,23 @@
+package com.forge.multilogical;
+
+import com.forge.multilogical.tenancy.TenantContext;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.*;
+
+class TenancyFilterTests {
+
+    @AfterEach
+    void tearDown() {
+        TenantContext.clear();
+    }
+
+    @Test
+    void testTenantContextIsolation() {
+        assertNull(TenantContext.getTenantId());
+        TenantContext.setTenantId("tenant-alpha");
+        assertEquals("tenant-alpha", TenantContext.getTenantId());
+        TenantContext.clear();
+        assertNull(TenantContext.getTenantId());
+    }
+}

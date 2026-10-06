@@ -1,0 +1,22 @@
+name: validar-cnpj
+description: Validador e formatador de CNPJ brasileiro com cálculo de dois dígitos
+  verificadores
+category: data-validation
+type: class
+platform: dotnet
+version: 1.0.0
+author: '@scott'
+tags:
+- cnpj
+- validacao
+- brasil
+- empresa
+dependencies: []
+invariants:
+- 14 digits check
+- reject all same digits
+- check digits mod 11 with weights
+exports:
+- CnpjValidator.Validar
+- CnpjValidator.Formatar
+tests: tests/CnpjValidatorTests.cs

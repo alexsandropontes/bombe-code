@@ -1,0 +1,38 @@
+{
+  "stages": {
+    "DISCUSS": {
+      "agents": [
+        {
+          "agent": "@meira",
+          "input_tokens": 1148484,
+          "output_tokens": 2392,
+          "total_tokens": 1150876,
+          "cost": 0.040965,
+          "duration_seconds": 88.538,
+          "success": true
+        },
+        {
+          "agent": "@grace",
+          "input_tokens": 0,
+          "output_tokens": 0,
+          "total_tokens": 0,
+          "cost": 0.0,
+          "duration_seconds": 0.0,
+          "success": false
+        }
+      ],
+      "input_tokens": 1148484,
+      "output_tokens": 2392,
+      "total_tokens": 1150876,
+      "cost": 0.040965,
+      "duration_seconds": 88.538
+    }
+  },
+  "total": {
+    "input_tokens": 1148484,
+    "output_tokens": 2392,
+    "total_tokens": 1150876,
+    "cost": 0.040965,
+    "duration_seconds": 88.538
+  }
+}

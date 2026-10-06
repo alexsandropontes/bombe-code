@@ -1,0 +1,68 @@
+using Forge.WhatsAppBffDotNet.Services;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
+
+namespace Forge.WhatsAppBffDotNet.Controllers;
+
+[ApiController]
+[Route("api/[controller]")]
+public class WebhookController : ControllerBase
+{
+    private readonly IConfiguration _configuration;
+    private readonly WebhookSignatureValidator _signatureValidator;
+    private readonly WhatsAppClient _whatsAppClient;
+    private readonly ILogger<WebhookController> _logger;
+
+    public WebhookController(
+        IConfiguration configuration,
+        WebhookSignatureValidator signatureValidator,
+        WhatsAppClient whatsAppClient,
+        ILogger<WebhookController> logger)
+    {
+        _configuration = configuration;
+        _signatureValidator = signatureValidator;
+        _whatsAppClient = whatsAppClient;
+        _logger = logger;
+    }
+
+    // 1. Verificação do Webhook pela Meta (GET)
+    [HttpGet]
+    public IActionResult VerifyWebhook(
+        [FromQuery(Name = "hub.mode")] string? mode,
+        [FromQuery(Name = "hub.verify_token")] string? token,
+        [FromQuery(Name = "hub.challenge")] string? challenge)
+    {
+        var verifyToken = _configuration["WhatsApp:VerifyToken"] ?? "forge-webhook-secret-token";
+
+        if (mode == "subscribe" && token == verifyToken)
+        {
+            _logger.LogInformation("Webhook WhatsApp verificado com sucesso.");
+            return Ok(challenge);
+        }
+
+        return Forbid();
+    }
+
+    // 2. Recebimento de Mensagens e Eventos (POST)
+    [HttpPost]
+    public async Task<IActionResult> ReceiveEvent()
+    {
+        using var reader = new StreamReader(Request.Body);
+        var body = await reader.ReadToEndAsync();
+
+        var appSecret = _configuration["WhatsApp:AppSecret"];
+        if (!string.IsNullOrWhiteSpace(appSecret))
+        {
+            var signature = Request.Headers["X-Hub-Signature-256"].ToString();
+            if (!_signatureValidator.ValidateSignature(body, signature, appSecret))
+            {
+                _logger.LogWarning("Assinatura de Webhook WhatsApp inválida rejeitada.");
+                return Unauthorized();
+            }
+        }
+
+        _logger.LogInformation("Evento WhatsApp recebido: {Payload}", body);
+        return Ok(new { status = "received" });
+    }
+}

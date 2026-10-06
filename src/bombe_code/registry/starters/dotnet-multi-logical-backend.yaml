@@ -1,0 +1,24 @@
+name: dotnet-multi-logical-backend
+blueprint: dotnet-multi-logical
+category: Backend
+type: server
+description: .NET 10 Web API Multi-Tenant Lógico (Shared DB, Global Query Filter)
+tech_stack:
+  backend: "Dotnet 10 (C# 13)"
+  database: "PostgreSQL"
+structure:
+  - src/backend/Domain/Common/
+  - src/backend/Domain/Entities/
+  - src/backend/Infrastructure/Data/
+  - src/backend/Infrastructure/Tenancy/
+  - src/backend/Controllers/
+  - src/backend/WebApi.csproj
+  - src/backend/Program.cs
+  - src/backend/appsettings.json
+  - src/backend/.env.example
+  - src/backend/Dockerfile
+  - tests/WebApi.Tests.csproj
+  - tests/LogicalTenancyFilterTests.cs
+required_agents:
+  - Scott
+  - Turing

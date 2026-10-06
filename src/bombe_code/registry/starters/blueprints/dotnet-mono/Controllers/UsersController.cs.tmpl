@@ -1,0 +1,29 @@
+using Forge.DotNetMono.Domain.Entities;
+using Forge.DotNetMono.Infrastructure.Data;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+
+namespace Forge.DotNetMono.Controllers;
+
+[ApiController]
+[Route("api/[controller]")]
+[Authorize]
+public class UsersController : ControllerBase
+{
+    private readonly ApplicationDbContext _dbContext;
+
+    public UsersController(ApplicationDbContext dbContext)
+    {
+        _dbContext = dbContext;
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> GetAll()
+    {
+        var users = await _dbContext.Users
+            .Select(u => new { u.Id, u.Name, u.Email, u.Role, u.CreatedAt })
+            .ToListAsync();
+        return Ok(users);
+    }
+}

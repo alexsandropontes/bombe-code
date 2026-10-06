@@ -1,0 +1,39 @@
+from sqlalchemy import Column, String, Boolean, DateTime, ForeignKey
+from sqlalchemy.orm import declarative_base
+import datetime
+
+Base = declarative_base()
+
+/**
+ * Enterprise Standard: User Contract (Local Tenant)
+ * Matches 'users' table in op_{tenant_slug}
+ */
+class User(Base):
+    __tablename__ = "users"
+    
+    id = Column(String, primary_key=True)
+    email = Column(String, unique=True, nullable=False)
+    password_hash = Column(String, nullable=False)
+    first_name = Column(String)
+    last_name = Column(String)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+/**
+ * Enterprise Standard: Global Registry (Admin Schema)
+ */
+class GlobalUser(Base):
+    __tablename__ = "global_users"
+    __table_args__ = {"schema": "admin"}
+    
+    email = Column(String, primary_key=True)
+    tenant_id = Column(String, ForeignKey("admin.tenants.id"))
+
+class Tenant(Base):
+    __tablename__ = "tenants"
+    __table_args__ = {"schema": "admin"}
+    
+    id = Column(String, primary_key=True)
+    name = Column(String, nullable=False)
+    tenant_slug = Column(String, unique=True, nullable=False)
+    is_active = Column(Boolean, default=True)

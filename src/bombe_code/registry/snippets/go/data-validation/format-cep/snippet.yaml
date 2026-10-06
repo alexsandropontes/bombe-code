@@ -1,0 +1,21 @@
+name: format-cep
+description: Formata CEP brasileiro no padrão XXXXX-XXX
+category: data-validation
+type: function
+platform: go
+version: 1.0.0
+author: '@barbara'
+tags:
+- cep
+- formatacao
+- brasil
+- endereco
+dependencies: []
+tests: tests/format_cep_test.go
+invariants:
+- 8 digits check
+- format 00000-000
+exports:
+- format_cep
+- FormatCEP
+- formatCEP

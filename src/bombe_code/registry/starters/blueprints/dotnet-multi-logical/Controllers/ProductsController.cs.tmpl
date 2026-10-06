@@ -1,0 +1,53 @@
+using Forge.DotNetMultiLogical.Domain.Entities;
+using Forge.DotNetMultiLogical.Infrastructure.Data;
+using Forge.DotNetMultiLogical.Infrastructure.Tenancy;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+
+namespace Forge.DotNetMultiLogical.Controllers;
+
+[ApiController]
+[Route("api/[controller]")]
+public class ProductsController : ControllerBase
+{
+    private readonly TenantDbContext _dbContext;
+    private readonly ITenantContext _tenantContext;
+
+    public ProductsController(TenantDbContext dbContext, ITenantContext tenantContext)
+    {
+        _dbContext = dbContext;
+        _tenantContext = tenantContext;
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> GetAll()
+    {
+        if (string.IsNullOrWhiteSpace(_tenantContext.CurrentTenantId))
+            return BadRequest(new { error = "Header X-Tenant-ID é obrigatório para consultar produtos." });
+
+        // O Global Query Filter filtra automaticamente apenas os produtos do CurrentTenantId
+        var products = await _dbContext.Products.ToListAsync();
+        return Ok(products);
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> Create([FromBody] CreateProductRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(_tenantContext.CurrentTenantId))
+            return BadRequest(new { error = "Header X-Tenant-ID é obrigatório para criar produtos." });
+
+        var product = new Product
+        {
+            TenantId = _tenantContext.CurrentTenantId,
+            Name = request.Name,
+            Price = request.Price
+        };
+
+        _dbContext.Products.Add(product);
+        await _dbContext.SaveChangesAsync();
+
+        return Ok(product);
+    }
+}
+
+public record CreateProductRequest(string Name, decimal Price);

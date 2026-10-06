@@ -1,0 +1,21 @@
+name: jwt-service
+description: Serviço de geração e validação de tokens JWT seguro em Java 21
+category: auth
+type: class
+platform: java
+version: 1.0.0
+author: '@james'
+tags:
+- jwt
+- auth
+- token
+- seguranca
+dependencies: []
+invariants:
+- signature verification
+- expiry validation
+- claims extraction
+exports:
+- JwtTokenService.generateToken
+- JwtTokenService.validateToken
+tests: tests/JwtTokenServiceTest.java

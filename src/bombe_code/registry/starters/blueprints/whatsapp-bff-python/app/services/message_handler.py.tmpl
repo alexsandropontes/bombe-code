@@ -1,0 +1,87 @@
+import logging
+from typing import Dict, Any
+from services.whatsapp_service import WhatsAppCloudAPI
+
+logger = logging.getLogger(__name__)
+
+class MessageHandler:
+    """
+    Business logic handler for incoming WhatsApp messages
+    """
+
+    def __init__(self, whatsapp_api: WhatsAppCloudAPI):
+        self.whatsapp_api = whatsapp_api
+
+    async def process_text_message(
+        self,
+        from_number: str,
+        message_body: str,
+        message_id: str
+    ):
+        """
+        Process incoming text message
+
+        Args:
+            from_number: Sender's phone number
+            message_body: Message text content
+            message_id: WhatsApp message ID
+        """
+        logger.info(f"Processing text message from {from_number}: {message_body}")
+
+        # TODO: Implement your business logic here
+        # Example: Echo the message back
+        # await self.whatsapp_api.send_message(
+        #     to=from_number,
+        #     message_type="text",
+        #     content={"body": f"Echo: {message_body}"}
+        # )
+
+        # Mark message as read
+        await self.whatsapp_api.mark_as_read(message_id)
+
+    async def process_interactive_message(
+        self,
+        from_number: str,
+        interactive_data: Dict[str, Any],
+        message_id: str
+    ):
+        """
+        Process interactive message (button clicks, list selections)
+
+        Args:
+            from_number: Sender's phone number
+            interactive_data: Interactive message data
+            message_id: WhatsApp message ID
+        """
+        logger.info(f"Processing interactive message from {from_number}: {interactive_data}")
+
+        # TODO: Handle button clicks or list selections
+        # Example: Check for button reply
+        # if "button_reply" in interactive_data:
+        #     button_id = interactive_data["button_reply"]["id"]
+        #     await self.handle_button_click(from_number, button_id)
+
+        await self.whatsapp_api.mark_as_read(message_id)
+
+    async def process_media_message(
+        self,
+        from_number: str,
+        media_type: str,
+        media_data: Dict[str, Any],
+        message_id: str
+    ):
+        """
+        Process media message (image, audio, video, document)
+
+        Args:
+            from_number: Sender's phone number
+            media_type: Type of media ("image", "audio", "video", "document")
+            media_data: Media information
+            message_id: WhatsApp message ID
+        """
+        logger.info(f"Processing {media_type} message from {from_number}")
+
+        # TODO: Handle media messages
+        # Example: Download media or process it
+
+        await self.whatsapp_api.mark_as_read(message_id)

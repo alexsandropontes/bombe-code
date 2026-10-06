@@ -1,0 +1,19 @@
+name: slugify
+description: Transforma strings com acentos e caracteres especiais em slugs URL-friendly
+category: utils
+type: class
+platform: dotnet
+version: 1.0.0
+author: '@scott'
+tags:
+- slug
+- url
+- texto
+dependencies: []
+invariants:
+- lowercase
+- no accents
+- hyphen separated
+exports:
+- Slugifier.Slugify
+tests: tests/SlugifierTests.cs

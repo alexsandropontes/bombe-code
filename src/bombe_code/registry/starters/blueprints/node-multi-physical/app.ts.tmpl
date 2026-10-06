@@ -1,0 +1,21 @@
+import express from 'express';
+import cors from 'cors';
+import * as dotenv from 'dotenv';
+import authRoutes from './routes/auth';
+import { tenantContextMiddleware } from './middleware/tenantContext';
+
+dotenv.config();
+const app = express();
+app.use(cors());
+app.use(express.json());
+
+app.get('/health', (req, res) => res.json({ status: 'UP', engine: 'Forge Core Node' }));
+app.use('/auth', authRoutes);
+
+// Rotas protegidas (Requerem tenant_slug no user object via authMiddleware anterior em prod)
+app.use(tenantContextMiddleware);
+app.get('/api/dashboard', (req, res) => res.json({ message: 'Acesso garantido ao Vault.' }));
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`[SERVER] Forge Backend rodando na porta ${PORT}`));
+export default app;

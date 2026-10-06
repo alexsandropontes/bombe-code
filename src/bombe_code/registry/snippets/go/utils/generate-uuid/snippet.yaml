@@ -1,0 +1,22 @@
+name: generate-uuid
+description: Gera UUID v4 único
+category: utils
+type: function
+platform: go
+version: 1.0.0
+author: '@barbara'
+tags:
+- uuid
+- guid
+- unique
+- id
+dependencies:
+- github.com/google/uuid
+tests: tests/generate_uuid_test.go
+invariants:
+- uuid v4 random generation
+- rfc 4122 compliant
+exports:
+- generate_uuid
+- GenerateUUID
+- generateUuid

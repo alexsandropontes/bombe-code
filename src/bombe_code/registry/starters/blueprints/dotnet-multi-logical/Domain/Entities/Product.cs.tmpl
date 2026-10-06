@@ -1,0 +1,12 @@
+using Forge.DotNetMultiLogical.Domain.Common;
+
+namespace Forge.DotNetMultiLogical.Domain.Entities;
+
+public class Product : ITenantEntity
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public required string TenantId { get; set; }
+    public required string Name { get; set; }
+    public decimal Price { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+}

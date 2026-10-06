@@ -1,0 +1,40 @@
+package com.forge.multiphysical.controller;
+
+import com.forge.multiphysical.domain.Customer;
+import com.forge.multiphysical.repository.CustomerRepository;
+import com.forge.multiphysical.tenancy.TenantContext;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+
+@RestController
+@RequestMapping("/api/customers")
+@RequiredArgsConstructor
+public class CustomerController {
+
+    private final CustomerRepository customerRepository;
+
+    @GetMapping
+    public ResponseEntity<List<Customer>> list() {
+        if (TenantContext.DEFAULT_TENANT.equals(TenantContext.getTenantId())) {
+            return ResponseEntity.badRequest().build();
+        }
+        return ResponseEntity.ok(customerRepository.findAll());
+    }
+
+    @PostMapping
+    public ResponseEntity<Customer> create(@RequestBody CreateCustomerRequest request) {
+        if (TenantContext.DEFAULT_TENANT.equals(TenantContext.getTenantId())) {
+            return ResponseEntity.badRequest().build();
+        }
+        Customer customer = Customer.builder()
+                .name(request.name())
+                .email(request.email())
+                .build();
+        return ResponseEntity.ok(customerRepository.save(customer));
+    }
+
+    public record CreateCustomerRequest(String name, String email) {}
+}

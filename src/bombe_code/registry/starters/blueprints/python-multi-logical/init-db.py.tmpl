@@ -1,0 +1,39 @@
+import psycopg2
+from psycopg2 import sql
+import os
+import bcrypt
+from dotenv import load_dotenv
+
+load_dotenv()
+
+def bootstrap():
+    db_name = os.getenv("DB_NAME", "forge_db_python_logical")
+    conn = psycopg2.connect(host=os.getenv("DB_HOST"), user=os.getenv("DB_USER"), password=os.getenv("DB_PASSWORD"), database="postgres")
+    conn.autocommit = True
+    cur = conn.cursor()
+    
+    cur.execute("SELECT 1 FROM pg_database WHERE datname = %s", (db_name,))
+    if not cur.fetchone():
+        cur.execute(sql.Identifier("CREATE DATABASE", db_name))
+    
+    cur.close(); conn.close()
+    
+    # Conexão real
+    conn = psycopg2.connect(host=os.getenv("DB_HOST"), user=os.getenv("DB_USER"), password=os.getenv("DB_PASSWORD"), database=db_name)
+    cur = conn.cursor()
+    
+    cur.execute("CREATE TABLE IF NOT EXISTS tenants (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), name TEXT, slug TEXT UNIQUE)")
+    cur.execute("CREATE TABLE IF NOT EXISTS users (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), tenant_id UUID REFERENCES tenants(id), email TEXT UNIQUE, password_hash TEXT, first_name TEXT, roles JSONB DEFAULT '[\"USER\"]')")
+    
+    cur.execute("INSERT INTO tenants (name, slug) VALUES ('Default Corp', 'default') ON CONFLICT DO NOTHING RETURNING id")
+    tenant_id_row = cur.fetchone()
+    
+    if tenant_id_row:
+        tenant_id = tenant_id_row[0]
+        hash_pw = bcrypt.hashpw(b'password', bcrypt.gensalt()).decode('utf-8')
+        cur.execute("INSERT INTO users (tenant_id, email, password_hash, first_name, roles) VALUES (%s, 'admin@forge.local', %s, 'Admin', '[\"ADMIN\"]') ON CONFLICT DO NOTHING", (tenant_id, hash_pw))
+    
+    print("[BOOTSTRAP] Python Logical Database Ready.")
+    conn.commit(); cur.close(); conn.close()
+
+if __name__ == "__main__": bootstrap()

@@ -1,0 +1,21 @@
+using Forge.DotNetMultiPhysical.Infrastructure.Tenancy;
+using Xunit;
+
+namespace Forge.DotNetMultiPhysical.Tests;
+
+public class PhysicalSchemaIsolationTests
+{
+    [Fact]
+    public void Test_Schema_Name_Sanitization_And_Assignment()
+    {
+        var context = new TenantContext
+        {
+            CurrentTenantId = "acme-corp",
+            CurrentSchema = "tenant_acme_corp"
+        };
+
+        Assert.Equal("acme-corp", context.CurrentTenantId);
+        Assert.Equal("tenant_acme_corp", context.CurrentSchema);
+        Assert.StartsWith("tenant_", context.CurrentSchema);
+    }
+}

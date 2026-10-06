@@ -1,0 +1,9 @@
+from sqlalchemy.orm import Session
+from uuid import UUID
+
+class BaseRepository:
+    def __init__(self, model):
+        self.model = model
+
+    def get_all(self, db: Session, tenant_id: UUID):
+        return db.query(self.model).filter(self.model.tenant_id == tenant_id).all()

@@ -1,0 +1,21 @@
+name: format-phone
+description: Formata telefone brasileiro no padrão (XX) XXXXX-XXXX
+category: data-validation
+type: function
+platform: python
+version: 1.0.0
+author: '@barbara'
+tags:
+- phone
+- telefone
+- formatacao
+- brasil
+dependencies: []
+tests: tests/test_format_phone.py
+invariants:
+- ddd area code check
+- format br phone
+exports:
+- format_phone
+- FormatPhone
+- formatPhone

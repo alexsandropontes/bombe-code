@@ -1,0 +1,44 @@
+package main
+
+import (
+	"database/sql"
+	"fmt"
+	"log"
+	"os"
+	"github.com/joho/godotenv"
+	"golang.org/x/crypto/bcrypt"
+	_ "github.com/lib/pq"
+)
+
+func main() {
+	godotenv.Load()
+	dbName := os.Getenv("DB_NAME")
+	if dbName == "" { dbName = "forge_db_go_logical" }
+
+	connStr := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=postgres sslmode=disable", os.Getenv("DB_HOST"), os.Getenv("DB_PORT"), os.Getenv("DB_USER"), os.Getenv("DB_PASSWORD"))
+	db, err := sql.Open("postgres", connStr)
+	if err != nil { log.Fatal(err) }
+
+	_, err = db.Exec(fmt.Sprintf("CREATE DATABASE %s", dbName))
+	if err != nil { fmt.Println("Banco ja existe ou erro na criacao.") }
+	db.Close()
+
+	// Conexão real
+	connStrReal := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable", os.Getenv("DB_HOST"), os.Getenv("DB_PORT"), os.Getenv("DB_USER"), os.Getenv("DB_PASSWORD"), dbName)
+	dbReal, err := sql.Open("postgres", connStrReal)
+	if err != nil { log.Fatal(err) }
+	defer dbReal.Close()
+
+	dbReal.Exec("CREATE TABLE IF NOT EXISTS tenants (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), name TEXT, slug TEXT UNIQUE)")
+	dbReal.Exec("CREATE TABLE IF NOT EXISTS users (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), tenant_id UUID REFERENCES tenants(id), email TEXT UNIQUE, password_hash TEXT, first_name TEXT, roles JSONB DEFAULT '[\"USER\"]')")
+
+	var tenantID string
+	err = dbReal.QueryRow("INSERT INTO tenants (name, slug) VALUES ('Default Corp', 'default') ON CONFLICT DO NOTHING RETURNING id").Scan(&tenantID)
+	
+	if err == nil && tenantID != "" {
+		hash, _ := bcrypt.GenerateFromPassword([]byte("password"), bcrypt.DefaultCost)
+		dbReal.Exec("INSERT INTO users (tenant_id, email, password_hash, first_name, roles) VALUES ($1, 'admin@forge.local', $2, 'Admin', '[\"ADMIN\"]') ON CONFLICT DO NOTHING", tenantID, string(hash))
+	}
+
+	fmt.Println("[BOOTSTRAP] Go Logical Database Ready.")
+}

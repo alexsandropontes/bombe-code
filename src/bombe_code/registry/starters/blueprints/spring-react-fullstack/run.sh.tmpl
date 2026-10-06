@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# Inicia Backend Spring Boot e Frontend React em paralelo
+echo "Iniciando Spring Boot Backend na porta 8080..."
+(cd src/backend && mvn spring-boot:run) &
+BACKEND_PID=$!
+
+echo "Iniciando React Frontend..."
+(cd src/frontend && npm run dev) &
+FRONTEND_PID=$!
+
+trap "kill $BACKEND_PID $FRONTEND_PID" SIGINT SIGTERM
+wait

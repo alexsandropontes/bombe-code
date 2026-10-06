@@ -1,0 +1,22 @@
+name: mask-credit-card
+description: 'Mascara número de cartão de crédito (ex: **** **** **** 1234)'
+category: data-validation
+type: function
+platform: nodejs
+version: 1.0.0
+author: '@barbara'
+tags:
+- credit-card
+- cartao
+- mascara
+- seguranca
+- pci
+dependencies: []
+tests: tests/mask-credit-card.test.js
+invariants:
+- preserve last 4 digits
+- mask first 12 digits
+exports:
+- mask_credit_card
+- MaskCreditCard
+- maskCreditCard

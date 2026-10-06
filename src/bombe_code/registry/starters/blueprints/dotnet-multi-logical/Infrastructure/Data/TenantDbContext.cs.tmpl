@@ -1,0 +1,60 @@
+using Forge.DotNetMultiLogical.Domain.Common;
+using Forge.DotNetMultiLogical.Domain.Entities;
+using Forge.DotNetMultiLogical.Infrastructure.Tenancy;
+using Microsoft.EntityFrameworkCore;
+
+namespace Forge.DotNetMultiLogical.Infrastructure.Data;
+
+public class TenantDbContext : DbContext
+{
+    private readonly ITenantContext _tenantContext;
+
+    public TenantDbContext(DbContextOptions<TenantDbContext> options, ITenantContext tenantContext) 
+        : base(options)
+    {
+        _tenantContext = tenantContext;
+    }
+
+    public DbSet<Tenant> Tenants => Set<Tenant>();
+    public DbSet<Product> Products => Set<Product>();
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        base.OnModelCreating(modelBuilder);
+
+        modelBuilder.Entity<Tenant>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Name).HasMaxLength(150).IsRequired();
+        });
+
+        modelBuilder.Entity<Product>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Name).HasMaxLength(200).IsRequired();
+            entity.Property(e => e.TenantId).HasMaxLength(100).IsRequired();
+            entity.HasIndex(e => e.TenantId);
+
+            // GLOBAL QUERY FILTER: Filtro automático e inviolável por TenantId
+            entity.HasQueryFilter(e => _tenantContext.CurrentTenantId == null || e.TenantId == _tenantContext.CurrentTenantId);
+        });
+    }
+
+    public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+    {
+        // Garante que todo registro criado receba o TenantId atual
+        foreach (var entry in ChangeTracker.Entries<ITenantEntity>())
+        {
+            if (entry.State == EntityState.Added && string.IsNullOrWhiteSpace(entry.Entity.TenantId))
+            {
+                if (string.IsNullOrWhiteSpace(_tenantContext.CurrentTenantId))
+                {
+                    throw new InvalidOperationException("Operação de escrita bloqueada: TenantId não identificado no contexto.");
+                }
+                entry.Entity.TenantId = _tenantContext.CurrentTenantId;
+            }
+        }
+
+        return base.SaveChangesAsync(cancellationToken);
+    }
+}

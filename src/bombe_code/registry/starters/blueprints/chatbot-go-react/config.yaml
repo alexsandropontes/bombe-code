@@ -1,0 +1,16 @@
+name: "chatbot-go-react"
+description: "Chatbot POC com Go + React e integração OpenAI/Gemini"
+tech_stack:
+  backend: "Go 1.21"
+  frontend: "React 19 + Vite"
+  llm: "OpenAI API Compatible + Gemini"
+
+structure:
+  - "backend/cmd/api"
+  - "backend/agents/teams"
+  - "frontend/src"
+
+env_vars:
+  - "OPENAI_API_KEY"
+  - "GEMINI_API_KEY"
+  - "OPENAI_BASE_URL"

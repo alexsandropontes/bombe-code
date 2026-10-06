@@ -1,0 +1,106 @@
+package main
+
+import (
+	"encoding/json"
+	"log"
+
+	"github.com/gin-gonic/gin"
+)
+
+// handleWebhook processes incoming webhook payload
+func handleWebhook(c *gin.Context) {
+	var payload WebhookPayload
+	if err := c.ShouldBindJSON(&payload); err != nil {
+		log.Printf("❌ Error parsing webhook payload: %v", err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid payload"})
+		return
+	}
+
+	// Process webhook asynchronously
+	go processWebhook(payload)
+
+	c.JSON(http.StatusOK, gin.H{"status": "accepted"})
+}
+
+// processWebhook processes the webhook payload
+func processWebhook(payload WebhookPayload) {
+	handler := NewMessageHandler(whatsappAPI)
+
+	for _, entry := range payload.Entry {
+		for _, change := range entry.Changes {
+			// Skip if not a message event
+			if change.Field != "messages" {
+				continue
+			}
+
+			// Parse value
+			valueBytes, _ := json.Marshal(change.Value)
+			var value Value
+			if err := json.Unmarshal(valueBytes, &value); err != nil {
+				log.Printf("❌ Error parsing value: %v", err)
+				continue
+			}
+
+			// Create contact lookup
+			contactsMap := make(map[string]*Profile)
+			for _, contact := range value.Contacts {
+				contactsMap[contact.WaID] = contact.Profile
+			}
+
+			// Process each message
+			for _, message := range value.Messages {
+				processMessage(message, contactsMap, handler)
+			}
+		}
+	}
+}
+
+// processMessage processes individual message
+func processMessage(message Message, contactsMap map[string]*Profile, handler *MessageHandler) {
+	fromNumber := message.From
+	messageID := message.ID
+	messageType := message.Type
+
+	log.Printf("📨 Received %s message from %s (ID: %s)", messageType, fromNumber, messageID)
+
+	// Route based on message type
+	switch messageType {
+	case "text":
+		messageBody := ""
+		if message.Text != nil {
+			messageBody = message.Text.Body
+		}
+		if err := handler.ProcessTextMessage(fromNumber, messageBody, messageID); err != nil {
+			log.Printf("❌ Error processing text message: %v", err)
+		}
+
+	case "interactive":
+		var interactiveData map[string]interface{}
+		if message.Interactive != nil {
+			interactiveData = *message.Interactive
+		}
+		if err := handler.ProcessInteractiveMessage(fromNumber, interactiveData, messageID); err != nil {
+			log.Printf("❌ Error processing interactive message: %v", err)
+		}
+
+	case "image", "audio", "video", "document":
+		var mediaData map[string]interface{}
+		mediaBytes, _ := json.Marshal(message)
+		json.Unmarshal(mediaBytes, &mediaData)
+		if err := handler.ProcessMediaMessage(fromNumber, messageType, mediaData, messageID); err != nil {
+			log.Printf("❌ Error processing media message: %v", err)
+		}
+
+	case "button":
+		var interactiveData map[string]interface{}
+		if message.Interactive != nil {
+			interactiveData = *message.Interactive
+		}
+		if err := handler.ProcessInteractiveMessage(fromNumber, interactiveData, messageID); err != nil {
+			log.Printf("❌ Error processing button message: %v", err)
+		}
+
+	default:
+		log.Printf("⚠️  Unhandled message type: %s", messageType)
+	}
+}

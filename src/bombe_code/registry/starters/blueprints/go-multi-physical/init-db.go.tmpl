@@ -1,0 +1,22 @@
+package main
+
+import (
+	"database/sql"
+	"fmt"
+	"log"
+	"os"
+	_ "github.com/lib/pq"
+)
+
+func main() {
+	dbName := "forge_db_go"
+	connStr := fmt.Sprintf("host=localhost user=postgres password=postgres dbname=postgres sslmode=disable")
+	db, err := sql.Open("postgres", connStr)
+	if err != nil { log.Fatal(err) }
+
+	_, err = db.Exec(fmt.Sprintf("CREATE DATABASE %s", dbName))
+	if err != nil { fmt.Println("Banco ja existe ou erro na criacao.") }
+	db.Close()
+
+	fmt.Println("[BOOTSTRAP] Go Database Ready.")
+}

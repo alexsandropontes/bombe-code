@@ -1,0 +1,42 @@
+package com.forge.whatsapp.service;
+
+import org.springframework.stereotype.Service;
+
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+
+@Service
+public class SignatureVerifier {
+
+    public boolean verify(String payload, String signatureHeader, String appSecret) {
+        if (payload == null || signatureHeader == null || appSecret == null) {
+            return false;
+        }
+        if (!signatureHeader.startsWith("sha256=")) {
+            return false;
+        }
+        String expectedHash = signatureHeader.substring("sha256=".Length);
+
+        try {
+            Mac mac = Mac.getInstance("HmacSHA256");
+            SecretKeySpec secretKey = new SecretKeySpec(appSecret.getBytes(StandardCharsets.UTF_8), "HmacSHA256");
+            mac.init(secretKey);
+            byte[] hmacBytes = mac.doFinal(payload.getBytes(StandardCharsets.UTF_8));
+
+            StringBuilder hex = new StringBuilder();
+            for (byte b : hmacBytes) {
+                hex.append(String.format("%02x", b));
+            }
+            String calculatedHash = hex.toString();
+
+            return MessageDigest.isEqual(
+                calculatedHash.getBytes(StandardCharsets.UTF_8),
+                expectedHash.toLowerCase().getBytes(StandardCharsets.UTF_8)
+            );
+        } catch (Exception e) {
+            return false;
+        }
+    }
+}

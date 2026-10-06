@@ -1,0 +1,16 @@
+name: "chatbot-py-streamlit"
+description: "Chatbot POC com Python + Streamlit e integração OpenAI/Gemini"
+tech_stack:
+  backend: "Python 3.13"
+  frontend: "Streamlit"
+  llm: "OpenAI API Compatible + Gemini"
+
+structure:
+  - "backend/app"
+  - "backend/agents/teams"
+  - "frontend"
+
+env_vars:
+  - "OPENAI_API_KEY"
+  - "GEMINI_API_KEY"
+  - "OPENAI_BASE_URL"
