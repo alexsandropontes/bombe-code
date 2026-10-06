@@ -129,7 +129,12 @@ class PromotorDeBranches:
             rc, saida = self._git("switch", BRANCH_OFICIAL)
             if rc != 0:
                 return ResultadoPromocao(False, "dev", f"Falha ao assumir dev: {saida}", detalhes)
-            rc, saida = self._git("merge", "--squash", BRANCH_TRABALHO)
+            # --allow-unrelated-histories é a SEMÂNTICA da política: dev é a
+            # linha de releases; working-ia é a linhagem operacional da IA.
+            # O squash EMBALA o estado — os históricos nunca se fundem.
+            rc, saida = self._git(
+                "merge", "--squash", "--allow-unrelated-histories", BRANCH_TRABALHO
+            )
             if rc != 0:
                 self._git("merge", "--abort")
                 self._git("switch", BRANCH_TRABALHO)
