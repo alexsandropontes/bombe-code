@@ -126,29 +126,25 @@ class PromotorDeBranches:
         dev_existe = rc == 0
 
         if dev_existe:
-            rc, saida = self._git("switch", BRANCH_OFICIAL)
+            # EMBALAGEM DE RELEASE via commit-tree: o novo commit de dev recebe
+            # a ÁRVORE EXATA do estado aprovado da working-ia (zero conflitos —
+            # não há merge entre linhagens independentes) e pai = release
+            # anterior de dev (linha de releases linear e limpa).
+            rc, pai = self._git("rev-parse", BRANCH_OFICIAL)
             if rc != 0:
-                return ResultadoPromocao(False, "dev", f"Falha ao assumir dev: {saida}", detalhes)
-            # --allow-unrelated-histories é a SEMÂNTICA da política: dev é a
-            # linha de releases; working-ia é a linhagem operacional da IA.
-            # O squash EMBALA o estado — os históricos nunca se fundem.
-            rc, saida = self._git(
-                "merge", "--squash", "--allow-unrelated-histories", BRANCH_TRABALHO
+                return ResultadoPromocao(False, "dev", f"Falha ao ler dev: {pai}", detalhes)
+            rc, arvore = self._git("rev-parse", f"{BRANCH_TRABALHO}^{{tree}}")
+            if rc != 0:
+                return ResultadoPromocao(False, "dev", f"Falha ao ler árvore do estado: {arvore}", detalhes)
+            rc, novo = self._git(
+                "commit-tree", arvore, "-p", pai.strip(), "-m", mensagem
             )
             if rc != 0:
-                self._git("merge", "--abort")
-                self._git("switch", BRANCH_TRABALHO)
-                return ResultadoPromocao(
-                    False,
-                    "dev",
-                    f"Conflito no squash {BRANCH_TRABALHO} → dev: {saida}",
-                    detalhes,
-                )
-            rc, saida = self._git("commit", "-m", mensagem)
+                return ResultadoPromocao(False, "dev", f"Falha ao embalar release: {novo}", detalhes)
+            rc, _ = self._git("update-ref", f"refs/heads/{BRANCH_OFICIAL}", novo.strip())
             if rc != 0:
-                return ResultadoPromocao(
-                    False, "dev", f"Falha ao commitar squash em dev: {saida}", detalhes
-                )
+                return ResultadoPromocao(False, "dev", "Falha ao atualizar a branch dev.", detalhes)
+            detalhes.append("Release embalado (árvore do estado aprovado, pai = release anterior).")
         else:
             # dev ainda não existe: nasce como snapshot de UM commit do estado aprovado
             rc, saida = self._git("switch", "--orphan", BRANCH_OFICIAL)
