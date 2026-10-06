@@ -1,6 +1,7 @@
 """Testes do _run_orchestrator_with_stream — transcript ao vivo da TUI consumindo o bus."""
 
 import asyncio
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -134,3 +135,87 @@ def test_conteudo_llm_com_markup_nao_quebra_renderizacao():
     assert "[magenta]cor" in joined  # literal preservado, não interpretado
     assert "[/magenta] injetado" in joined
     assert "saída estranha" in joined
+
+
+def test_linearidade_pensamento_nunca_volta_atras():
+    """REGRA DA TELA LINEAR: pensar → agir → pensar de novo abre um bloco NOVO
+    abaixo da última ação. NUNCA reescreve o pensamento anterior lá em cima."""
+    chat = FakeChat()
+
+    def orchestrator_fake() -> dict[str, Any]:
+        BUS.publish("thinking_delta", agent="@unclebob", text="pensamento ANTIGO do review ")
+        BUS.publish(
+            "tool_call", agent="@unclebob", text="read_project_file", args='{"path":"x.py"}'
+        )
+        BUS.publish("tool_result", agent="@unclebob", text="código lido")
+        BUS.publish("thinking_delta", agent="@unclebob", text="pensamento NOVO após agir")
+        return {"success": True}
+
+    async def cenario() -> None:
+        await _run_orchestrator_with_stream(chat, orchestrator_fake)
+
+    asyncio.run(cenario())
+
+    textos = [
+        str(getattr(w, "renderable", None) or getattr(w, "content", "")) for w in chat.mounted
+    ]
+    # Ordem linear: pensamento antigo → ferramenta → resultado → pensamento novo
+    idx_antigo = next(i for i, t in enumerate(textos) if "ANTIGO" in t)
+    idx_tool = next(i for i, t in enumerate(textos) if "read_project_file" in t)
+    idx_result = next(i for i, t in enumerate(textos) if "código lido" in t)
+    idx_novo = next(i for i, t in enumerate(textos) if "NOVO após agir" in t)
+    assert idx_antigo < idx_tool < idx_result < idx_novo, f"tela não-linear: {textos}"
+    # O bloco novo NÃO contém o pensamento antigo (cada bloco é só seu)
+    assert "ANTIGO" not in textos[idx_novo]
+
+
+class FakeAppSidebar:
+    """App falso com sidebar registrável (sem Textual)."""
+
+    def __init__(self) -> None:
+        self.sidebar = SimpleNamespace()
+        self.sidebar.update_metrics = self._registrar  # type: ignore[attr-defined]
+        self.chamadas: list[dict] = []
+
+    def _registrar(self, **kw: Any) -> None:
+        self.chamadas.append(kw)
+
+    def query_one(self, _id: str, _tipo: Any = None) -> Any:
+        # A sidebar É o objeto com update_metrics (a view é o próprio app falso)
+        return self.sidebar
+
+
+def test_agent_usage_alimenta_sidebar_custo_oculto():
+    """Tokens da ONDA chegam à sidebar via agent_usage; custo acumula oculto."""
+    chat = FakeChat()
+    app_falso = FakeAppSidebar()
+
+    def orchestrator_fake() -> dict[str, Any]:
+        BUS.publish(
+            "agent_usage",
+            agent="@valim",
+            total_tokens=5_000,
+            input_tokens=4_000,
+            output_tokens=1_000,
+            cost=0.012,
+        )
+        BUS.publish(
+            "agent_usage",
+            agent="@aniche",
+            total_tokens=3_000,
+            input_tokens=2_500,
+            output_tokens=500,
+            cost=0.008,
+        )
+        return {"success": True}
+
+    async def cenario() -> None:
+        await _run_orchestrator_with_stream(chat, orchestrator_fake, app=app_falso)
+
+    asyncio.run(cenario())
+
+    assert app_falso.chamadas, "sidebar nunca atualizada"
+    final = app_falso.chamadas[-1]
+    assert final["tokens"] == 8_000  # acumulado dos dois agentes
+    assert final["percent"] == int(8_000 / 128_000 * 100)
+    assert final["cost"] == 0.02  # custo medido (exibição é oculta na sidebar)

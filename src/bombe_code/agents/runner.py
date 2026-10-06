@@ -17,6 +17,7 @@ from bombe_code.llm.quota_detector import is_quota_or_rate_limit_error
 from bombe_code.skills.registry import SkillRegistry
 from bombe_code.skills.tools import make_skill_tools
 from bombe_code.storage.project_db import ProjectDatabase
+from bombe_code.turing.progress import ABORT_EVENT, BUS
 
 logger = logging.getLogger(__name__)
 
@@ -238,6 +239,16 @@ class AgentRunner:
                         task_id, task_status, output=output_str
                     )
 
+                if total_tokens or cost:
+                    BUS.publish(
+                        "agent_usage",
+                        agent=self.agent.handle,
+                        total_tokens=total_tokens,
+                        input_tokens=input_tokens,
+                        output_tokens=output_tokens,
+                        cost=cost,
+                    )
+
                 return AgentExecutionResult(
                     agent_handle=self.agent.handle,
                     success=not is_blocked,
@@ -259,6 +270,20 @@ class AgentRunner:
                 # BANDEIRA VERMELHA: comportamento indevido determinado pela
                 # Guardiã — escala para o humano com evidência (a exceção do
                 # processo), sem apagar o trabalho já gravado.
+                if isinstance(exc, InterruptedError):
+                    motivo = f"⏸ {exc}"
+                    if self.project_db and task_id:
+                        self.project_db.update_agent_task_status(task_id, "blocked", output=motivo)
+                    return AgentExecutionResult(
+                        agent_handle=self.agent.handle,
+                        success=False,
+                        status="INTERRUPTED",
+                        is_blocked=True,
+                        block_reason=motivo,
+                        error=str(exc),
+                        task_id=task_id,
+                    )
+
                 from bombe_code.permissions.acao_guard import RedFlagError
 
                 if isinstance(exc, RedFlagError):
@@ -429,6 +454,8 @@ class AgentRunner:
                         from bombe_code.permissions.acao_guard import RedFlagError
 
                         raise RedFlagError(self.guarda.red_flag)
+                    if ABORT_EVENT.is_set():
+                        raise InterruptedError("Execução interrompida pelo usuário (ESC ESC)")
                     if isinstance(ev, PartDeltaEvent):
                         delta = ev.delta
                         if isinstance(delta, TextPartDelta) and delta.content_delta:

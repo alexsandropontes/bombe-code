@@ -182,7 +182,8 @@ class Sidebar(VerticalScroll):
         t.append(f" Modelo: {self.model_name}\n", style=f"{TOKENS['text']}")
         t.append(f" Tokens: {self.tokens_count:,} tokens\n", style=f"{TOKENS['text']}")
         t.append(f" Janela: {self.context_percent}% usada\n", style=f"{TOKENS['text']}")
-        t.append(f" Custo:  ${self.cost:.4f} USD\n", style=f"{TOKENS['warning']}")
+        # Custo em USD permanece medido (self.cost) porém OCULTO da tela —
+        # decisão de produto: não exibir custo por enquanto.
         t.append("─" * 36 + "\n", style=TOKENS["surface_alt"])
 
         # 3. Modified Files

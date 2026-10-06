@@ -77,8 +77,8 @@ class BombeTuiApp(App):
     BINDINGS: ClassVar[list[Binding]] = [
         Binding("shift+tab", "toggle_vibe_mode", "Alternar VIBE/TDD", show=True),
         Binding("tab", "cycle_stage", "Alternar Etapa (TDD)", show=True),
-        Binding("ctrl+c", "interrupt", "Interromper Turno", show=True),
-        Binding("escape", "interrupt", "Interromper", show=False),
+        Binding("ctrl+c", "noop", show=False),
+        Binding("escape", "escape_press", "Interromper (2× ESC)", show=False),
         Binding("ctrl+p", "command_palette", "Paleta de Comandos", show=True),
         Binding("ctrl+b", "toggle_sidebar", "Painel Lateral", show=True),
         Binding("f1", "help", "Ajuda", show=True),
@@ -726,24 +726,45 @@ class BombeTuiApp(App):
         except NoMatches:
             pass
 
+    _last_escape_ts: float = 0.0
+
+    def action_noop(self) -> None:
+        """Ctrl+C NÃO interrompe fluxo nenhum (cópia de tela não é pausa)."""
+
+    async def action_escape_press(self) -> None:
+        """ESCAPE DUPLO (janela 1.8s) = interromper. ESC único = dica."""
+        import time as _t
+
+        agora = _t.monotonic()
+        if agora - self._last_escape_ts <= 1.8:
+            self._last_escape_ts = 0.0
+            await self.action_interrupt()
+            return
+        self._last_escape_ts = agora
+        chat = self.query_one("#chat-view", ChatView)
+        await chat.mount(Static("[dim]⏸ pressione ESC novamente para interromper o fluxo[/dim]"))
+
     async def action_interrupt(self) -> None:
-        """Interrompe o turno ativo via client.interrupt."""
+        """Interrompe DE VERDADE: bandeira global aborta agentes/etapas + server."""
+        from bombe_code.turing.progress import ABORT_EVENT
+
+        ABORT_EVENT.set()
         if self.session_id and self._is_active_turn:
             try:
                 await self.client.interrupt(self.session_id)
-                chat = self.query_one("#chat-view", ChatView)
-                await chat.mount(
-                    Static(
-                        f"[{TOKENS['warning']}]Turno interrompido pelo usuário.[/{TOKENS['warning']}]"
-                    )
-                )
-            except (OSError, RuntimeError) as exc:
+            except (OSError, RuntimeError, httpx.HTTPError) as exc:
                 logger.warning("Erro ao interromper turno: %s", exc)
             finally:
                 self._is_active_turn = False
                 if self._processing_bar is not None:
                     self._processing_bar.stop()
-                self.update_status()
+        chat = self.query_one("#chat-view", ChatView)
+        await chat.mount(
+            Static(
+                f"[{TOKENS['warning']}]⏸ Interrupção solicitada (ESC ESC) — agentes encerram na "
+                "próxima fronteira e o checkpoint fica salvo. /wave resume retoma.[/{TOKENS['warning']}]"
+            )
+        )
 
     def action_command_palette(self) -> None:
         """Abre a paleta de comandos modal."""

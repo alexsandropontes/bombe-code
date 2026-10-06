@@ -26,7 +26,7 @@ from bombe_code.storage.project_db import ProjectDatabase
 from bombe_code.turing.gates import SealGate, TemplateGate
 from bombe_code.turing.kanban import KanbanCardStatus, KanbanManager
 from bombe_code.turing.pbb import AtomicTask, AtomicTaskType
-from bombe_code.turing.progress import BUS
+from bombe_code.turing.progress import ABORT_EVENT, BUS
 from bombe_code.turing.prompt_assembler import DeliveryTarget, TuringPromptAssembler
 from bombe_code.turing.review_gate import TuringReviewGate
 from bombe_code.turing.rework import VETO_ROUTES, VetoClass, VetoReworkEngine
@@ -1739,7 +1739,7 @@ class WaveOrchestrator:
         return True, motivo
 
     @staticmethod
-    def _extract_verdict_excerpt(text: str, max_len: int = 220) -> str:
+    def _extract_verdict_excerpt(text: str, max_len: int = 1200) -> str:
         """Extrai a linha do veredito (com contexto do marcador) para o veto ser legível."""
         for marker in ("veredito final", "veredito", "resultado final", "rejeitad", "reprovad"):
             idx = text.find(marker)
@@ -1976,13 +1976,13 @@ class WaveOrchestrator:
 
         aniche_verdict = {
             "approved": aniche_approved,
-            "notes": getattr(aniche_val_res, "output", "")[:120]
+            "notes": getattr(aniche_val_res, "output", "")[:400]
             if aniche_val_res
             else aniche_reason,
         }
         unclebob_verdict = {
             "approved": bob_approved,
-            "notes": getattr(bob_res, "output", "")[:120] if bob_res else bob_reason,
+            "notes": getattr(bob_res, "output", "")[:400] if bob_res else bob_reason,
         }
 
         review_eval = self.review_gate.evaluate(
@@ -2322,6 +2322,19 @@ class WaveOrchestrator:
                 completed_stories.append(story)
                 continue
 
+            if ABORT_EVENT.is_set():
+                BUS.publish(
+                    "announcement",
+                    agent="@turing",
+                    text="⏸ Execução da ONDA interrompida pelo usuário — checkpoint salvo. /wave resume retoma exatamente daqui.",
+                )
+                return {
+                    "success": False,
+                    "completed_stories": completed_stories,
+                    "interrompido": True,
+                    "error": "Execução interrompida pelo usuário (checkpoint salvo — /wave resume retoma).",
+                }
+
             cycle_res = self.run_cycle(story_id=story)
             if not cycle_res.get("success"):
                 card = self.kanban.get_card(story)
@@ -2390,7 +2403,7 @@ class WaveOrchestrator:
                             "1. INFORMAR — digite a informação que falta (biblioteca, serviço aceito, restrição)\n"
                             "2. SIMPLIFICAR O ACEITE — diga o novo critério mínimo desta story\n"
                             "3. ADIAR — mover a story para a próxima onda\n"
-                            f"Parecer completo do review: {cycle_res.get('review_output', '')[:400]}"
+                            f"Parecer completo do review: {cycle_res.get('review_output', '')[:2000]}"
                         ),
                         "suggested_owner": "@unclebob",
                     }
@@ -2703,6 +2716,13 @@ class WaveOrchestrator:
             return "|".join(tokens[:12])
 
         while attempt < engine.max_attempts:
+            if ABORT_EVENT.is_set():
+                BUS.publish(
+                    "announcement",
+                    agent="@turing",
+                    text="⏸ Retrabalho de VALIDATE interrompido pelo usuário — checkpoint salvo.",
+                )
+                break
             attempt += 1
             failed = {
                 name: info
@@ -3147,7 +3167,7 @@ class WaveOrchestrator:
             if story_do_furo and self.kanban.get_card(story_do_furo):
                 self.kanban.block_card(
                     story_do_furo,
-                    reason=f"FURO (contra-auditoria @hoare): {furo[:180]}",
+                    reason=f"FURO (contra-auditoria @hoare): {furo[:500]}",
                     blocked_by="@hoare",
                 )
 
