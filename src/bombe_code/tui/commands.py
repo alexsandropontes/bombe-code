@@ -31,6 +31,7 @@ async def _run_orchestrator_with_stream(
     chat: Any,
     orch_call,
     *args: Any,
+    app: Any = None,
 ) -> dict[str, Any]:
     """Executa o orquestrador em worker thread consumindo o TuringProgressBus.
 
@@ -43,19 +44,22 @@ async def _run_orchestrator_with_stream(
     result: dict[str, Any] = {}
 
     async def _worker() -> None:
+        from bombe_code.turing.progress import ABORT_EVENT
+
+        # Começar um comando limpa aborts antigos (o ESC vale para o ciclo corrente)
+        ABORT_EVENT.clear()
         result.update(await anyio.to_thread.run_sync(orch_call, *args))
 
-    live_widget: Static | None = None
+    # ── ESTADO LINEAR (append-only): a tela NUNCA volta atrás ──
     live_agent: str = ""
-    buf_text = ""
-    buf_think = ""
-    tools_lines: list[RichText] = []
-    last_paint = 0.0
+    bloco_tipo: str | None = None  # "thinking" | "text" | None
+    bloco_widget: Any | None = None
+    bloco_texto: RichText = RichText()
+    tokens_sessao = 0
+    custo_sessao = 0.0
+    ultimo_evento_ts = [time.monotonic()]
 
-    def _mount(line: str) -> None:
-        chat.mount(Static(line))
-
-    def _novo_widget(conteudo: str) -> Any:
+    def _novo_widget(conteudo: Any) -> Any:
         fabrica = getattr(chat, "criar_static", None)
         return fabrica(conteudo) if fabrica else Static(conteudo)
 
@@ -66,6 +70,41 @@ async def _run_orchestrator_with_stream(
         else:
             widget.update(conteudo)
 
+    def _fechar_bloco() -> None:
+        nonlocal bloco_tipo, bloco_widget, bloco_texto
+        bloco_tipo = None
+        bloco_widget = None
+        bloco_texto = RichText()
+
+    async def _montar_linha(linha: RichText) -> None:
+        """Linha completa (tool/resultado): append-only, nunca reaberta."""
+        _fechar_bloco()
+        await chat.mount(_novo_widget(linha))
+
+    def _abrir_bloco_delta(tipo: str, agente: str, primeiro_pedaco: str) -> None:
+        nonlocal bloco_tipo, bloco_widget, bloco_texto
+        _fechar_bloco()
+        bloco_tipo = tipo
+        estilo = "dim italic" if tipo == "thinking" else ""
+        prefixo = "🧠 " if tipo == "thinking" else ""
+        bloco_texto = RichText()
+        bloco_texto.append(f"{prefixo}{primeiro_pedaco}", style=estilo)
+        cabecalho = RichText()
+        cabecalho.append("◈ ", style=f"bold {cor_agente(agente)}")
+        cabecalho.append(agente, style=f"bold {cor_agente(agente)}")
+        bloco_widget = _novo_widget(cabecalho)
+        chat.mount(bloco_widget)
+        linha_delta = RichText()
+        linha_delta.append(f"{prefixo}{primeiro_pedaco}", style=estilo)
+        bloco_widget = _novo_widget(linha_delta)
+        chat.mount(bloco_widget)
+
+    def _appender_delta(tipo: str, pedaco: str) -> None:
+        nonlocal bloco_texto
+        estilo = "dim italic" if tipo == "thinking" else ""
+        bloco_texto.append(pedaco, style=estilo)
+        _atualizar(bloco_widget, bloco_texto)
+
     def _linha_tool(agent: str, tool: str, args_resumo: str) -> RichText:
         """Linha de tool em Rich Text — imune a markup vindo da LLM."""
         t = RichText("🔧 ")
@@ -73,55 +112,8 @@ async def _run_orchestrator_with_stream(
         t.append(f" → {tool}({args_resumo})", style="magenta")
         return t
 
-    def _linha_file(agent: str, path: str, preview: str) -> RichText:
-        t = RichText("📝 ")
-        t.append(agent, style=f"bold {cor_agente(agent)}")
-        t.append(f" → gravando {path}", style="green")
-        for linha in preview.splitlines()[:8]:
-            t.append(f"\n  │ {linha}", style="dim")
-        return t
-
-    def _linha_resultado(saida: str) -> RichText:
-        t = RichText()
-        for linha in saida.splitlines()[:6]:
-            t.append(f"  ← {linha}\n", style="dim")
-        return t
-
-    async def _finalize_live() -> None:
-        nonlocal live_widget, buf_text, buf_think, tools_lines
-        if live_widget is not None:
-            acc = RichText()
-            if buf_think.strip():
-                acc.append(f"🧠 {buf_think.strip()}\n", style="dim italic")
-            if buf_text.strip():
-                acc.append(buf_text.rstrip() + "\n")
-            for linha in tools_lines:
-                acc.append_text(linha)
-                acc.append("\n")
-            _atualizar(live_widget, acc)
-        live_widget = None
-        buf_text = ""
-        buf_think = ""
-        tools_lines = []
-
-    def _paint(force: bool = False) -> None:
-        nonlocal last_paint
-        now = time.monotonic()
-        if live_widget is None or (not force and (now - last_paint) * 1000 < _STREAM_THROTTLE_MS):
-            return
-        last_paint = now
-        acc = RichText()
-        if buf_think.strip():
-            acc.append(f"🧠 {buf_think.strip()[-400:]}\n", style="dim italic")
-        if buf_text.strip():
-            acc.append(buf_text.rstrip() + "\n")
-        for linha in tools_lines[-6:]:
-            acc.append_text(linha)
-            acc.append("\n")
-        _atualizar(live_widget, acc)
-
     async def _drain() -> None:
-        nonlocal live_widget, live_agent, buf_text, buf_think, tools_lines
+        nonlocal live_agent, bloco_tipo, bloco_widget, bloco_texto, tokens_sessao, custo_sessao
         while True:
             try:
                 ev = await asyncio.wait_for(queue.get(), timeout=0.15)
@@ -129,44 +121,87 @@ async def _run_orchestrator_with_stream(
                 continue
             if ev is None:
                 break
+            ultimo_evento_ts[0] = time.monotonic()
             etype = ev.type
             agent = ev.agent or ""
-            ultimo_evento_ts[0] = time.monotonic()
-            if etype in ("text_delta", "thinking_delta", "tool_call", "tool_result", "file_write"):
-                if agent != live_agent:
-                    await _finalize_live()
-                    live_agent = agent
-                    live_widget = _novo_widget(
-                        f"[bold {cor_agente(agent)}]◈ {agent}[/bold {cor_agente(agent)}]"
-                    )
-                    await chat.mount(live_widget)
-                if etype == "text_delta":
-                    buf_text += ev.text
-                elif etype == "thinking_delta":
-                    buf_think += ev.text
-                elif etype == "tool_call":
-                    # IDENTIDADE (cor do agente) + IMUNIDADE a markup: Rich
-                    # Text — conteúdo da LLM nunca é parseado como markup.
-                    args = str((ev.data or {}).get("args", ""))
-                    resumo_args = args if len(args) <= 220 else args[:220] + "…"
-                    tools_lines.append(_linha_tool(agent, ev.text, resumo_args))
-                elif etype == "file_write":
-                    previa = str((ev.data or {}).get("preview", ""))
-                    tools_lines.append(_linha_file(agent, ev.text, previa))
-                elif etype == "tool_result":
-                    # Paridade opencode: a SAÍDA da tool aparece (antes era descartada)
-                    saida = (ev.text or "").strip()
-                    if saida:
-                        tools_lines.append(_linha_resultado(saida))
-                _paint()
+
+            # Sidebar: uso real dos agentes da ONDA (custo acumula oculto)
+            if etype == "agent_usage":
+                tokens_sessao += int(ev.data.get("total_tokens", 0) or 0)
+                custo_sessao += float(ev.data.get("cost", 0) or 0)
+                if app is not None:
+                    try:
+                        from .widgets.sidebar import Sidebar
+
+                        sidebar = app.query_one("#sidebar", Sidebar)
+                        sidebar.update_metrics(
+                            tokens=tokens_sessao,
+                            percent=min(100, int(tokens_sessao / 128_000 * 100)),
+                            cost=round(custo_sessao, 4),
+                        )
+                    except Exception as exc:  # noqa: BLE001 — sidebar é best-effort
+                        logger.debug("Sidebar indisponível: %s", exc)
                 continue
 
-            # Eventos canônicos (visíveis em qualquer modo)
-            await _finalize_live()
+            if etype == "agent_start":
+                _fechar_bloco()
+                if agent != live_agent:
+                    live_agent = agent
+                await chat.mount(
+                    _novo_widget(
+                        f"[bold {cor_agente(agent)}]🤖 [{agent}][/bold {cor_agente(agent)}]"
+                        + (f" {_rich_escape(ev.text.split('] ', 1)[1])}" if "] " in ev.text else "")
+                    )
+                )
+                continue
+
+            if etype in ("text_delta", "thinking_delta"):
+                tipo = "thinking" if etype == "thinking_delta" else "text"
+                if bloco_tipo != tipo:
+                    _fechar_bloco()
+                    bloco_tipo = tipo
+                    primeiro = ev.text
+                    estilo = "dim italic" if tipo == "thinking" else ""
+                    prefixo = "🧠 " if tipo == "thinking" else ""
+                    bloco_texto = RichText()
+                    bloco_texto.append(f"{prefixo}{primeiro}", style=estilo)
+                    bloco_widget = _novo_widget(bloco_texto)
+                    await chat.mount(bloco_widget)
+                else:
+                    bloco_texto.append(ev.text, style="dim italic" if tipo == "thinking" else "")
+                    _atualizar(bloco_widget, bloco_texto)
+                continue
+
+            if etype == "tool_call":
+                args = str((ev.data or {}).get("args", ""))
+                resumo_args = args if len(args) <= 220 else args[:220] + "…"
+                await _montar_linha(_linha_tool(agent, ev.text, resumo_args))
+                continue
+
+            if etype == "file_write":
+                previa = str((ev.data or {}).get("preview", ""))
+                t = RichText("📝 ")
+                t.append(agent, style=f"bold {cor_agente(agent)}")
+                t.append(f" → gravando {ev.text}", style="green")
+                for linha in previa.splitlines()[:8]:
+                    t.append(f"\n  │ {linha}", style="dim")
+                await _montar_linha(t)
+                continue
+
+            if etype == "tool_result":
+                saida = (ev.text or "").strip()
+                if saida and saida != "None":
+                    t = RichText()
+                    for linha in saida.splitlines()[:6]:
+                        t.append(f"  ← {linha}\n", style="dim")
+                    await _montar_linha(t)
+                continue
+
+            # ── Anúncios canônicos (visíveis em qualquer modo) ──
+            _fechar_bloco()
             live_agent = ""
             style = {
                 "wave_start": TOKENS["primary"],
-                "agent_start": TOKENS["secondary"],
                 "stage_start": TOKENS["secondary"],
                 "stage_end": TOKENS["success"],
                 "announcement": TOKENS["secondary"],
@@ -182,9 +217,8 @@ async def _run_orchestrator_with_stream(
     worker_task = asyncio.create_task(_worker())
     drain_task = asyncio.create_task(_drain())
 
-    # WATCHDOG DE SILENCIO: mede desde o ÚLTIMO EVENTO (delta, tool, resultado)
-    # — trabalho saudável streamando NÃO dispara alarme; silêncio real, sim.
-    ultimo_evento_ts = [time.monotonic()]
+    # WATCHDOG DE SILENCIO: mede desde o ÚLTIMO EVENTO — trabalho saudável
+    # streamando NÃO dispara alarme; silêncio real, sim.
     heartbeat: Static | None = None
 
     async def _heartbeat() -> None:
@@ -216,7 +250,7 @@ async def _run_orchestrator_with_stream(
         hb_task.cancel()
         if heartbeat is not None:
             heartbeat.update("[dim]⏱ chamada concluída.[/dim]")
-        await _finalize_live()
+        _fechar_bloco()
         unsubscribe()
 
     return result
@@ -1174,7 +1208,7 @@ async def handle_slash_command(app: BombeTuiApp, raw_text: str) -> bool:
                 await chat.mount(Static("\n".join(msg)))
                 return True
 
-            res = await _run_orchestrator_with_stream(chat, orch.run_discuss, topic)
+            res = await _run_orchestrator_with_stream(chat, orch.run_discuss, topic, app=app)
             if res.get("success"):
                 app.wave_station = "PLAN"
                 app.update_status()
@@ -1219,7 +1253,7 @@ async def handle_slash_command(app: BombeTuiApp, raw_text: str) -> bool:
                 await chat.mount(Static("\n".join(msg)))
                 return True
 
-            res = await _run_orchestrator_with_stream(chat, orch.run_plan)
+            res = await _run_orchestrator_with_stream(chat, orch.run_plan, app=app)
             if res.get("success"):
                 app.wave_station = "EXECUTE"
                 app.update_status()
@@ -1276,7 +1310,7 @@ async def handle_slash_command(app: BombeTuiApp, raw_text: str) -> bool:
                     f"[{TOKENS['secondary']} bold]Executando ciclo atômico para {story_label}...[/{TOKENS['secondary']} bold]"
                 )
             )
-            res = await _run_orchestrator_with_stream(chat, orch.run_cycle, target_story)
+            res = await _run_orchestrator_with_stream(chat, orch.run_cycle, target_story, app=app)
             if res.get("success"):
                 await chat.mount(
                     Static(f"[{TOKENS['success']}]✓ {res['message']}[/{TOKENS['success']}]")
@@ -1295,7 +1329,7 @@ async def handle_slash_command(app: BombeTuiApp, raw_text: str) -> bool:
                     f"[{TOKENS['secondary']} bold]Iniciando execução em lote da ONDA (Cycle-Full)...[/{TOKENS['secondary']} bold]"
                 )
             )
-            res = await _run_orchestrator_with_stream(chat, orch.run_execute)
+            res = await _run_orchestrator_with_stream(chat, orch.run_execute, app=app)
             if res.get("success"):
                 app.wave_station = "VALIDATE"
                 app.update_status()
@@ -1334,7 +1368,7 @@ async def handle_slash_command(app: BombeTuiApp, raw_text: str) -> bool:
             return True
 
         if subcmd == "validate":
-            res = await _run_orchestrator_with_stream(chat, orch.run_validate)
+            res = await _run_orchestrator_with_stream(chat, orch.run_validate, app=app)
             if res.get("success"):
                 await chat.mount(
                     Static(
@@ -1414,7 +1448,7 @@ async def handle_slash_command(app: BombeTuiApp, raw_text: str) -> bool:
                     f"[{TOKENS['secondary']} bold]🔍 Contra-Auditoria Forense (@hoare) — alvo: {alvo or 'onda ativa'}[/{TOKENS['secondary']} bold]"
                 )
             )
-            res = await _run_orchestrator_with_stream(chat, orch.run_audit, alvo)
+            res = await _run_orchestrator_with_stream(chat, orch.run_audit, alvo, app=app)
             if res.get("success") and res.get("limpa"):
                 await chat.mount(
                     Static(

@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 ANNOUNCEMENT_EVENTS = frozenset(
     {
         "announcement",
+        "agent_usage",
         "agent_start",
         "wave_start",
         "stage_start",
@@ -140,6 +141,12 @@ class TuringProgressBus:
     def subscriber_count(self) -> int:
         with self._lock:
             return len(self._queues)
+
+
+ABORT_EVENT = threading.Event()
+"""Bandeira global de interrupção humana (ESC ESC). Checada pelo runner a
+cada evento de stream e pelo orquestrador entre agentes — aborta de verdade,
+sem matar o processo nem perder o que já foi gravado."""
 
 
 BUS = TuringProgressBus()

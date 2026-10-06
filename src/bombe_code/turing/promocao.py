@@ -135,12 +135,14 @@ class PromotorDeBranches:
                 return ResultadoPromocao(False, "dev", f"Falha ao ler dev: {pai}", detalhes)
             rc, arvore = self._git("rev-parse", f"{BRANCH_TRABALHO}^{{tree}}")
             if rc != 0:
-                return ResultadoPromocao(False, "dev", f"Falha ao ler árvore do estado: {arvore}", detalhes)
-            rc, novo = self._git(
-                "commit-tree", arvore, "-p", pai.strip(), "-m", mensagem
-            )
+                return ResultadoPromocao(
+                    False, "dev", f"Falha ao ler árvore do estado: {arvore}", detalhes
+                )
+            rc, novo = self._git("commit-tree", arvore, "-p", pai.strip(), "-m", mensagem)
             if rc != 0:
-                return ResultadoPromocao(False, "dev", f"Falha ao embalar release: {novo}", detalhes)
+                return ResultadoPromocao(
+                    False, "dev", f"Falha ao embalar release: {novo}", detalhes
+                )
             rc, _ = self._git("update-ref", f"refs/heads/{BRANCH_OFICIAL}", novo.strip())
             if rc != 0:
                 return ResultadoPromocao(False, "dev", "Falha ao atualizar a branch dev.", detalhes)
