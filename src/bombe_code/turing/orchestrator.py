@@ -3222,10 +3222,39 @@ class WaveOrchestrator:
         if not self.transition_to(TuringStage.COMPLETED):
             return {"success": False, "error": "Falha na transição final para COMPLETED."}
 
+        # POLÍTICA DE BRANCHES: estado aprovado é promovido para `dev` via
+        # squash (memória operacional da IA ≠ histórico oficial). Nunca push.
+        resultado_promocao = None
+        try:
+            from bombe_code.turing.promocao import PromotorDeBranches
+
+            promotor = PromotorDeBranches(str(self.project_dir))
+            if promotor.eh_repositorio():
+                from bombe_code.turing.progress import BUS as _bus
+
+                promocao = promotor.promover_para_dev(
+                    f"feat({self.state_machine.wave_id}): entrega homologada da ONDA "
+                    f"(VALIDATE aprovado — estado aprovado consolidado em 1 commit)"
+                )
+                resultado_promocao = promocao.mensagem
+                _bus.publish(
+                    "announcement" if promocao.success else "escalation",
+                    agent="@turing",
+                    text=(
+                        f"🌿 [PROMOÇÃO] {promocao.mensagem}"
+                        if promocao.success
+                        else f"⚠️ [PROMOÇÃO] {promocao.mensagem}"
+                    ),
+                    wave_id=self.state_machine.wave_id,
+                )
+        except Exception as exc:  # noqa: BLE001 — promoção é best-effort, não derruba o fim da onda
+            logger.warning("Promoção de branches falhou (não bloqueante): %s", exc)
+
         return {
             "success": True,
             "wave_id": self.state_machine.wave_id,
             "stage": TuringStage.COMPLETED.value,
+            "promocao": resultado_promocao,
             "message": f"ONDA {self.state_machine.wave_id} finalizada com sucesso e arquivada.",
         }
 

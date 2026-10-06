@@ -465,6 +465,34 @@ def wave_resume(
     typer.echo(f"Etapa ativa: {res.get('stage')}. Continue com: bombe-code wave run")
 
 
+@wave_cli.command("promote")
+def wave_promote(
+    destino: Annotated[str, typer.Argument(help="Destino da promoção: dev | hml | main")],
+    project_dir: Annotated[str, typer.Option("--project-dir", help="Pasta do projeto")] = ".",
+    mensagem: Annotated[
+        str | None, typer.Option("--mensagem", "-m", help="Mensagem do squash (destino dev)")
+    ] = None,
+) -> None:
+    """Promove estados pela política de branches: working→dev (squash), dev→hml, hml→main."""
+    from bombe_code.turing.promocao import PromotorDeBranches
+
+    promotor = PromotorDeBranches(project_dir)
+    destino_norm = destino.strip().lower()
+    if destino_norm == "dev":
+        res = promotor.promover_para_dev(
+            mensagem or "feat: promoção manual do estado aprovado da IA (squash)"
+        )
+    else:
+        res = promotor.promover_fase(destino_norm)
+    if res.success:
+        typer.echo(f"✅ {res.mensagem}")
+        for d in res.detalhes:
+            typer.echo(f"  • {d}")
+    else:
+        typer.echo(f"❌ {res.mensagem}", err=True)
+        raise typer.Exit(code=1)
+
+
 @wave_cli.command("end")
 def wave_end(
     project_dir: Annotated[str, typer.Option("--project-dir", help="Pasta do projeto")] = ".",
