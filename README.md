@@ -1,6 +1,6 @@
 # ⚡ Bombe Code
 
-> **Harness soberano, local-first e determinístico de inteligência artificial para engenharia de software enterprise.**
+> **Harness determinístico, local-first e de engenharia de software enterprise com IA.**
 
 [![Python Version](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
@@ -22,7 +22,7 @@ No Bombe Code, nenhuma linha de código de produção é gerada ao acaso. O dese
 
 ## 🎯 A Premissa & Princípios Arquiteturais
 
-### 1. Local-First & Soberania Tecnológica
+### 1. Local-First & Independência Tecnológica
 O Bombe Code opera prioritariamente na sua estação de trabalho:
 * **Banco Local SQLite (`state.db`):** Armazena o estado do runtime, tarefas, cards do Kanban e checkpoints das ONDAS.
 * **Transparência em Arquivos Físicos (`docs/`):** Todos os artefatos de PRDs, jornadas, decisões de arquitetura e histórias BDD são arquivos Markdown versionados no Git.
@@ -74,7 +74,7 @@ O ciclo de entrega no Bombe Code é classificado deterministicamente pela máqui
   * **Identificadores:** `ONDA-0`, `ONDA-00`, `ONDA-000`, `WAVE-0`, `WAVE-00`, `WAVE-000` (ou prefixos `ONDA-000-*`).
   * **Ciclo de Estados:** `DISCOVERY` ➔ `INCEPTION` ➔ `COMPLETED`.
   * **Natureza:** Estritamente **UPSTREAM**. Conduz pesquisa de viabilidade (`@meira`), PRD e visão de produto (`@grace`), jornadas do usuário (`@alan`), design system e wireframes (`@norman`), arquitetura de sistemas (`@ieru`), modelagem de dados relacional (`@codd`) e NoSQL/vetorial (`@claudia`), modelagem de ameaças STRIDE (`@barreto`), Lean Inception Macro com Canvas MVP e o **Sequenciador de Ondas** (`@caroli`), e alinhamento de contexto de IA (`@nelson`).
-  * **Trava Arquitetural:** Transições para `EXECUTE` ou `VALIDATE` são **terminantemente PROIBIDAS** e geram `InvalidTransitionError`. A Onda Zero não gera código em `src/`; ela entrega a fundação soberana para as ondas de desenvolvimento.
+  * **Trava Arquitetural:** Transições para `EXECUTE` ou `VALIDATE` são **terminantemente PROIBIDAS** e geram `InvalidTransitionError`. A Onda Zero não gera código em `src/`; ela entrega a fundação autônoma para as ondas de desenvolvimento.
 * **Ondas de Entrega 1..N e Brownfield (`DELIVERY_WAVE`):**
   * **Identificadores:** `ONDA-001`, `ONDA-002`, `WAVE-001` em diante, ou evolução de sistemas legados.
   * **Ciclo de Estados:** `PLAN` ➔ `REFINEMENT` ➔ `EXECUTE` ➔ `VALIDATE` ➔ `COMPLETED`.
@@ -138,7 +138,7 @@ O Bombe Code reúne 24 agentes especialistas de elite, homenageando 12 pioneiros
 | :--- | :--- | :--- | :--- | :--- |
 | **`@edith`** | Edith Ranzini | Brasil | Contract & Deliverable Validator | `docs/reports/` — Auditoria do entregável contra o PRD e emissão do Selo |
 | **`@nina`** | Nina Silva | Brasil | Gov, FinOps & AI Ethics Auditor | Auditoria de consumo de tokens, governança de custos e conformidade ética |
-| **`@turing`** | Alan Turing | UK | Sovereign Runtime Maestro | Orquestração da ONDA, máquina de estados finita e guarda de gates |
+| **`@turing`** | Alan Turing | UK | Runtime Maestro & Orquestrador | Orquestração da ONDA, máquina de estados finita e guarda de gates |
 
 ---
 
@@ -248,7 +248,7 @@ Módulos reutilizáveis e testados que podem ser consultados e injetados pelas L
 
 ---
 
-## 🖥️ Experiência de Terminal (TUI) Moderna & Soberana
+## 🖥️ Experiência de Terminal (TUI) Moderna & Autônoma
 
 A TUI do Bombe Code foi desenhada para paridade visual e de desempenho com ferramentas de ponta (como OpenCode original e Claude Code):
 

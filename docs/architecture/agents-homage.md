@@ -37,7 +37,7 @@ O Bombe Code homenageia 23 grandes mentes da história da computação, valoriza
 
 | Handle | Pioneiro Homenageado | País de Origem | Marco Histórico Real | Papel no Bombe Code |
 | :--- | :--- | :--- | :--- | :--- |
-| **@turing** | **Alan Turing** | Reino Unido | Pai da computação teórica, inteligência artificial e formalização da máquina universal de estados. Decifrador de códigos e arquiteto de autômatos determinísticos. | Sovereign Orchestrator & Runtime Maestro |
+| **@turing** | **Alan Turing** | Reino Unido | Pai da computação teórica, inteligência artificial e formalização da máquina universal de estados. Decifrador de códigos e arquiteto de autômatos determinísticos. | Autônomo Orchestrator & Runtime Maestro |
 | **@meira** | **Silvio Meira** | Brasil | Pioneiro do ecossistema de software brasileiro, cofundador do CESAR e do Porto Digital em Recife, professor emérito da UFPE e autoridade em inovação tecnológica. | Analista de Viabilidade & Inovação |
 | **@grace** | **Grace Hopper** | Estados Unidos | Pioneira da programação de computadores, criadora dos primeiros compiladores (A-0) e precursora fundamental da linguagem COBOL, unindo requisitos de negócios à computação. | Senior Product Manager & Strategy Lead |
 | **@alan** | **Alan Cooper** | Estados Unidos | Criador do Visual Basic original, pioneiro do Goal-Directed Design e criador do conceito de personas de software para design de interação centrado em objetivos. | User Journey & Navigation Architect |

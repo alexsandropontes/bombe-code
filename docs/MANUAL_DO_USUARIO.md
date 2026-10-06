@@ -1,6 +1,6 @@
 # 📖 Manual do Usuário — Bombe Code
 
-Bem-vindo ao **Bombe Code**, o ambiente soberano de engenharia de software com **Governança Determinística pelo Turing Runtime**, suporte híbrido a **TDD Formal** e **Vibe Coding**, e orquestração de **24 Agentes Especialistas**.
+Bem-vindo ao **Bombe Code**, o ambiente autônomo de engenharia de software com **Governança Determinística pelo Turing Runtime**, suporte híbrido a **TDD Formal** e **Vibe Coding**, e orquestração de **24 Agentes Especialistas**.
 
 ---
 
@@ -38,7 +38,7 @@ Toda a persistência física das especificações é mantida em arquivos Markdow
 
 ## 🧭 Os Dois Grandes Modos: TDD vs VIBE
 
-O Bombe Code organiza sua experiência em dois modos soberanos de engenharia:
+O Bombe Code organiza sua experiência em dois modos autônomos de engenharia:
 
 ```
                   ┌────────────────────────────────────────┐
@@ -190,7 +190,7 @@ O Bombe Code conta com 24 agentes especialistas de elite (12 brasileiros e 11 in
 ### Downstream (Validação, Homologação & Maestro)
 * **`@edith`** (Edith Ranzini — Brasil): Contract & Deliverable Validator. Auditoria final do entregável contra o PRD e emissão do Selo de Entrega em `docs/reports/`.
 * **`@nina`** (Nina Silva — Brasil): Gov, FinOps & AI Ethics Auditor. Auditoria de consumo de tokens, governança de custos e conformidade ética e LGPD.
-* **`@turing`** (Alan Turing — UK): Sovereign Runtime Maestro. Orquestração da ONDA, máquina de estados finita e guarda de quality gates.
+* **`@turing`** (Alan Turing — UK): Runtime Maestro & Orquestrador. Orquestração da ONDA, máquina de estados finita e guarda de quality gates.
 
 ---
 

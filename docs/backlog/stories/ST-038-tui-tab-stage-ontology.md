@@ -31,7 +31,7 @@ Além disso, as nomenclaturas de etapas foram refinadas para refletir a semânti
 ---
 
 ## 2. Critérios de Aceitação (INVEST)
-* [x] **AC-1:** Projeto novo / recém-criado sem estado prévio inicializa soberanamente em `DISCOVERY`.
+* [x] **AC-1:** Projeto novo / recém-criado sem estado prévio inicializa autônomamente em `DISCOVERY`.
 * [x] **AC-2:** Pressionar `TAB` na Onda Zero cicla estritamente entre `DISCOVERY` e `INCEPTION`.
 * [x] **AC-3:** Pressionar `TAB` em Ondas de Entrega cicla sequencialmente entre `PLAN` ➔ `REFINEMENT` ➔ `EXECUTE` ➔ `VALIDATE`.
 * [x] **AC-4:** `stage_guard.py` trata `DISCOVERY` com bloqueio total de código de produção e testes (igual a DISCUSS), e `INCEPTION` e `REFINEMENT` com bloqueio de código de produção (permitindo docs).

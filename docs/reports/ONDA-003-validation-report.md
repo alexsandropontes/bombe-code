@@ -2,7 +2,7 @@
 
 > **Etapa:** VALIDATE  
 > **Auditora Responsável:** @edith (Edith Ranzini — Contract Validator & QA Lead)  
-> **Soberano:** @turing (Turing Runtime Gate)  
+> **Autônomo:** @turing (Turing Runtime Gate)  
 > **Modo de Engenharia:** tdd-code  
 > **Status:** HOMOLOGADO  
 

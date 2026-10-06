@@ -12,7 +12,7 @@
 Reimplementar **100% do opencode original** numa implementação própria chamada **Bombe Code**, em **Python + UV (obrigatório)**, com as regras:
 
 - **Derivação declarada:** nunca negar que somos derivados do opencode; atribuição e licenças no README/NOTICE. Licença nossa: **MIT**.
-- **HARNESS & TUI SOBERANOS:** ciclo completo de desenvolvimento com rigor arquitetural, TDD estrito e suporte a Vibe Coding.
+- **HARNESS & TUI AUTÔNOMOS:** ciclo completo de desenvolvimento com rigor arquitetural, TDD estrito e suporte a Vibe Coding.
 - **STREAMING REAL TOKEN-A-TOKEN:** paridade completa com o streaming assíncrono do OpenCode original, suporte a reasoning delta e anti-freezing UI.
 
 **Evolução da missão (Onda 2+):** acima da paridade com o opencode, o produto incorporou o **Turing Runtime Engine** — orquestração determinística da Metodologia ONDA com quality gates, Kanban e máquina de estados — transformando o harness em máquina de engenharia autônoma (ver `docs/architecture/bombe-code-foundation-master.md`).

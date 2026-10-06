@@ -208,7 +208,7 @@ class BombeTuiApp(App):
             pass
 
     def action_toggle_vibe_mode(self) -> None:
-        """Alterna soberanamente entre Modo TDD e Modo VIBE via Shift+Tab."""
+        """Alterna autônomamente entre Modo TDD e Modo VIBE via Shift+Tab."""
         old_mode = self.mode
         allowed = self.get_current_wave_stages()
         default_stage = allowed[0]

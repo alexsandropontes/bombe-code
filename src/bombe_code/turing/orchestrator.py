@@ -1,4 +1,4 @@
-"""Orquestrador Soberano da ONDA no Turing Runtime (EP-003).
+"""Orquestrador Autônomo da ONDA no Turing Runtime (EP-003).
 
 Coordena as transições de estado, despacho de agentes especialistas,
 fiscalização determinística de gates e persistência no banco local do projeto.

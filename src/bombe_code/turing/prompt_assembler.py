@@ -40,8 +40,8 @@ class TuringPromptAssembler:
     )
 
     ANTI_SCOPE_CREEP_BLOCK = (
-        "### 🛡️ DIRETRIZ FUNDAMENTAL: TETO MÁXIMO DA DEMANDA E SOBERANIA DO PEDIDO (ANTI-SCOPE CREEP / YAGNI RADICAL E CORTE DE INVENTIVIDADE DA LLM)\n"
-        "1. SOBERANIA ABSOLUTA DO PEDIDO: O pedido do usuário é o TETO MÁXIMO DA DEMANDA. Tudo o que o usuário explicitamente pedir é MANDATÓRIO e inegociável. "
+        "### 🛡️ DIRETRIZ FUNDAMENTAL: TETO MÁXIMO DA DEMANDA E FIDELIDADE AO PEDIDO (ANTI-SCOPE CREEP / YAGNI RADICAL E CORTE DE INVENTIVIDADE DA LLM)\n"
+        "1. AUTONOMIA ABSOLUTA DO PEDIDO: O pedido do usuário é o TETO MÁXIMO DA DEMANDA. Tudo o que o usuário explicitamente pedir é MANDATÓRIO e inegociável. "
         "A IA NUNCA tem autoridade para julgar o pedido do usuário como 'supérfluo' ou cortá-lo. "
         "Se o usuário pediu um botão rosa, entregue o botão rosa. Se pediu um quiz com 10 perguntas, entregue exatamente o quiz com 10 perguntas.\n"
         "2. CORTE DO SUPÉRFLUO DA PRÓPRIA LLM: O que deve ser rigorosamente cortado é APENAS o que a LLM inventar por conta própria. "

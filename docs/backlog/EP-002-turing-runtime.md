@@ -7,7 +7,7 @@
 ---
 
 ### Descrição do Épico
-Implementar o motor de orquestração soberano **Turing Runtime Engine**, a fábrica unificada de agentes via **Pydantic AI**, a persistência limpa de estado local em `.bombe-code/state.db` com o **Kanban de Tasks de Agentes**, e o suporte a navegação por tecla `Tab` entre as 4 estações da ONDA na TUI.
+Implementar o motor de orquestração autônomo **Turing Runtime Engine**, a fábrica unificada de agentes via **Pydantic AI**, a persistência limpa de estado local em `.bombe-code/state.db` com o **Kanban de Tasks de Agentes**, e o suporte a navegação por tecla `Tab` entre as 4 estações da ONDA na TUI.
 
 ---
 

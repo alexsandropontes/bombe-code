@@ -3,7 +3,7 @@
 > **Status:** PLANNING -> READY FOR IMPLEMENTATION  
 > **Onda:** ONDA-005  
 > **Modo:** tdd-code (Sem teste RED = Sem código de produção)  
-> **Liderança:** @turing (Soberano da ONDA), @grace (Product Strategy), @ieru (Software Architecture), @unclebob (Tech Lead)  
+> **Liderança:** @turing (Autônomo da ONDA), @grace (Product Strategy), @ieru (Software Architecture), @unclebob (Tech Lead)  
 
 ---
 

@@ -3,7 +3,7 @@
 > **Épico:** [EP-006: Orquestração do Turing, Gates Determinísticos & Kanban Dinâmico](file:///home/lexpontes/projetos/struct/bombe-code/docs/backlog/epics/EP-006-turing-flow-orchestration-and-gates.md)  
 > **Status:** DONE
 > **Prioridade:** ALTA  
-> **Responsáveis:** @turing (Soberano da ONDA), @grace (Product Strategy), @ieru (Software Architecture)  
+> **Responsáveis:** @turing (Autônomo da ONDA), @grace (Product Strategy), @ieru (Software Architecture)  
 > **Modo:** tdd-code  
 
 ---

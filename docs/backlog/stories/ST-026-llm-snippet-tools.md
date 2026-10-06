@@ -3,7 +3,7 @@
 > **Épico:** [EP-005: Starters Engine, Snippets Registry & LLM Snippet Tool](file:///home/lexpontes/projetos/struct/bombe-code/docs/backlog/epics/EP-005-starters-and-snippets-engine.md)  
 > **Status:** DONE
 > **Prioridade:** ALTA  
-> **Responsáveis:** @andrej (AI Prompt & Context), @turing (Soberano da ONDA)  
+> **Responsáveis:** @andrej (AI Prompt & Context), @turing (Autônomo da ONDA)  
 > **Modo:** tdd-code  
 
 ---

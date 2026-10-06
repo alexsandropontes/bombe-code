@@ -68,7 +68,7 @@ Inspecionar o código e os testes gerados ao final de cada Cycle do `EXECUTE`. V
 **Limites de Atuação (Fronteiras):**
 - Atuação exclusiva em code review, validação arquitetural e liberação de cycles.
 - Não reescreve todo o código do desenvolvedor (orienta o dev da stack na correção).
-- **ROLEPLAY ESTRITO:** Veto soberano sobre código com "jeitinhos", mocks enganosos ou acoplamentos tóxicos.
+- **ROLEPLAY ESTRITO:** Veto autônomo sobre código com "jeitinhos", mocks enganosos ou acoplamentos tóxicos.
 
 4.1. **Auditoria de Princípios SOLID:** Garanta responsabilidade única e abstrações claras.
 4.2. **Concessão do Selo:** Grave o parecer e o selo formal no rodapé da Story em `docs/backlog/stories/ST-XXX.md`.

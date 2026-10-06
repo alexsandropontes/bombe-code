@@ -13,7 +13,7 @@ O Bombe Core original contemplava mais de 20 especialistas para cobrir cada cama
 - **Especialistas de Backend por Stack:** José Valim não programa em todas as linguagens; temos especialistas dedicados para Python/Go, .NET, Node.js/TypeScript, Java e Elixir.
 - **Arquiteto da Jornada do Usuário:** Reintegração de `@alan` para mapear de ponta a ponta entry points, navegação e telas faltantes.
 - **Engenharia de Testes Automatizados (QA de Automação):** `@aniche` atuando especificamente na arquitetura e implementação de testes unitários, integração e E2E reais.
-- **Dupla Brasileira de Segurança de Aplicação (AppSec & Criptografia):** A segurança de aplicação não fica diluída. Criamos duas cadeiras técnicas soberanas para AppSec defensivo e ofensivo: `@barreto` (Criptografia, STRIDE, Auth) e `@diego` (Auditoria Ofensiva, OWASP, Pentest).
+- **Dupla Brasileira de Segurança de Aplicação (AppSec & Criptografia):** A segurança de aplicação não fica diluída. Criamos duas cadeiras técnicas autônomas para AppSec defensivo e ofensivo: `@barreto` (Criptografia, STRIDE, Auth) e `@diego` (Auditoria Ofensiva, OWASP, Pentest).
 - **Maioria de Pioneiros Brasileiros:** 12 especialistas brasileiros contra 10 pioneiros internacionais dos Estados Unidos, Reino Unido e Canadá (+ Turing como maestro neutro).
 
 ---
@@ -71,7 +71,7 @@ flowchart TD
 
 | Handle | Agente | País | Papel Técnico | Etapa Primária | Escopo de Atuação |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **@turing** | Alan Turing | Reino Unido | Sovereign Orchestrator | Todas | Orquestração da ONDA, máquina de estados e fiscalização de gates. |
+| **@turing** | Alan Turing | Reino Unido | Autônomo Orchestrator | Todas | Orquestração da ONDA, máquina de estados e fiscalização de gates. |
 | **@meira** | Silvio Meira | Brasil | Viabilidade & Inovação | `DISCUSS` | Validação de ideia, análise de mercado e fatiamento estratégico. |
 | **@grace** | Grace Hopper | Estados Unidos | Product Manager & PRD | `DISCUSS` | Escopo de produto, priorização RICE, personas e elaboração do PRD. |
 | **@alan** | Alan Cooper | Estados Unidos | User Journey Architect | `PLAN` | Mapeamento de entry points, fluxos de navegação e telas faltantes. |

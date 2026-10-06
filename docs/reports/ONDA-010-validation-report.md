@@ -4,7 +4,7 @@
 > **Etapa:** Auditoria documental de conformidade (stories ST-042..045)
 > **Auditora de Contratos:** @edith (Edith Ranzini — Contract Validator & QA Lead)
 > **Gov & Token Architect:** @nina (Nina Silva — Ethics, Token Control & Compliance)
-> **Soberano:** @turing (Alan Turing — Turing Runtime Gate & Orchestration Master)
+> **Autônomo:** @turing (Alan Turing — Turing Runtime Gate & Orchestration Master)
 > **Modo de Engenharia:** tdd-code
 > **Status:** HOMOLOGADO (auditoria retroativa baseada em evidências de código, testes e releases)
 > **Data da auditoria:** 2026-10-05
@@ -36,5 +36,5 @@
 
 [SELO GOVERNANÇA: APROVADO]
 
-— Template matching com catálogo declarativo impede invenção arquitetural fora do contratado — Soberania do Pedido respeitada no upstream.
+— Template matching com catálogo declarativo impede invenção arquitetural fora do contratado — Fidelidade ao Pedido respeitada no upstream.
 *(Nina Silva — Gov & Token Architect)*

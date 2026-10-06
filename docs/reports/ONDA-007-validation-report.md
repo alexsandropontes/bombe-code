@@ -4,7 +4,7 @@
 > **Etapa:** VALIDATE -> COMPLETED  
 > **Auditora de Contratos:** @edith (Edith Ranzini — Contract Validator & QA Lead)  
 > **Gov & Token Architect:** @nina (Nina Silva — Ethics, Token Control & Compliance)  
-> **Soberano:** @turing (Alan Turing — Turing Runtime Gate & Orchestration Master)  
+> **Autônomo:** @turing (Alan Turing — Turing Runtime Gate & Orchestration Master)  
 > **Modo de Engenharia:** tdd-code  
 > **Status:** HOMOLOGADO  
 

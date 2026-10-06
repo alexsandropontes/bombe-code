@@ -3,7 +3,7 @@
 ## 1. Visão Geral da Arquitetura
 
 A Onda 2 introduz três pilares estruturais no pacote `bombe_code`:
-1. **Camada de Orquestração Soberana (`bombe_code.turing`):** Máquina de estados da ONDA, barramento de eventos, orquestrador, classificadores de intenção e gates.
+1. **Camada de Orquestração Autônoma (`bombe_code.turing`):** Máquina de estados da ONDA, barramento de eventos, orquestrador, classificadores de intenção e gates.
 2. **Camada de LLM Baseada em Pydantic AI (`bombe_code.llm` / `PydanticAiFactory`):** Centralização tipada de workers de IA.
 3. **Camada de Persistência Local do Projeto (`bombe_code.storage.project_db`):** SQLite local assíncrono em `.bombe-code/state.db` gerenciando o Kanban de tasks internas dos agentes e checkpoints da ONDA.
 

@@ -1,4 +1,4 @@
-"""Subpacote Turing Runtime Engine — Orquestração Soberana do Bombe Code."""
+"""Subpacote Turing Runtime Engine — Orquestração Autônoma do Bombe Code."""
 
 from __future__ import annotations
 

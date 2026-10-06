@@ -4,7 +4,7 @@
 > **Etapa:** VALIDATE -> COMPLETED  
 > **Auditora de Contratos:** @edith (Edith Ranzini — Contract Validator & QA Lead)  
 > **Gov & Token Architect:** @nina (Nina Silva — Ethics, Token Control & Compliance)  
-> **Soberano:** @turing (Alan Turing — Turing Runtime Gate & Orchestration Master)  
+> **Autônomo:** @turing (Alan Turing — Turing Runtime Gate & Orchestration Master)  
 > **Modo de Engenharia:** tdd-code  
 > **Status:** HOMOLOGADO  
 
@@ -45,5 +45,5 @@
 
 [SELO GOVERNANÇA: APROVADO]
 
-— Transparência total com sincronização no SQLite e nos arquivos físicos de markdown, preservando a soberania local-first e a rastreabilidade no Git.
+— Transparência total com sincronização no SQLite e nos arquivos físicos de markdown, preservando a autonomia local-first e a rastreabilidade no Git.
 *(Nina Silva — Gov & Token Architect)*

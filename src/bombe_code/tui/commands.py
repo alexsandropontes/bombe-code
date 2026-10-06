@@ -278,7 +278,7 @@ COMMAND_HELP_CATALOG: list[dict[str, str]] = [
     {"name": "/workspace [dir]", "desc": "Inspecionar ou alterar pasta do workspace (alias: /dir)"},
     {
         "name": "/wave <start|status|discuss|plan|cycle|execute|validate|end>",
-        "desc": "Orquestração soberana da ONDA e fluxo de entrega",
+        "desc": "Orquestração autônoma da ONDA e fluxo de entrega",
     },
     {
         "name": "/verbosity <verbose|quiet>",

@@ -22,11 +22,11 @@ O Bombe Code nasce de uma linhagem clara e estruturada:
             ▼                                   ▼
     [ Code-Forge-2 ]                     [ Bombe Code ]
   (Multi-tenant, Nuvem,                (Open Source, Local-First,
-   Enterprise Server)                   Lightweight, Máquina Soberana)
+   Enterprise Server)                   Lightweight, Máquina Autônoma)
 ```
 
 * **Fase 1 (Concluída com Sucesso):** Port completo do OpenCode original para Python moderno (3.13+), com TUI Textual, servidor FastAPI in-process, adaptadores agnósticos de provedores, barramento SSE de streaming token a token em tempo real e 100% de testes automatizados passando.
-* **Fase 2 (Esta Onda — Fundação do Turing Runtime):** Incorporação soberana e determinística do framework de governança (Bombe Core) embutido diretamente no código do runtime, e não como arquivos soltos em disco que LLMs esquecem de ler. Uma versão open source enxuta, mono-usuário e mono-projeto, com inteligência herdada dos padrões de orquestração do `code-forge-2`.
+* **Fase 2 (Esta Onda — Fundação do Turing Runtime):** Incorporação autônoma e determinística do framework de governança (Bombe Core) embutido diretamente no código do runtime, e não como arquivos soltos em disco que LLMs esquecem de ler. Uma versão open source enxuta, mono-usuário e mono-projeto, com inteligência herdada dos padrões de orquestração do `code-forge-2`.
 
 ---
 
