@@ -23,7 +23,6 @@ def create_session(title: str = "", directory: str = "", **kwargs) -> Session:
     return session
 
 
-
 def save_session(session: Session) -> None:
     SessionStore().save_session(session.model_dump())
 

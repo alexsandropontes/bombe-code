@@ -23,10 +23,14 @@ class ProjectOrigin(str, Enum):
 class InceptionLevel(str, Enum):
     """Nível de profundidade e rigor da Lean Inception."""
 
-    MINI = "MINI"                          # POC / PROTOTYPE: hipótese isolada e critérios rápidos
-    FULL_CANONICAL = "FULL_CANONICAL"      # MVP Premium: Visão, É/Não É, Personas, Canvas MVP, PBB
-    DEEP_ENTERPRISE = "DEEP_ENTERPRISE"    # Enterprise Grade: Inception completa + STRIDE + P99 + LGPD
-    EVOLUTION_DAKI = "EVOLUTION_DAKI"      # Brownfield: Mapeamento de fluxo existente + DAKI + PBB Delta
+    MINI = "MINI"  # POC / PROTOTYPE: hipótese isolada e critérios rápidos
+    FULL_CANONICAL = "FULL_CANONICAL"  # MVP Premium: Visão, É/Não É, Personas, Canvas MVP, PBB
+    DEEP_ENTERPRISE = (
+        "DEEP_ENTERPRISE"  # Enterprise Grade: Inception completa + STRIDE + P99 + LGPD
+    )
+    EVOLUTION_DAKI = (
+        "EVOLUTION_DAKI"  # Brownfield: Mapeamento de fluxo existente + DAKI + PBB Delta
+    )
 
 
 @dataclass(frozen=True)
@@ -70,7 +74,8 @@ class UpstreamProfiler:
 
         if src_dir.is_dir():
             code_files = [
-                f for f in src_dir.rglob("*")
+                f
+                for f in src_dir.rglob("*")
                 if f.is_file() and f.suffix in (".ts", ".js", ".py", ".go", ".rs", ".java", ".cs")
             ]
             if len(code_files) >= 3:
@@ -113,7 +118,11 @@ class UpstreamProfiler:
             )
 
         # 2. Greenfield: calibra pela maturidade requerida
-        if delivery_target in (DeliveryTarget.POC, DeliveryTarget.PROTOTYPE, DeliveryTarget.SNIPPET):
+        if delivery_target in (
+            DeliveryTarget.POC,
+            DeliveryTarget.PROTOTYPE,
+            DeliveryTarget.SNIPPET,
+        ):
             return UpstreamProfile(
                 origin=ProjectOrigin.GREENFIELD,
                 target=delivery_target,

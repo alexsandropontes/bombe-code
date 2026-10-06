@@ -1,7 +1,7 @@
 # STORY ST-032: Hardening do TuringReviewGate com Scanner Anti-Fraude
 
 > **Épico:** EP-007  
-> **Status:** IN_PROGRESS  
+> **Status:** DONE
 > **Responsáveis:** @turing, @aniche, @unclebob  
 > **Prioridade:** ALTA  
 

@@ -213,9 +213,6 @@ echo -e "${DIM}Executando: ${INSTALL_CMD[*]}${NC}"
 # 6. Validação e Informações de Uso
 echo ""
 BOMBE_EXE="$HOME/.local/bin/bombe-code"
-if [[ ! -x "$BOMBE_EXE" ]]; then
-    BOMBE_EXE="$HOME/.local/bin/bombe"
-fi
 
 if [[ -x "$BOMBE_EXE" ]]; then
     VERSION_INFO=$("$BOMBE_EXE" version 2>/dev/null || echo "instalado")

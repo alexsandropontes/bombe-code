@@ -49,7 +49,6 @@ class AgentBody(BaseModel):
     agent: str
 
 
-
 class PermissionReplyBody(BaseModel):
     permission: str
     details: str
@@ -105,10 +104,11 @@ def build_session_router(deps: ServerDeps) -> APIRouter:
         deps.bus.publish({"type": "prompt.started", "session_id": session_id})
         try:
             from pathlib import Path
+
             import anyio
+
             from ...application.intent.service import IntentApplicationService
             from ...application.wave.service import WaveApplicationService
-            from ...domain.session.models import Message, Part
             from ...storage.project_db import ProjectDatabase
 
             project_dir = session.directory or deps.project_dir
@@ -120,7 +120,9 @@ def build_session_router(deps: ServerDeps) -> APIRouter:
             text = ""
 
             # Em modo TDD, passa pelo despachante determinístico do Turing
-            if eng_mode == "tdd-code" and not body.text.startswith(("/model", "/theme", "/help", "/clear", "/exit")):
+            if eng_mode == "tdd-code" and not body.text.startswith(
+                ("/model", "/theme", "/help", "/clear", "/exit")
+            ):
                 prd_file = Path(project_dir) / "docs" / "briefings" / "PRD.md"
                 is_greenfield = not prd_file.exists()
                 intent_svc = IntentApplicationService()
@@ -133,12 +135,14 @@ def build_session_router(deps: ServerDeps) -> APIRouter:
 
                 if action.command and action.command.startswith("/wave"):
                     handled_by_wave = True
-                    deps.bus.publish({
-                        "type": "turing.intent",
-                        "session_id": session_id,
-                        "intention": action.intention,
-                        "command": action.command,
-                    })
+                    deps.bus.publish(
+                        {
+                            "type": "turing.intent",
+                            "session_id": session_id,
+                            "intention": action.intention,
+                            "command": action.command,
+                        }
+                    )
 
                     wave_svc = WaveApplicationService(
                         project_dir=project_dir,
@@ -156,16 +160,32 @@ def build_session_router(deps: ServerDeps) -> APIRouter:
                     elif subcmd == "discuss":
                         topic = subarg or body.text
                         res = wave_svc.execute_with_auto_cascade("DISCUSS", input_text=topic)
-                        text = "Etapa DISCUSS concluída com @meira e @grace." if res.get("success") else f"Aviso em DISCUSS: {res.get('error')}"
+                        text = (
+                            "Etapa DISCUSS concluída com @meira e @grace."
+                            if res.get("success")
+                            else f"Aviso em DISCUSS: {res.get('error')}"
+                        )
                     elif subcmd == "plan":
                         res = wave_svc.execute_with_auto_cascade("PLAN", input_text=subarg)
-                        text = "Etapa PLAN concluída. Backlog e arquitetura definidos." if res.get("success") else f"Aviso em PLAN: {res.get('error')}"
+                        text = (
+                            "Etapa PLAN concluída. Backlog e arquitetura definidos."
+                            if res.get("success")
+                            else f"Aviso em PLAN: {res.get('error')}"
+                        )
                     elif subcmd in ("execute", "cycle"):
                         res = wave_svc.execute_with_auto_cascade("EXECUTE")
-                        text = "Ciclo EXECUTE TDD concluído." if res.get("success") else f"Aviso em EXECUTE: {res.get('error')}"
+                        text = (
+                            "Ciclo EXECUTE TDD concluído."
+                            if res.get("success")
+                            else f"Aviso em EXECUTE: {res.get('error')}"
+                        )
                     elif subcmd in ("validate", "review"):
                         res = wave_svc.execute_with_auto_cascade("VALIDATE")
-                        text = "Etapa VALIDATE concluída com @hoare e @unclebob." if res.get("success") else f"Aviso em VALIDATE: {res.get('error')}"
+                        text = (
+                            "Etapa VALIDATE concluída com @hoare e @unclebob."
+                            if res.get("success")
+                            else f"Aviso em VALIDATE: {res.get('error')}"
+                        )
                     elif subcmd == "end":
                         res = wave_svc.end_wave()
                         text = f"ONDA finalizada com sucesso: {res.get('wave_id')}"
@@ -174,7 +194,9 @@ def build_session_router(deps: ServerDeps) -> APIRouter:
                         text = f"Status da ONDA {st.get('wave_id')}: Etapa {st.get('stage')}"
 
                     # Persiste mensagem do usuário e resposta no histórico
-                    from ...session.models import Message as SessionMessage, TextPart
+                    from ...session.models import Message as SessionMessage
+                    from ...session.models import TextPart
+
                     user_msg = SessionMessage(session_id=session_id, role="user")
                     crud.save_message(user_msg)
                     crud.save_part(session_id, TextPart(message_id=user_msg.id, text=body.text))
@@ -191,7 +213,9 @@ def build_session_router(deps: ServerDeps) -> APIRouter:
                         adapter = resolve_provider_adapter(model_to_use)
                     except (RuntimeError, ValueError, OSError, KeyError) as exc:
                         logger.warning(
-                            "Falha ao resolver adaptador para %s: %s; usando padrão", model_to_use, exc
+                            "Falha ao resolver adaptador para %s: %s; usando padrão",
+                            model_to_use,
+                            exc,
                         )
                         adapter = deps.adapter
                 else:
@@ -348,4 +372,3 @@ def build_session_router(deps: ServerDeps) -> APIRouter:
         return session.model_dump()
 
     return router
-

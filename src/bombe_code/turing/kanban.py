@@ -38,6 +38,7 @@ class KanbanManager:
         self.project_dir = Path(project_dir).resolve()
         self.db = db or ProjectDatabase(str(self.project_dir))
         from bombe_code.domain.wave.workspace import WaveWorkspace
+
         self.workspace = WaveWorkspace(project_dir=self.project_dir)
         self.stories_dir = self.workspace.docs_dir / "backlog" / "stories"
 

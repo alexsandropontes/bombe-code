@@ -53,9 +53,17 @@ class PydanticAiFactory:
                 model_id = "glm-5.3-flash"
             import httpx
             from openai import AsyncOpenAI
-            timeout_cfg = httpx.Timeout(timeout=240.0, connect=20.0, read=240.0, write=30.0, pool=10.0)
-            http_cli = httpx.AsyncClient(timeout=timeout_cfg, limits=httpx.Limits(max_keepalive_connections=5, keepalive_expiry=30.0))
-            openai_cli = AsyncOpenAI(base_url=zai_url, api_key=zai_key or "dummy", http_client=http_cli, max_retries=2)
+
+            timeout_cfg = httpx.Timeout(
+                timeout=240.0, connect=20.0, read=240.0, write=30.0, pool=10.0
+            )
+            http_cli = httpx.AsyncClient(
+                timeout=timeout_cfg,
+                limits=httpx.Limits(max_keepalive_connections=5, keepalive_expiry=30.0),
+            )
+            openai_cli = AsyncOpenAI(
+                base_url=zai_url, api_key=zai_key or "dummy", http_client=http_cli, max_retries=2
+            )
             provider = OpenAIProvider(openai_client=openai_cli)
             return OpenAIChatModel(model_id, provider=provider)
 
@@ -65,21 +73,34 @@ class PydanticAiFactory:
                 import httpx
                 from openai import AsyncOpenAI
 
-                timeout_cfg = httpx.Timeout(timeout=240.0, connect=20.0, read=240.0, write=30.0, pool=10.0)
-                http_cli = httpx.AsyncClient(timeout=timeout_cfg, limits=httpx.Limits(max_keepalive_connections=5, keepalive_expiry=30.0))
-                openai_cli = AsyncOpenAI(base_url=zai_url, api_key=zai_key, http_client=http_cli, max_retries=2)
+                timeout_cfg = httpx.Timeout(
+                    timeout=240.0, connect=20.0, read=240.0, write=30.0, pool=10.0
+                )
+                http_cli = httpx.AsyncClient(
+                    timeout=timeout_cfg,
+                    limits=httpx.Limits(max_keepalive_connections=5, keepalive_expiry=30.0),
+                )
+                openai_cli = AsyncOpenAI(
+                    base_url=zai_url, api_key=zai_key, http_client=http_cli, max_retries=2
+                )
                 provider = OpenAIProvider(openai_client=openai_cli)
                 return OpenAIChatModel("glm-5.3-flash", provider=provider)
 
-            openai_key = os.environ.get("OPENAI_API_KEY") or auth_data.get("openai", {}).get("api_key")
+            openai_key = os.environ.get("OPENAI_API_KEY") or auth_data.get("openai", {}).get(
+                "api_key"
+            )
             if openai_key:
                 return "openai:gpt-4o"
 
-            anthropic_key = os.environ.get("ANTHROPIC_API_KEY") or auth_data.get("anthropic", {}).get("api_key")
+            anthropic_key = os.environ.get("ANTHROPIC_API_KEY") or auth_data.get(
+                "anthropic", {}
+            ).get("api_key")
             if anthropic_key:
                 return "anthropic:claude-3-5-sonnet-20241022"
 
-            openrouter_key = os.environ.get("OPENROUTER_API_KEY") or auth_data.get("openrouter", {}).get("api_key")
+            openrouter_key = os.environ.get("OPENROUTER_API_KEY") or auth_data.get(
+                "openrouter", {}
+            ).get("api_key")
             if openrouter_key:
                 return "openrouter:anthropic/claude-3.5-sonnet"
 
@@ -88,9 +109,9 @@ class PydanticAiFactory:
                 return "groq:llama-3.3-70b-versatile"
 
             if "LLAMA_CPP_BASE_URL" in os.environ or "llama.cpp" in auth_data:
-                llama_url = os.environ.get("LLAMA_CPP_BASE_URL") or auth_data.get("llama.cpp", {}).get(
-                    "base_url", self.DEFAULT_LOCAL_URL
-                )
+                llama_url = os.environ.get("LLAMA_CPP_BASE_URL") or auth_data.get(
+                    "llama.cpp", {}
+                ).get("base_url", self.DEFAULT_LOCAL_URL)
                 provider = OpenAIProvider(base_url=llama_url, api_key="dummy")
                 return OpenAIChatModel("mimo-qwen-9b", provider=provider)
 

@@ -1,7 +1,7 @@
 # STORY ST-036: Decomposição PBB — Modelo de Dados de AtomicTask
 
 > **Épico:** EP-008  
-> **Status:** READY  
+> **Status:** DONE
 > **Responsáveis:** @caroli, @unclebob, @turing  
 > **Prioridade:** ALTA  
 

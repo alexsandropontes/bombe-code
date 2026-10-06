@@ -35,9 +35,7 @@ def build_wave_router(deps: ServerDeps) -> APIRouter:
         def on_wave_event(event: dict[str, Any]) -> None:
             deps.bus.publish({**event, "channel": "wave"})
 
-        return WaveApplicationService(
-            project_dir=deps.project_dir, on_event=on_wave_event
-        )
+        return WaveApplicationService(project_dir=deps.project_dir, on_event=on_wave_event)
 
     @router.get("/api/wave/status")
     def wave_status():
@@ -79,7 +77,10 @@ def build_wave_router(deps: ServerDeps) -> APIRouter:
             elif stage_norm in ("VALIDATE", "REVIEW"):
                 res = service.validate_stage(context=body.context)
             else:
-                raise HTTPException(400, f"Estágio desconhecido: '{body.stage}'. Use: DISCOVERY, INCEPTION, PLAN, REFINEMENT, EXECUTE, VALIDATE.")
+                raise HTTPException(
+                    400,
+                    f"Estágio desconhecido: '{body.stage}'. Use: DISCOVERY, INCEPTION, PLAN, REFINEMENT, EXECUTE, VALIDATE.",
+                )
         return res
 
     @router.post("/api/wave/end")

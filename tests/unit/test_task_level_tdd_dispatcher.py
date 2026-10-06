@@ -1,8 +1,10 @@
 """Testes TDD para a Story ST-037: Despachante de Execução por Task no WaveOrchestrator."""
 
 from unittest.mock import MagicMock
+
 import pytest
-from bombe_code.turing.kanban import KanbanCardStatus, KanbanManager
+
+from bombe_code.turing.kanban import KanbanCardStatus
 from bombe_code.turing.orchestrator import WaveOrchestrator
 from bombe_code.turing.pbb import AtomicTask, AtomicTaskType
 
@@ -11,7 +13,9 @@ from bombe_code.turing.pbb import AtomicTask, AtomicTaskType
 def mock_orchestrator(tmp_path):
     orch = WaveOrchestrator(project_dir=tmp_path)
     # Cria card inicial no Kanban
-    orch.kanban.add_card(story_id="ST-001", wave_id="ONDA-001", title="Demanda Teste", agent="@aniche")
+    orch.kanban.add_card(
+        story_id="ST-001", wave_id="ONDA-001", title="Demanda Teste", agent="@aniche"
+    )
     return orch
 
 
@@ -40,6 +44,7 @@ def test_dispatcher_executes_tasks_sequentially(mock_orchestrator):
 
     def mock_runner_factory(agent_handle: str):
         runner = MagicMock()
+
         def mock_run(prompt, context=None):
             executed_agents.append(agent_handle)
             res = MagicMock()
@@ -52,6 +57,7 @@ def test_dispatcher_executes_tasks_sequentially(mock_orchestrator):
             res.cost = 0.001
             res.duration_seconds = 0.5
             return res
+
         runner.run.side_effect = mock_run
         return runner
 

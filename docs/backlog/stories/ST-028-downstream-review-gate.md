@@ -1,7 +1,7 @@
 # STORY ST-028: Downstream Review Gate & Validação dos Revisores (@aniche & @unclebob)
 
 > **Épico:** [EP-006: Orquestração do Turing, Gates Determinísticos & Kanban Dinâmico](file:///home/lexpontes/projetos/struct/bombe-code/docs/backlog/epics/EP-006-turing-flow-orchestration-and-gates.md)  
-> **Status:** READY  
+> **Status:** DONE
 > **Prioridade:** ALTA  
 > **Responsáveis:** @turing (Soberano da ONDA), @aniche (Test Architect), @unclebob (Tech Lead)  
 > **Modo:** tdd-code  

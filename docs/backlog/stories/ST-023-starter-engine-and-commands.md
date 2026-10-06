@@ -1,7 +1,7 @@
 # STORY ST-023: StarterEngine & Comandos de Scaffolding de Projeto
 
 > **Épico:** [EP-005: Starters Engine, Snippets Registry & LLM Snippet Tool](file:///home/lexpontes/projetos/struct/bombe-code/docs/backlog/epics/EP-005-starters-and-snippets-engine.md)  
-> **Status:** READY  
+> **Status:** DONE
 > **Prioridade:** ALTA  
 > **Responsáveis:** @ieru (Software Architecture), @unclebob (Tech Lead)  
 > **Modo:** tdd-code  

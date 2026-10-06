@@ -1,7 +1,7 @@
 # STORY ST-030: Dashboard `/wave status` Enriquecido na CLI e TUI
 
 > **Épico:** [EP-006: Orquestração do Turing, Gates Determinísticos & Kanban Dinâmico](file:///home/lexpontes/projetos/struct/bombe-code/docs/backlog/epics/EP-006-turing-flow-orchestration-and-gates.md)  
-> **Status:** READY  
+> **Status:** DONE
 > **Prioridade:** ALTA  
 > **Responsáveis:** @norman (UI/UX), @turing (Soberano da ONDA)  
 > **Modo:** tdd-code  

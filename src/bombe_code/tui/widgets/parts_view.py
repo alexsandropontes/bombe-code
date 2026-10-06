@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import time
 from typing import Any
 
 from rich.markdown import Markdown
@@ -12,8 +13,6 @@ from rich.text import Text
 from textual.containers import VerticalScroll
 from textual.widget import AwaitMount, Widget
 from textual.widgets import Static
-
-import time
 
 from ..tokens import TOKENS
 
@@ -35,7 +34,7 @@ class PartWidget(Static):
 
     def update_stream(self, text: str) -> None:
         """Atualização de alta frequência durante streaming contínuo.
-        
+
         Garante fluidez visual idêntica ao OpenCode original e previne congelamento
         da UI por re-parsing excessivo de Markdown na mesma frame de execução.
         """

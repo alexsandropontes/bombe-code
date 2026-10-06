@@ -4,7 +4,6 @@ from bombe_code.domain.wave.sequencer import (
     RiskLevel,
     WavePlan,
     WaveSequencer,
-    SequencerValidationError,
 )
 
 

@@ -1,8 +1,6 @@
 """Testes TDD para a Story ST-036: Decomposição PBB — Modelo de Dados de AtomicTask."""
 
-import pytest
 from bombe_code.turing.pbb import (
-    AtomicTask,
     AtomicTaskType,
     PBBDecomposer,
 )

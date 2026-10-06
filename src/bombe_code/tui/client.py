@@ -75,9 +75,7 @@ class BombeClient:
         async with httpx.AsyncClient(
             base_url=self.base_url, auth=self.auth, timeout=self.timeout
         ) as client:
-            resp = await client.post(
-                f"/api/session/{session_id}/stage", json={"stage": stage}
-            )
+            resp = await client.post(f"/api/session/{session_id}/stage", json={"stage": stage})
             resp.raise_for_status()
             return resp.json()
 
@@ -88,7 +86,6 @@ class BombeClient:
             resp = await client.get(f"/api/session/{session_id}/stage")
             resp.raise_for_status()
             return resp.json()
-
 
     async def set_model(self, session_id: str, model: str) -> dict[str, Any]:
         async with httpx.AsyncClient(

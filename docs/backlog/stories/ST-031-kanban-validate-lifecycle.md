@@ -1,7 +1,7 @@
 # STORY ST-031: Ciclo de Vida do Kanban com DEV_DONE, VALIDATE e DONE
 
 > **Épico:** EP-007  
-> **Status:** IN_PROGRESS  
+> **Status:** DONE
 > **Responsáveis:** @turing, @caroli, @edith  
 > **Prioridade:** ALTA  
 

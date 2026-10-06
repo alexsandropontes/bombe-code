@@ -1,7 +1,7 @@
 # STORY ST-033: Flexibilização de Priorização no PRDQualityGate
 
 > **Épico:** EP-007  
-> **Status:** IN_PROGRESS  
+> **Status:** DONE
 > **Responsáveis:** @turing, @grace  
 > **Prioridade:** MÉDIA  
 

@@ -75,9 +75,7 @@ class ConsumerHandoffGate:
             required_improvements=[],
         )
 
-    def build_rework_prompt(
-        self, evaluation: HandoffEvaluation, original_demand: str
-    ) -> str:
+    def build_rework_prompt(self, evaluation: HandoffEvaluation, original_demand: str) -> str:
         """Gera prompt formal de retrabalho para o agente produtor corrigir as lacunas."""
         lines: list[str] = [
             f"# Atenção {evaluation.producer_persona}: SOLICITAÇÃO DE RETRABALHO SEMÂNTICO (HANDOFF REJEITADO)",

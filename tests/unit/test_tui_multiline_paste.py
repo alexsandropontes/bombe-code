@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import pytest
 from textual.events import Paste
+from textual.widgets import Static
 
 from bombe_code.tui.app import BombeTuiApp
 from bombe_code.tui.client import BombeClient
 from bombe_code.tui.widgets.parts_view import ChatView
 from bombe_code.tui.widgets.prompt_input import PromptInput
-from textual.widgets import Static
 
 
 @pytest.mark.anyio
@@ -116,7 +116,9 @@ async def test_prompt_input_large_paste_nonblocking_submission(monkeypatch):
 
     monkeypatch.setattr(app, "_run_slash_command_worker", fake_worker)
 
-    large_briefing = "\n".join([f"Linha de requisito {i} com caracteres [especiais]" for i in range(25)])
+    large_briefing = "\n".join(
+        [f"Linha de requisito {i} com caracteres [especiais]" for i in range(25)]
+    )
 
     async with app.run_test() as pilot:
         inp = app.query_one("#prompt-input", PromptInput)
@@ -167,4 +169,3 @@ async def test_chat_view_autoscroll_on_message_submission_and_mount(monkeypatch)
         # Deve permanecer ancorado e no final absoluto do scroll
         assert chat.is_vertical_scroll_end
         assert chat.scroll_y == chat.max_scroll_y
-

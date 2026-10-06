@@ -42,7 +42,7 @@ class TuringWaiter:
         "validate_wave": "/wave validate",
         "review_cycle": "/review",
         "approve_execution": "/wave execute",
-        "workflow_resume": "/wave start",
+        "workflow_resume": "/wave resume",
     }
 
     def __init__(self, classifier: TuringIntentClassifier | None = None) -> None:
@@ -74,7 +74,7 @@ class TuringWaiter:
             return "/wave execute", "run_cycle", {}
 
         if intent == "workflow_resume":
-            return "/wave start", "run_cycle", {}
+            return "/wave resume", "run_cycle", {}
 
         if intent == "approve_execution":
             return "/wave execute", "run_execute", {}
@@ -187,7 +187,7 @@ class TuringWaiter:
             "- wave_status (pergunta sobre status, progresso ou métricas da onda)\n"
             "- toggle_mode (troca de modo de autonomia auto/semi-auto/manual ou tdd/vibe)\n"
             "- unknown (dúvida conceitual ou pergunta fora das ações da onda)\n\n"
-            f"Texto do usuário:\n\"\"\"{raw_text[:1500]}\"\"\"\n\n"
+            f'Texto do usuário:\n"""{raw_text[:1500]}"""\n\n'
             "Responda EXCLUSIVAMENTE em formato JSON puro, sem blocos markdown adicionais:\n"
             '{"intention": "<opcao>", "confidence": 0.0_a_1.0, "topic": "<resumo_se_houver>"}'
         )
@@ -213,7 +213,11 @@ class TuringWaiter:
         confidence = float(data.get("confidence", 0.5))
         topic = data.get("topic", "")
 
-        if intent in self.INTENT_TO_COMMAND or intent in ("start_discuss", "start_cycle", "toggle_mode"):
+        if intent in self.INTENT_TO_COMMAND or intent in (
+            "start_discuss",
+            "start_cycle",
+            "toggle_mode",
+        ):
             mock_res = TuringIntentResult(
                 intention=intent,
                 confidence=confidence,

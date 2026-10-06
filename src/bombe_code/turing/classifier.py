@@ -157,7 +157,16 @@ class TuringIntentClassifier:
                 "implementar story",
                 "desenvolver story",
             ],
-            "strong": ["ciclo", "story", "tdd", "testes", "teste", "implementar", "executar", "executa"],
+            "strong": [
+                "ciclo",
+                "story",
+                "tdd",
+                "testes",
+                "teste",
+                "implementar",
+                "executar",
+                "executa",
+            ],
             "weak": ["rodar", "iniciar", "proximo", "proxima", "fazer", "desenvolver", "codigo"],
         },
         "review_cycle": {
@@ -217,7 +226,16 @@ class TuringIntentClassifier:
                 "parou no meio",
             ],
             "strong": ["retomar", "retoma", "retome", "resume"],
-            "weak": ["continua", "continue", "continuar", "parou", "fluxo", "trabalho", "workflow", "segue"],
+            "weak": [
+                "continua",
+                "continue",
+                "continuar",
+                "parou",
+                "fluxo",
+                "trabalho",
+                "workflow",
+                "segue",
+            ],
         },
         "approve_execution": {
             "phrases": [
@@ -325,7 +343,9 @@ class TuringIntentClassifier:
             return True, extracted_title
 
         # 2. Padrões explícitos como 'Quero criar um app...', '# Briefing'
-        if re.search(r"^(#+\s*)?(?:briefing|prd|especificacao|visao do produto)\b", raw, re.IGNORECASE):
+        if re.search(
+            r"^(#+\s*)?(?:briefing|prd|especificacao|visao do produto)\b", raw, re.IGNORECASE
+        ):
             title = self._strip_markdown_headers(raw) or raw[:120]
             return True, title
 
@@ -421,7 +441,16 @@ class TuringIntentClassifier:
         # e o usuário enviou uma descrição substantiva (> 40 caracteres)
         norm_stage = (stage or "").strip().upper()
         if (norm_stage in ("DISCUSS", "DISCOVERY") or is_greenfield) and len(raw) >= 40:
-            product_words = {"app", "aplicativo", "sistema", "plataforma", "mvp", "produto", "projeto", "funcionalidade"}
+            product_words = {
+                "app",
+                "aplicativo",
+                "sistema",
+                "plataforma",
+                "mvp",
+                "produto",
+                "projeto",
+                "funcionalidade",
+            }
             if norm_tokens.intersection(product_words):
                 slots = self._extract_slots("start_discuss", raw)
                 return TuringIntentResult(

@@ -4,8 +4,6 @@ TDD Estrito: RED -> GREEN -> REFACTOR.
 
 from __future__ import annotations
 
-import pytest
-
 from bombe_code.turing.prompt_assembler import (
     DeliveryTarget,
     TuringPromptAssembler,
@@ -46,9 +44,15 @@ def test_tdd_code_mode_mvp_includes_operational_mvp_and_anti_scope_creep():
     assert "ANTI-SCOPE CREEP / YAGNI RADICAL" in prompt
     assert "TETO MÁXIMO DA DEMANDA" in prompt
     assert "MVP OPERACIONAL" in prompt
-    assert "versão mínima funcional capaz de ser utilizada por usuários externos reais" in prompt.lower()
+    assert (
+        "versão mínima funcional capaz de ser utilizada por usuários externos reais"
+        in prompt.lower()
+    )
     assert "funcionalidades essenciais não podem ser simuladas por mocks" in prompt.lower()
-    assert "The system MUST NOT assume MVP, production or enterprise requirements unless explicitly required" in prompt
+    assert (
+        "The system MUST NOT assume MVP, production or enterprise requirements unless explicitly required"
+        in prompt
+    )
     assert "Elabore o PRD para o formulário de onboarding" in prompt
 
 

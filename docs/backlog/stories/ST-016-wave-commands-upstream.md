@@ -1,4 +1,5 @@
 ---
+status: "DONE"
 id: "ST-016"
 type: "feature"
 agent: "@valim"

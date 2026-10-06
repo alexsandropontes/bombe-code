@@ -89,7 +89,6 @@ def _prepare_turn(
     return system, tools_meta, ctx
 
 
-
 def _handle_event(event, processor, recent_signatures, ask, ctx, registry) -> str | None:
     """Processa um evento de stream. Retorna finish prematuro ou None."""
     if event["type"] == "tool-call":

@@ -2,9 +2,9 @@
 
 from pathlib import Path
 from unittest.mock import MagicMock
-from bombe_code.turing.orchestrator import WaveOrchestrator
-from bombe_code.domain.wave.models import WaveState
 
+from bombe_code.domain.wave.models import WaveState
+from bombe_code.turing.orchestrator import WaveOrchestrator
 
 SAMPLE_PRD_WITH_SEQUENCER = """
 # PRD - Drops MVP
@@ -55,6 +55,7 @@ def test_orchestrator_validate_intermediate_wave_prompt(tmp_path: Path):
         cost_usd=0.001,
         duration_ms=200,
     )
+
     def mock_get_runner(handle: str):
         if handle == "@edith":
             return runner_edith
@@ -70,7 +71,10 @@ def test_orchestrator_validate_intermediate_wave_prompt(tmp_path: Path):
     # Inspeciona o prompt passado para Edith
     call_args = runner_edith.run.call_args[0][0]
     assert "ONDA INTERMEDIÁRIA 'ONDA-001'" in call_args
-    assert "NÃO reprove nem bloqueie esta onda por falta de módulos ou funcionalidades que estão formalmente agendadas para as ondas futuras" in call_args
+    assert (
+        "NÃO reprove nem bloqueie esta onda por falta de módulos ou funcionalidades que estão formalmente agendadas para as ondas futuras"
+        in call_args
+    )
 
 
 def test_orchestrator_validate_final_wave_prompt(tmp_path: Path):
@@ -105,6 +109,7 @@ def test_orchestrator_validate_final_wave_prompt(tmp_path: Path):
         cost_usd=0.001,
         duration_ms=200,
     )
+
     def mock_get_runner(handle: str):
         if handle == "@edith":
             return runner_edith

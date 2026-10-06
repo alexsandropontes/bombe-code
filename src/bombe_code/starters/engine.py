@@ -444,11 +444,7 @@ class StarterEngine:
                 lang = "python"
                 if "go" in backend_lang or "gin" in backend_lang:
                     lang = "go"
-                elif (
-                    "node" in backend_lang
-                    or "ts" in backend_lang
-                    or "javascript" in backend_lang
-                ):
+                elif "node" in backend_lang or "ts" in backend_lang or "javascript" in backend_lang:
                     lang = "nodejs"
                 elif "dotnet" in backend_lang or "c#" in backend_lang:
                     lang = "dotnet"
@@ -485,8 +481,12 @@ class StarterEngine:
                         "backend_language": lang,
                         "frontend_stack": fstack,
                         "root_src": "src/",
-                        "backend_path": "src/backend/" if stype in ("fullstack", "server") else "src/",
-                        "frontend_path": "src/frontend/" if stype in ("fullstack", "frontend") else "",
+                        "backend_path": "src/backend/"
+                        if stype in ("fullstack", "server")
+                        else "src/",
+                        "frontend_path": "src/frontend/"
+                        if stype in ("fullstack", "frontend")
+                        else "",
                         "mode": "tdd-code",
                         "autonomy": "auto",
                     },
@@ -667,24 +667,19 @@ class StarterEngine:
             clean_name = item.name.removesuffix(".tmpl")
             target_item = dst / clean_name
             if item.is_dir():
-                self._copy_blueprint_dir(
-                    item, target_item, project_name, base_dest, created_files
-                )
+                self._copy_blueprint_dir(item, target_item, project_name, base_dest, created_files)
             else:
                 target_item.parent.mkdir(parents=True, exist_ok=True)
                 self._write_rendered_file(item, target_item, project_name)
                 rel = str(target_item.relative_to(base_dest))
                 created_files.append(rel)
 
-    def _write_rendered_file(
-        self, src_file: Path, dst_file: Path, project_name: str
-    ) -> None:
+    def _write_rendered_file(self, src_file: Path, dst_file: Path, project_name: str) -> None:
         """Lê arquivo fonte, substitui placeholders e grava no destino."""
         try:
             content = src_file.read_text(encoding="utf-8")
-            rendered = (
-                content.replace("{project_name}", project_name)
-                .replace("{name}", project_name)
+            rendered = content.replace("{project_name}", project_name).replace(
+                "{name}", project_name
             )
             dst_file.write_text(rendered, encoding="utf-8")
         except UnicodeDecodeError:

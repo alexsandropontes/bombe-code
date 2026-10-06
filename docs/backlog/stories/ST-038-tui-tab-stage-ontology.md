@@ -2,7 +2,7 @@
 
 > **Story:** ST-038  
 > **Épico:** EP-008 (Onda Zero Lean Inception e Ontologia de Ondas)  
-> **Status:** READY_FOR_REVIEW  
+> **Status:** DONE
 > **Responsáveis:** @turing (Orquestrador), @norman (UI/UX Architect), @unclebob (Tech Lead)  
 > **Modo:** tdd-code  
 

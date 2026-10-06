@@ -190,7 +190,10 @@ def validate_stage_permission(
                         "em 'docs/briefings/PRD.md' e produzido sob a autoridade da agente @grace."
                     ),
                 )
-            if filename.startswith("viability") and filename not in ("viability.md", "viability.json"):
+            if filename.startswith("viability") and filename not in (
+                "viability.md",
+                "viability.json",
+            ):
                 return (
                     False,
                     (

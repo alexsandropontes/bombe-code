@@ -9,7 +9,7 @@ from typing import Any, ClassVar
 
 import httpx
 from rich.markup import escape
-from textual import on, work
+from textual import work
 from textual.app import App, ComposeResult, ScreenStackError
 from textual.binding import Binding
 from textual.containers import Container, Horizontal, Vertical
@@ -462,6 +462,8 @@ class BombeTuiApp(App):
                     "  • [cyan]/wave execute[/cyan]          [dim]- Implementação TDD fullstack (@barbara, @ada, @fowler)[/dim]",
                     "  • [cyan]/wave validate[/cyan]         [dim]- Homologação e testes E2E (@edith, @nina)[/dim]",
                     "  • [cyan]/wave status[/cyan]           [dim]- Status da ONDA ativa, gates de qualidade e Kanban[/dim]",
+                    "  • [cyan]/wave resume[/cyan]           [dim]- Retoma a ONDA exatamente do checkpoint onde parou[/dim]",
+                    "  • [cyan]/wave audit [ONDA-xxx][/cyan] [dim]- Contra-Auditoria Forense do validate (@hoare)[/dim]",
                     "",
                     "[dim]Shift+Tab: alterna modo (TDD/VIBE) | Tab: alterna etapa | /help: lista de comandos[/dim]",
                 ]
@@ -500,14 +502,13 @@ class BombeTuiApp(App):
         # No modo TDD, toda entrada de texto livre passa obrigatoriamente pelo Motor de Intenções do Turing
         if self.mode == "TDD":
             from pathlib import Path
+
             from ..turing.waiter import TuringWaiter
 
             waiter = TuringWaiter()
             prd_file = Path(self.project_dir) / "docs" / "briefings" / "PRD.md"
             is_greenfield = "DISCOVERY" in self.get_current_wave_stages() or not prd_file.exists()
-            action = await waiter.attend(
-                text, stage=self.wave_station, is_greenfield=is_greenfield
-            )
+            action = await waiter.attend(text, stage=self.wave_station, is_greenfield=is_greenfield)
 
             if action.command and action.command.startswith("/"):
                 first_line_cmd = action.command.splitlines()[0][:100]
@@ -596,7 +597,7 @@ class BombeTuiApp(App):
                 await asyncio.sleep(0.5)
             except asyncio.CancelledError:
                 break
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 — reconexão SSE resiliente por design
                 logger.debug("Reconectando SSE após erro: %s", exc)
                 await asyncio.sleep(1.0)
 

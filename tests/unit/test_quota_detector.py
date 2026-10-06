@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+from datetime import UTC
 from unittest.mock import MagicMock
 
-from bombe_code.agents.models import AgentDefinition
 from bombe_code.agents.runner import AgentRunner
 from bombe_code.llm.quota_detector import is_quota_or_rate_limit_error
 
@@ -107,7 +107,8 @@ def test_agent_runner_marks_quota_exhausted_as_blocked(tmp_path):
 
 
 def test_parse_quota_reset_info_zai_beijing_timezone():
-    from datetime import datetime, timezone
+    from datetime import datetime
+
     from bombe_code.llm.quota_detector import parse_quota_reset_info
 
     raw_err = (
@@ -116,7 +117,7 @@ def test_parse_quota_reset_info_zai_beijing_timezone():
     )
 
     # 1. Simula horário ANTES do reset (ex: 07:02:39 UTC, que é 15:02:39 em Beijing CST)
-    t_before = datetime(2026, 10, 3, 7, 2, 39, tzinfo=timezone.utc)
+    t_before = datetime(2026, 10, 3, 7, 2, 39, tzinfo=UTC)
     info = parse_quota_reset_info(raw_err, current_time=t_before)
 
     assert info.is_exhausted is True
@@ -126,7 +127,7 @@ def test_parse_quota_reset_info_zai_beijing_timezone():
     assert "Reset previsto em 60m 0s" in info.human_message
 
     # 2. Simula horário DEPOIS do reset (ex: 10:29:00 UTC, que é 18:29:00 em Beijing CST)
-    t_after = datetime(2026, 10, 3, 10, 29, 0, tzinfo=timezone.utc)
+    t_after = datetime(2026, 10, 3, 10, 29, 0, tzinfo=UTC)
     info_after = parse_quota_reset_info(raw_err, current_time=t_after)
 
     assert info_after.is_exhausted is True
@@ -136,15 +137,15 @@ def test_parse_quota_reset_info_zai_beijing_timezone():
 
 
 def test_parse_quota_reset_info_relative_seconds():
-    from datetime import datetime, timezone
+    from datetime import datetime
+
     from bombe_code.llm.quota_detector import parse_quota_reset_info
 
     raw_err = "Rate limit reached. Please try again in 45.5s."
-    t_now = datetime(2026, 10, 3, 12, 0, 0, tzinfo=timezone.utc)
+    t_now = datetime(2026, 10, 3, 12, 0, 0, tzinfo=UTC)
     info = parse_quota_reset_info(raw_err, current_time=t_now)
 
     assert info.is_exhausted is True
     assert info.retry_after_seconds == 45.5
     assert info.is_already_reset is False
     assert "45s" in info.human_message
-

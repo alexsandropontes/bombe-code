@@ -64,15 +64,17 @@ def save_starter_decision(
     for g in guidelines:
         lines.append(f"- {g}")
 
-    lines.extend([
-        "",
-        "<!-- BOMBE_TEMPLATE_METADATA_START -->",
-        "```json",
-        json.dumps(data, ensure_ascii=False, indent=2),
-        "```",
-        "<!-- BOMBE_TEMPLATE_METADATA_END -->",
-        "",
-    ])
+    lines.extend(
+        [
+            "",
+            "<!-- BOMBE_TEMPLATE_METADATA_START -->",
+            "```json",
+            json.dumps(data, ensure_ascii=False, indent=2),
+            "```",
+            "<!-- BOMBE_TEMPLATE_METADATA_END -->",
+            "",
+        ]
+    )
 
     content = "\n".join(lines)
     target_file.write_text(content, encoding="utf-8")

@@ -93,10 +93,15 @@ def test_classify_approve_execution_variations():
 
 def test_classify_natural_project_creation():
     classifier = TuringIntentClassifier()
-    res = classifier.classify("quero criar um app de onboarding com quiz financeiro e validação de leads")
+    res = classifier.classify(
+        "quero criar um app de onboarding com quiz financeiro e validação de leads"
+    )
     assert res.intention == "start_discuss"
     assert not res.needs_llm
-    assert "onboarding" in res.slots.get("topic", "").lower() or "quiz" in res.slots.get("topic", "").lower()
+    assert (
+        "onboarding" in res.slots.get("topic", "").lower()
+        or "quiz" in res.slots.get("topic", "").lower()
+    )
 
 
 def test_classify_stage_context_in_discuss():

@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 import re
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -66,7 +66,7 @@ def parse_quota_reset_info(
     Trata adequadamente o fuso horário de origem (ex: Z.ai / Zhipu AI usa UTC+8 Pequim).
     """
     raw_str = str(exc or "")
-    now_utc = current_time.astimezone(timezone.utc) if current_time else datetime.now(timezone.utc)
+    now_utc = current_time.astimezone(UTC) if current_time else datetime.now(UTC)
 
     # Identifica o provider
     provider = (provider_hint or "generic").lower()
@@ -84,10 +84,10 @@ def parse_quota_reset_info(
     if match_zai_date:
         date_str = match_zai_date.group(1)
         try:
-            naive_dt = datetime.strptime(date_str, "%Y-%m-%d %H:%M:%S")
+            naive_dt = datetime.strptime(date_str, "%Y-%m-%d %H:%M:%S")  # noqa: DTZ007 — fuso aplicado abaixo (UTC+8)
             # Servidores Z.ai emitem hora local de Pequim (UTC+8)
             beijing_dt = naive_dt.replace(tzinfo=BEIJING_TZ)
-            reset_utc = beijing_dt.astimezone(timezone.utc)
+            reset_utc = beijing_dt.astimezone(UTC)
             origin_tz_name = "Asia/Shanghai (CST UTC+8)"
         except ValueError:
             pass

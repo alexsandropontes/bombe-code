@@ -48,7 +48,6 @@ class ToolContext:
     abort: Callable[[], bool] = field(default_factory=lambda: _default_abort)
 
 
-
 @dataclass
 class ToolDef:
     id: str

@@ -3,12 +3,11 @@
 2. Todo agente valida sua entrada antes de executar; se faltar, bloqueia (BLOCKED) e Turing intervém.
 """
 
-from pathlib import Path
 from unittest.mock import MagicMock
-import pytest
+
+from bombe_code.storage.project_db import ProjectDatabase
 from bombe_code.turing.orchestrator import WaveOrchestrator
 from bombe_code.turing.state_machine import TuringStage
-from bombe_code.storage.project_db import ProjectDatabase
 
 
 def test_rule1_turing_rejects_upstream_output_without_negotiation(tmp_path):

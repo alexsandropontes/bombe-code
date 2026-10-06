@@ -19,11 +19,11 @@ from typing import Any, ClassVar
 class AtomicTaskType(str, Enum):
     """Tipos canônicos de tarefas técnicas atômicas de uma Story."""
 
-    FOUNDATION = "FOUNDATION"            # Scaffolding determinístico de starter e baseline
-    DATABASE = "DATABASE"                # Schema, migrations, índices e persistência
-    CONTRACT = "CONTRACT"                # Schemas de validação Zod/Pydantic, tipos e DTOs
-    BACKEND_TDD = "BACKEND_TDD"          # Rota, regras de negócio e testes de unidade/integração
-    FRONTEND_UI = "FRONTEND_UI"          # Componente de interface, estado e validação inline
+    FOUNDATION = "FOUNDATION"  # Scaffolding determinístico de starter e baseline
+    DATABASE = "DATABASE"  # Schema, migrations, índices e persistência
+    CONTRACT = "CONTRACT"  # Schemas de validação Zod/Pydantic, tipos e DTOs
+    BACKEND_TDD = "BACKEND_TDD"  # Rota, regras de negócio e testes de unidade/integração
+    FRONTEND_UI = "FRONTEND_UI"  # Componente de interface, estado e validação inline
     E2E_INTEGRATION = "E2E_INTEGRATION"  # Testes ponta a ponta (ex: Playwright)
 
 

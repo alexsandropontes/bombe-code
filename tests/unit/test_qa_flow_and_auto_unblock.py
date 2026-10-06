@@ -30,7 +30,9 @@ def mock_orchestrator(tmp_path: Path):
     # Cria story pré-requisito no disco
     stories_dir = tmp_path / "docs" / "stories"
     stories_dir.mkdir(parents=True, exist_ok=True)
-    (stories_dir / "ST-001.md").write_text("# STORY ST-001\n## INVEST\n## Critérios de Aceite\n### Cenários BDD\n- Dado X\n- Quando Y\n- Então Z\n")
+    (stories_dir / "ST-001.md").write_text(
+        "# STORY ST-001\n## INVEST\n## Critérios de Aceite\n### Cenários BDD\n- Dado X\n- Quando Y\n- Então Z\n"
+    )
 
     orch = WaveOrchestrator(project_dir=str(tmp_path), db=db, llm_factory=mock_factory)
     orch.start_wave("ONDA-TEST")

@@ -1,10 +1,7 @@
 """Testes para o pipeline de streaming token-a-token e raciocínio (reasoning-delta)."""
 
-import pytest
-
 from bombe_code.providers.adapters.anthropic import parse_anthropic_sse
 from bombe_code.providers.adapters.openai_compat import parse_sse
-from bombe_code.session.models import Message
 from bombe_code.session.processor import TurnProcessor
 from bombe_code.tui.widgets.parts_view import PartWidget
 

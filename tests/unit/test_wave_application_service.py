@@ -8,9 +8,7 @@ from bombe_code.application.wave.service import WaveApplicationService
 
 def test_wave_service_events_and_start(tmp_path: Path):
     events: list[dict] = []
-    service = WaveApplicationService(
-        project_dir=tmp_path, on_event=lambda ev: events.append(ev)
-    )
+    service = WaveApplicationService(project_dir=tmp_path, on_event=lambda ev: events.append(ev))
 
     res = service.start_wave(wave_id="ONDA-777", autonomy_mode="AUTO")
     assert res.get("success") is True

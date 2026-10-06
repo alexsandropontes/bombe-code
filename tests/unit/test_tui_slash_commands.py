@@ -98,7 +98,7 @@ async def test_tui_slash_command_clear():
 def test_command_help_catalog_has_all_commands():
     from bombe_code.tui.commands import COMMAND_HELP_CATALOG
 
-    assert len(COMMAND_HELP_CATALOG) == 36
+    assert len(COMMAND_HELP_CATALOG) == 37
     commands = [c["name"].split()[0] for c in COMMAND_HELP_CATALOG]
     expected = [
         "/connect",
@@ -137,6 +137,7 @@ def test_command_help_catalog_has_all_commands():
         "/task",
         "/report",
         "/exit",
+        "/verbosity",
     ]
     for exp in expected:
         assert exp in commands
@@ -303,3 +304,105 @@ async def test_tui_slash_command_wave_plan_checks_prd_path_cleanly(tmp_path):
         chat_texts = [str(w.render()) for w in chat.children]
         assert any("requer um PRD" in t for t in chat_texts)
 
+
+@pytest.mark.anyio
+async def test_tui_slash_command_wave_resume(tmp_path):
+    """/wave resume retoma a onda persistida exatamente do checkpoint (subcomando literal)."""
+    from bombe_code.storage.project_db import ProjectDatabase
+    from bombe_code.turing.orchestrator import WaveOrchestrator
+    from bombe_code.turing.state_machine import TuringStage
+
+    db = ProjectDatabase(str(tmp_path))
+    orch = WaveOrchestrator(project_dir=str(tmp_path), db=db)
+    orch.start_wave("ONDA-001", autonomy_mode="AUTO")
+    orch.transition_to(TuringStage.PLAN)
+    orch.transition_to(TuringStage.EXECUTE)
+    orch.transition_to(TuringStage.VALIDATE)
+
+    client = BombeClient("http://127.0.0.1:9999")
+    app = BombeTuiApp(client=client, session_id="ses_test", project_dir=str(tmp_path))
+
+    async with app.run_test() as pilot:
+        chat = app.query_one("#chat-view", ChatView)
+        inp = app.query_one("#prompt-input", PromptInput)
+
+        inp.value = "/wave resume"
+        await pilot.press("enter")
+        await pilot.pause(0.3)
+
+        conteudo = "\n".join(str(getattr(w, "content", "")) for w in chat.children)
+        assert "retomada na etapa VALIDATE" in conteudo
+        assert app.wave_station == "VALIDATE"
+
+        # Onda inexistente → mensagem orientada, sem crash
+        import sqlite3
+
+        db2 = sqlite3.connect(str(tmp_path / ".bombe-code" / "state.db"))
+        db2.execute("DELETE FROM wave_state")
+        db2.commit()
+        db2.close()
+
+        inp.value = "/wave resume"
+        await pilot.press("enter")
+        await pilot.pause(0.3)
+        conteudo = "\n".join(str(getattr(w, "content", "")) for w in chat.children)
+        assert "Nenhuma ONDA persistida" in conteudo
+
+
+@pytest.mark.anyio
+async def test_tui_wave_resume_auto_cascateia_plan_sem_humano(tmp_path):
+    """Em AUTO, o resume em PLAN encadeia /wave plan sozinho — o humano nunca
+    digita o próximo comando (a plataforma não pede comando, só responde dúvida)."""
+    from bombe_code.storage.project_db import ProjectDatabase
+    from bombe_code.turing.orchestrator import WaveOrchestrator
+    from bombe_code.turing.state_machine import TuringStage
+
+    db = ProjectDatabase(str(tmp_path))
+    orch = WaveOrchestrator(project_dir=str(tmp_path), db=db)
+    orch.start_wave("ONDA-001", autonomy_mode="AUTO")
+    orch.transition_to(TuringStage.PLAN)
+
+    client = BombeClient("http://127.0.0.1:9999")
+    app = BombeTuiApp(client=client, session_id="ses_test", project_dir=str(tmp_path))
+
+    async with app.run_test() as pilot:
+        chat = app.query_one("#chat-view", ChatView)
+        inp = app.query_one("#prompt-input", PromptInput)
+
+        inp.value = "/wave resume"
+        await pilot.press("enter")
+        await pilot.pause(0.5)
+
+        conteudo = "\n".join(str(getattr(w, "content", "")) for w in chat.children)
+        # A cascatada disparou /wave plan sozinha (sem PRD → aviso didático da etapa,
+        # que prova que o comando foi executado pela máquina, não pelo humano)
+        assert "Retomando de PLAN — encadeando /wave plan" in conteudo
+        assert "Etapa PLAN ativa — /wave plan" not in conteudo
+
+
+@pytest.mark.anyio
+async def test_tui_resume_semi_auto_cascata_continuacao(tmp_path):
+    """SEMI-AUTO no resume: encadeia a continuação da etapa corrente (não é
+    fronteira). MANUAL: nunca encadeia — apenas informa."""
+    from bombe_code.storage.project_db import ProjectDatabase
+    from bombe_code.turing.orchestrator import WaveOrchestrator
+    from bombe_code.turing.state_machine import TuringStage
+
+    db = ProjectDatabase(str(tmp_path))
+    orch = WaveOrchestrator(project_dir=str(tmp_path), db=db)
+    orch.start_wave("ONDA-001", autonomy_mode="SEMI_AUTO")
+    orch.transition_to(TuringStage.PLAN)
+
+    client = BombeClient("http://127.0.0.1:9999")
+    app = BombeTuiApp(client=client, session_id="ses_test", project_dir=str(tmp_path))
+
+    async with app.run_test() as pilot:
+        chat = app.query_one("#chat-view", ChatView)
+        inp = app.query_one("#prompt-input", PromptInput)
+
+        inp.value = "/wave resume"
+        await pilot.press("enter")
+        await pilot.pause(0.5)
+
+        conteudo = "\n".join(str(getattr(w, "content", "")) for w in chat.children)
+        assert "MODO SEMI-AUTO] Retomando de PLAN" in conteudo

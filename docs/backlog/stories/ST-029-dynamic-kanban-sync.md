@@ -1,7 +1,7 @@
 # STORY ST-029: Sincronização Dinâmica do Kanban (SQLite + Cards Físicos)
 
 > **Épico:** [EP-006: Orquestração do Turing, Gates Determinísticos & Kanban Dinâmico](file:///home/lexpontes/projetos/struct/bombe-code/docs/backlog/epics/EP-006-turing-flow-orchestration-and-gates.md)  
-> **Status:** READY  
+> **Status:** DONE
 > **Prioridade:** ALTA  
 > **Responsáveis:** @david (Agile Master & Flow), @turing (Soberano da ONDA)  
 > **Modo:** tdd-code  

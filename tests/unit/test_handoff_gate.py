@@ -36,7 +36,9 @@ def test_handoff_gate_blocks_shallow_content():
         min_substantive_words=15,
     )
     assert evaluation.status == HandoffStatus.BLOCKED
-    assert any("Densidade de conteúdo insuficiente" in imp for imp in evaluation.required_improvements)
+    assert any(
+        "Densidade de conteúdo insuficiente" in imp for imp in evaluation.required_improvements
+    )
 
 
 def test_handoff_gate_blocks_missing_topics_and_builds_rework_prompt():

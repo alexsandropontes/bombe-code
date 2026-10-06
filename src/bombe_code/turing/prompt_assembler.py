@@ -7,7 +7,7 @@ de acordo com o DELIVERY_TARGET e o Modo de Engenharia (tdd-code vs vibe-code).
 from __future__ import annotations
 
 from enum import Enum
-from typing import Any
+from typing import Any, ClassVar
 
 
 class DeliveryTarget(str, Enum):
@@ -52,8 +52,7 @@ class TuringPromptAssembler:
         f"4. CLÁUSULA CANÔNICA: {CANONICAL_CLAUSE}"
     )
 
-
-    TARGET_BLOCKS: dict[DeliveryTarget, str] = {
+    TARGET_BLOCKS: ClassVar[dict[DeliveryTarget, str]] = {
         DeliveryTarget.SNIPPET: (
             "### 🎯 DELIVERY TARGET: SNIPPET\n"
             "- Objetivo: Resolver uma necessidade pontual de código, algoritmo ou função isolada.\n"

@@ -10,9 +10,9 @@ from enum import Enum
 class RiskLevel(str, Enum):
     """Níveis de risco do Semáforo do Sequenciador da Lean Inception."""
 
-    GREEN = "GREEN"      # Baixa incerteza / Baixo esforço
-    YELLOW = "YELLOW"    # Média incerteza / Médio esforço
-    RED = "RED"          # Alta incerteza técnica ou de negócio (The Riskiest Assumption)
+    GREEN = "GREEN"  # Baixa incerteza / Baixo esforço
+    YELLOW = "YELLOW"  # Média incerteza / Médio esforço
+    RED = "RED"  # Alta incerteza técnica ou de negócio (The Riskiest Assumption)
 
     @classmethod
     def from_str(cls, val: str) -> RiskLevel:
@@ -109,7 +109,9 @@ class WaveSequencer:
                 continue
 
             # Detecta header
-            if "Onda" in trimmed and ("Nome" in trimmed or "Hipótese" in trimmed or "Fatias" in trimmed):
+            if "Onda" in trimmed and (
+                "Nome" in trimmed or "Hipótese" in trimmed or "Fatias" in trimmed
+            ):
                 in_table = True
                 continue
 
@@ -163,7 +165,11 @@ class WaveSequencer:
         ]
         for p in self.plans:
             final_str = "Sim" if p.is_final else "Não"
-            risk_str = "VERMELHO" if p.risk_level == RiskLevel.RED else ("AMARELO" if p.risk_level == RiskLevel.YELLOW else "VERDE")
+            risk_str = (
+                "VERMELHO"
+                if p.risk_level == RiskLevel.RED
+                else ("AMARELO" if p.risk_level == RiskLevel.YELLOW else "VERDE")
+            )
             feats_str = ", ".join(p.features)
             lines.append(
                 f"| {p.wave_id} | {p.name} | {p.business_hypothesis} | {feats_str} | {risk_str} | {final_str} |"

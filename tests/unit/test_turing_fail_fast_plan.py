@@ -1,12 +1,9 @@
 """Testes unitários para Fail-Fast determinístico e validação de pré-requisitos em DISCUSS e PLAN."""
 
-from pathlib import Path
 from unittest.mock import MagicMock
-import pytest
-from bombe_code.turing.orchestrator import WaveOrchestrator
-from bombe_code.turing.state_machine import WaveState, TuringStage
+
 from bombe_code.storage.project_db import ProjectDatabase
-from bombe_code.agents.runner import AgentExecutionResult
+from bombe_code.turing.orchestrator import WaveOrchestrator
 
 
 def test_plan_fails_fast_when_prd_missing(tmp_path):
@@ -27,7 +24,7 @@ def test_plan_fails_fast_when_prd_missing(tmp_path):
 def test_plan_fails_fast_when_ieru_times_out(tmp_path):
     """Se @ieru falhar/dar timeout, o PLAN aborta IMEDIATAMENTE e NÃO chama @codd nem @caroli."""
     db = ProjectDatabase(tmp_path / "test.db")
-    
+
     # Prepara PRD.md válido
     briefings_dir = tmp_path / "docs" / "briefings"
     briefings_dir.mkdir(parents=True, exist_ok=True)

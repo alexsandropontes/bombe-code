@@ -1,7 +1,7 @@
 # STORY ST-026: Tool de Snippets para Agentes LLM (snippet_search & snippet_get)
 
 > **Épico:** [EP-005: Starters Engine, Snippets Registry & LLM Snippet Tool](file:///home/lexpontes/projetos/struct/bombe-code/docs/backlog/epics/EP-005-starters-and-snippets-engine.md)  
-> **Status:** READY  
+> **Status:** DONE
 > **Prioridade:** ALTA  
 > **Responsáveis:** @andrej (AI Prompt & Context), @turing (Soberano da ONDA)  
 > **Modo:** tdd-code  

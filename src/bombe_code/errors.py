@@ -60,10 +60,15 @@ def format_error_panel(
     title: str = "Bombe Code — Erro Inesperado",
 ) -> Panel:
     """Gera um painel Rich elegante para exibição ao usuário final, sem vazar código."""
+    from rich.markup import escape as _rich_escape
+
     if exc and str(exc).strip():
-        exc_summary = str(exc)
+        # A MENSAGEM da exceção pode conter sequências de markup (ex: '[/magenta]'
+        # vindo de um MarkupError) — escapar ANTES de compor o painel, senão o
+        # próprio painel de erro explode e a aplicação nem consegue reportar.
+        exc_summary = _rich_escape(str(exc))
     elif exc:
-        exc_summary = type(exc).__name__
+        exc_summary = _rich_escape(type(exc).__name__)
     else:
         exc_summary = "Erro interno de execução"
     # Limita mensagem para não vazar estruturas gigantes ou dados sensíveis

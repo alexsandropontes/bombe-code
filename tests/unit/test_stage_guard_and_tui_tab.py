@@ -57,12 +57,16 @@ def test_stage_guard_discuss_blocks_code():
     assert allowed is True
 
     # DISCUSS: escrita em PRD não-canônico BLOQUEADA
-    allowed, reason = validate_stage_permission(STAGE_DISCUSS, "write", "docs/briefings/PRD-drops-mvp.md")
+    allowed, reason = validate_stage_permission(
+        STAGE_DISCUSS, "write", "docs/briefings/PRD-drops-mvp.md"
+    )
     assert allowed is False
     assert "ARTEFATO NÃO-CANÔNICO" in reason
 
     # DISCUSS: escrita em Viabilidade não-canônica BLOQUEADA
-    allowed, reason = validate_stage_permission(STAGE_DISCUSS, "write", "docs/briefings/viability-v1.md")
+    allowed, reason = validate_stage_permission(
+        STAGE_DISCUSS, "write", "docs/briefings/viability-v1.md"
+    )
     assert allowed is False
     assert "ARTEFATO NÃO-CANÔNICO" in reason
 
@@ -288,23 +292,24 @@ def test_tui_app_toggle_vibe_mode_and_red_badge(tmp_path: Path):
     assert "TDD" in status_tdd
 
 
-def test_orchestrator_start_wave_incomplete_warning_and_force(tmp_path: Path):
+def test_orchestrator_start_wave_switch_archives_checkpoint(tmp_path: Path):
+    """Autonomia total: sem --force, sem bloqueio — trocar de onda arquiva o
+    checkpoint anterior no histórico e prossegue (decisão do Turing)."""
     from bombe_code.turing.orchestrator import WaveOrchestrator
 
     orch = WaveOrchestrator(project_dir=str(tmp_path))
-    # Inicia ONDA-001
-    res1 = orch.start_wave("ONDA-001", force=True)
+    res1 = orch.start_wave("ONDA-001")
     assert res1["success"] is True
 
-    # Tenta iniciar ONDA-002 sem force enquanto ONDA-001 está em DISCUSS (incompleta)
-    res2 = orch.start_wave("ONDA-002", force=False)
-    assert res2["success"] is False
-    assert "ainda está em andamento" in res2["message"]
+    # Pedir ONDA-002 com ONDA-001 pendente: arquiva e prossegue (sem humano).
+    res2 = orch.start_wave("ONDA-002")
+    assert res2["success"] is True
+    assert res2["wave_id"] == "ONDA-002"
 
-    # Com --force (force=True), deve permitir sobrescrever e iniciar
-    res3 = orch.start_wave("ONDA-002", force=True)
-    assert res3["success"] is True
-    assert res3["wave_id"] == "ONDA-002"
+    # O checkpoint da ONDA-001 foi preservado no histórico
+    checkpoint = orch.db.load_wave_checkpoint("ONDA-001")
+    assert checkpoint is not None
+    assert checkpoint["state"] in ("DISCUSS", "DISCOVERY")
 
 
 def test_validate_safe_relative_path_blocks_xml_and_invalid_chars():
@@ -343,13 +348,14 @@ def test_orchestrator_fs_tools_block_invalid_path(tmp_path: Path):
     from bombe_code.turing.orchestrator import WaveOrchestrator
 
     orch = WaveOrchestrator(project_dir=str(tmp_path))
-    read_fn, write_fn, list_fn = orch._get_project_fs_tools()
+    _read_fn, write_fn, _list_fn = orch._get_project_fs_tools()
 
-    malformed_path = "</parameter></function></tool_call><tool_call><function=write>?<parameter=content>"
+    malformed_path = (
+        "</parameter></function></tool_call><tool_call><function=write>?<parameter=content>"
+    )
     res_write = write_fn(malformed_path, "conteudo malformado")
     assert "Erro: Caminho inválido" in res_write
 
     # Garante que nenhum diretório '<' ou arquivo estranho foi criado no disco
     assert not (tmp_path / "<").exists()
     assert not list(tmp_path.glob("<*"))
-

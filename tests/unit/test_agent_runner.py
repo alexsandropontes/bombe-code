@@ -162,7 +162,6 @@ def test_agent_runner_automatic_failover():
     mock_agent_fallback.run.return_value = mock_res
     mock_agent_fallback.run_sync.return_value = mock_res
 
-
     mock_factory = MagicMock()
     # Primeiro retorno é o primário que falha; segundo retorno é o fallback que funciona
     mock_factory.create_agent.side_effect = [mock_agent_primary, mock_agent_fallback]
@@ -180,5 +179,3 @@ def test_agent_runner_automatic_failover():
     # Garante que o slot 1 foi marcado como esgotado e o slot 2 está ativo
     assert slot1.is_available() is False
     assert router.get_active_slot().name == "fallback_groq"
-
-

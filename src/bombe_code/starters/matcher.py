@@ -120,9 +120,7 @@ class TemplateMatcher:
         # 4. SaaS Fullstack vs Backend Standalone
         else:
             is_fullstack = (
-                f_stack == "react"
-                or p_type in ("saas", "fullstack")
-                or "fullstack" in p_type
+                f_stack == "react" or p_type in ("saas", "fullstack") or "fullstack" in p_type
             )
 
             # Matriz de resolução por linguagem e multitenancy

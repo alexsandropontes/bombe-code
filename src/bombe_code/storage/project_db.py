@@ -65,6 +65,21 @@ class ProjectDatabase:
                     created_at REAL NOT NULL,
                     updated_at REAL NOT NULL
                 );
+
+                CREATE TABLE IF NOT EXISTS wave_history (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    wave_id TEXT NOT NULL,
+                    state TEXT NOT NULL,
+                    autonomy_mode TEXT NOT NULL,
+                    engineering_mode TEXT NOT NULL,
+                    archived_at REAL NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS runtime_meta (
+                    key TEXT PRIMARY KEY,
+                    value TEXT NOT NULL,
+                    updated_at REAL NOT NULL
+                );
                 """
             )
             # Migração segura para tabelas já criadas
@@ -119,6 +134,64 @@ class ProjectDatabase:
             if row:
                 return dict(row)
         return None
+
+    def archive_wave_state(self) -> dict[str, Any] | None:
+        """Arquiva o checkpoint ativo no histórico (nunca destrói estado).
+
+        Parte da autonomia do Turing: trocar de onda não exige decisão humana
+        nem flag de força — o checkpoint anterior é preservado em wave_history.
+        """
+        saved = self.load_wave_state()
+        if not saved:
+            return None
+        with self._get_connection() as conn:
+            conn.execute(
+                """
+                INSERT INTO wave_history (wave_id, state, autonomy_mode, engineering_mode, archived_at)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (
+                    saved["wave_id"],
+                    saved["state"],
+                    saved["autonomy_mode"],
+                    saved["engineering_mode"],
+                    time.time(),
+                ),
+            )
+        return saved
+
+    def load_wave_checkpoint(self, wave_id: str) -> dict[str, Any] | None:
+        """Recupera do histórico o checkpoint MAIS RECENTE de uma onda específica."""
+        with self._get_connection() as conn:
+            row = conn.execute(
+                """
+                SELECT * FROM wave_history
+                WHERE UPPER(wave_id) = UPPER(?)
+                ORDER BY archived_at DESC
+                LIMIT 1
+                """,
+                (wave_id,),
+            ).fetchone()
+            if row:
+                return dict(row)
+        return None
+
+    def get_meta(self, key: str) -> str | None:
+        """Lê uma chave de metadados do runtime (orçamentos, assinaturas)."""
+        with self._get_connection() as conn:
+            row = conn.execute("SELECT value FROM runtime_meta WHERE key = ?", (key,)).fetchone()
+            return row["value"] if row else None
+
+    def set_meta(self, key: str, value: str) -> None:
+        """Grava uma chave de metadados do runtime."""
+        with self._get_connection() as conn:
+            conn.execute(
+                """
+                INSERT INTO runtime_meta (key, value, updated_at) VALUES (?, ?, ?)
+                ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
+                """,
+                (key, value, time.time()),
+            )
 
     def create_task(
         self,

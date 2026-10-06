@@ -1,7 +1,7 @@
 # STORY ST-035: Ontologia de Ondas — WaveType e Máquina de Estados Diferenciada
 
 > **Épico:** EP-008  
-> **Status:** IN_PROGRESS  
+> **Status:** DONE
 > **Responsáveis:** @turing, @caroli  
 > **Prioridade:** ALTA  
 

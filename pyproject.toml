@@ -15,18 +15,17 @@ dependencies = [
     "pydantic-ai>=0.0.18",
     "pyyaml>=6.0",
     "pyperclip>=1.8.2",
+    "reflex>=0.6",
 ]
 
 [project.optional-dependencies]
-web = ["reflex"]
 desktop = ["pywebview"]
 
 [project.scripts]
-bombe = "bombe_code.cli.main:app"
 bombe-code = "bombe_code.cli.main:app"
 
 [dependency-groups]
-dev = ["pytest>=8", "ruff"]
+dev = ["pytest>=8", "ruff", "coverage>=7"]
 
 [build-system]
 requires = ["hatchling"]

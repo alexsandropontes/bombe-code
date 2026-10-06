@@ -107,7 +107,9 @@ def test_downstream_review_gate_in_run_cycle(orchestrator):
     # Cria story pré-requisito no disco
     stories_dir = orchestrator.project_dir / "docs" / "stories"
     stories_dir.mkdir(parents=True, exist_ok=True)
-    (stories_dir / "ST-030.md").write_text("# STORY ST-030\n## INVEST\n## Critérios de Aceite\n### Cenários BDD\n- Dado X\n- Quando Y\n- Então Z\n")
+    (stories_dir / "ST-030.md").write_text(
+        "# STORY ST-030\n## INVEST\n## Critérios de Aceite\n### Cenários BDD\n- Dado X\n- Quando Y\n- Então Z\n"
+    )
 
     # Transita para EXECUTE
     orchestrator.transition_to(TuringStage.PLAN)

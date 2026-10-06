@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from .classifier import TuringIntentClassifier, TuringIntentResult
-from .waiter import TuringAction, TuringWaiter
 from .gates import (
     ConsumerHandoffGate,
     GateEvaluation,
@@ -20,6 +19,7 @@ from .state_machine import (
     TuringStateMachine,
     WaveState,
 )
+from .waiter import TuringAction, TuringWaiter
 
 __all__ = [
     "AutonomyMode",

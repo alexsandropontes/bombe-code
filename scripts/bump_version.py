@@ -14,7 +14,7 @@ INIT_PATH = ROOT_DIR / "src" / "bombe_code" / "__init__.py"
 
 
 def run_git(args: list[str]) -> str:
-    res = subprocess.run(["git", *args], cwd=ROOT_DIR, capture_output=True, text=True)
+    res = subprocess.run(["git", *args], cwd=ROOT_DIR, capture_output=True, text=True, check=False)
     return res.stdout.strip()
 
 

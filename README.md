@@ -16,7 +16,7 @@ O **Bombe Code** é uma plataforma e harness de desenvolvimento que transforma m
 
 Inspirado no poder computacional e na precisão da máquina *Bombe* de Bletchley Park — projetada para decifrar problemas de altíssima complexidade combinatória através de especialização mecânica —, o Bombe Code elimina a fragilidade do chamado *"vibe coding"* desgovernado (código gerado sem planejamento, sem modelagem e sem testes reais).
 
-No Bombe Code, nenhuma linha de código de produção é gerada ao acaso. O desenvolvimento segue a **Metodologia ONDA**, guiada por **23 Agentes Especialistas** e fiscalizada por **Gates Determinísticos do Turing Runtime**, onde a qualidade técnica é garantida por contratos de software em código Python imperativo, e não por promessas de modelos de linguagem.
+No Bombe Code, nenhuma linha de código de produção é gerada ao acaso. O desenvolvimento segue a **Metodologia ONDA**, guiada por **24 Agentes Especialistas** e fiscalizada por **Gates Determinísticos do Turing Runtime**, onde a qualidade técnica é garantida por contratos de software em código Python imperativo, e não por promessas de modelos de linguagem.
 
 ---
 
@@ -89,13 +89,18 @@ Modelos de linguagem são probabilisticamente criativos, mas a engenharia de sof
 * **ArchitectureGate & DatabaseQualityGate:** Valida as Decisões de Arquitetura (ADRs), separação de camadas, schemas SQL e modelos NoSQL.
 * **StoryDoRGate:** Valida se cada história cumpre rigorosamente o INVEST, DoR e cenários BDD (*Dado / Quando / Então*).
 * **TuringReviewGate:** Veta entregas se a suíte de testes falhar ou se houver objeções técnicas dos revisores (`@aniche` e `@unclebob`).
-* **SealGate:** Emite o relatório de validação contratual e selo de prontidão da ONDA (`@edith` e `@nina`).
+* **SealGate:** Emite o relatório de validação e selo de prontidão da ONDA (`@edith` e `@nina`).
+* **Ciclo Autônomo de Vetos (`VetoReworkEngine`):** Nenhum veto para o processo. Quando um validador reprova, o Turing determinístico classifica a causa, **rastreia o autor do artefato** (PRD→`@grace`, story→`@caroli`, schema→`@codd`, testes→`@aniche`), devolve o bloqueio para ele corrigir o artefato upstream, **re-queima as stories afetadas no burn TDD** e dispara re-auditoria — em até 2 rodadas autônomas. O humano só é convocado, como último recurso, por uma **Dúvida de Negócio** estruturada.
+
+### Verbosidade: Verboso por Padrão
+O padrão é a **transparência total**: cada letra, cada bloco de raciocínio (`🧠`) e cada tool call (`🔧`) dos agentes é streamado ao vivo na TUI. Para um modo executivo silencioso (apenas anúncios de onda, etapas e vetos):
+* `bombe-code tui --quiet` (flag de startup) ou `/verbosity quiet|verbose` na TUI (persistido no `.bombeconfig`).
 
 ---
 
-## 👥 O Elenco Oficial: 23 Agentes Especialistas
+## 👥 O Elenco Oficial: 24 Agentes Especialistas
 
-O Bombe Code reúne 23 agentes especialistas de elite, homenageando 12 pioneiros proeminentes do Brasil e 11 expoentes internacionais seminais da computação. Cada agente atua com foco cirúrgico em sua disciplina:
+O Bombe Code reúne 24 agentes especialistas de elite, homenageando 12 pioneiros proeminentes do Brasil e 12 expoentes internacionais seminais da computação. Cada agente atua com foco cirúrgico em sua disciplina:
 
 ### Upstream (Concepção, Arquitetura, Inception & Refinamento)
 
@@ -287,8 +292,6 @@ uv sync
 ```bash
 # Inicie o Terminal Interativo (TUI):
 bombe-code tui
-# ou simplesmente:
-bombe
 
 # Ou execute comandos diretamente pela CLI:
 bombe-code init                          # Inicializa o projeto local
@@ -302,6 +305,7 @@ bombe-code wave status                  # Exibe o status da ONDA e o Kanban
 * `/connect`: Abre o assistente para conectar provedores de IA e configurar chaves de API.
 * `/mode [tdd|vibe]`: Alterna o modo de engenharia em tempo de execução (`Shift + Tab`).
 * `/autonomy [auto|semi-auto|manual]`: Ajusta a autonomia do orquestrador.
+* `/verbosity [verbose|quiet]`: Alterna a verbosidade do runtime (padrão: verboso, streama tudo).
 * `/project starter [starter-id] [dir]`: Inicializa um novo projeto a partir de um starter oficial.
 * `/snippet list`: Lista os blocos de código LEGO disponíveis no repositório.
 

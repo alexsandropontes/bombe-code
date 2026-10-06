@@ -3,9 +3,6 @@
 import pytest
 
 from bombe_code.domain.wave.models import (
-    AutonomyMode,
-    DeliveryTarget,
-    EngineeringMode,
     StoryCard,
     Wave,
     WaveId,

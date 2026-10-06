@@ -24,7 +24,7 @@ def auth_header(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     from bombe_code.server.app import _ensure_password
 
     pwd = _ensure_password()
-    raw = f"bombe:{pwd}".encode("utf-8")
+    raw = f"bombe:{pwd}".encode()
     return {"Authorization": f"Basic {base64.b64encode(raw).decode('utf-8')}"}
 
 

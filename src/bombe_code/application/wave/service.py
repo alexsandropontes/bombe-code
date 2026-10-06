@@ -12,13 +12,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from bombe_code.domain.wave.models import (
-    AutonomyMode,
-    EngineeringMode,
-    WaveState,
-)
 from bombe_code.turing.orchestrator import WaveOrchestrator
-from bombe_code.turing.state_machine import TuringStage
 
 logger = logging.getLogger(__name__)
 
@@ -67,9 +61,7 @@ class WaveApplicationService:
                 "engineering_mode": engineering_mode,
             },
         )
-        res = self.orch.start_wave(
-            wave_id=wave_id, autonomy_mode=autonomy_mode, force=force
-        )
+        res = self.orch.start_wave(wave_id=wave_id, autonomy_mode=autonomy_mode, force=force)
         self._emit("wave.started", {"result": res})
         return res
 
@@ -95,27 +87,21 @@ class WaveApplicationService:
         """Alias para discovery_stage."""
         return self.discovery_stage(topic=topic, context=context)
 
-    def inception_stage(
-        self, context: dict[str, Any] | None = None
-    ) -> dict[str, Any]:
+    def inception_stage(self, context: dict[str, Any] | None = None) -> dict[str, Any]:
         """Executa a etapa INCEPTION (Lean Inception completa com @caroli, @grace, @alan e PRD Canônico)."""
         self._emit("wave.stage_started", {"stage": "INCEPTION"})
         res = self.orch.run_plan(context=context)
         self._emit("wave.stage_completed", {"stage": "INCEPTION", "result": res})
         return res
 
-    def plan_stage(
-        self, context: dict[str, Any] | None = None
-    ) -> dict[str, Any]:
+    def plan_stage(self, context: dict[str, Any] | None = None) -> dict[str, Any]:
         """Executa a etapa PLAN (Arquitetura com @ieru e modelagem com @codd)."""
         self._emit("wave.stage_started", {"stage": "PLAN"})
         res = self.orch.run_plan(context=context)
         self._emit("wave.stage_completed", {"stage": "PLAN", "result": res})
         return res
 
-    def refinement_stage(
-        self, context: dict[str, Any] | None = None
-    ) -> dict[str, Any]:
+    def refinement_stage(self, context: dict[str, Any] | None = None) -> dict[str, Any]:
         """Executa a etapa REFINEMENT (PBB, Step Map, quebra de stories INVEST e DoR com @caroli)."""
         self._emit("wave.stage_started", {"stage": "REFINEMENT"})
         res = self.orch.run_plan(context=context)
@@ -135,9 +121,7 @@ class WaveApplicationService:
         self._emit("wave.stage_completed", {"stage": "EXECUTE", "result": res})
         return res
 
-    def validate_stage(
-        self, context: dict[str, Any] | None = None
-    ) -> dict[str, Any]:
+    def validate_stage(self, context: dict[str, Any] | None = None) -> dict[str, Any]:
         """Executa a etapa VALIDATE (Auditoria de qualidade com @hoare e @unclebob)."""
         self._emit("wave.stage_started", {"stage": "VALIDATE"})
         res = self.orch.run_validate()
@@ -154,7 +138,12 @@ class WaveApplicationService:
         stage_norm = stage.strip().upper()
         res: dict[str, Any] = {"success": False, "stage": stage_norm}
         saved = self.orch.db.load_wave_state() or {}
-        is_wave_zero = str(saved.get("wave_id", "")).upper() in ("ONDA-000", "ONDA-0", "WAVE-000", "WAVE-0")
+        is_wave_zero = str(saved.get("wave_id", "")).upper() in (
+            "ONDA-000",
+            "ONDA-0",
+            "WAVE-000",
+            "WAVE-0",
+        )
 
         # 1. Onda Zero: DISCOVERY (ou DISCUSS)
         if stage_norm in ("DISCOVERY", "DISCUSS"):

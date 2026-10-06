@@ -28,6 +28,10 @@ class ProjectConfig(BaseModel):
     branch: str = Field(default="dev", description="Branch de trabalho da IA")
     mode: str = Field(default="tdd-code", description="Modo de engenharia: tdd-code ou vibe-code")
     autonomy: str = Field(default="auto", description="Modo de autonomia: auto, semi-auto, manual")
+    verbosity: str = Field(
+        default="verbose",
+        description="Verbosidade do runtime: verbose (padrão, streama tudo) ou quiet (resumos por etapa)",
+    )
     delivery_target: str = Field(
         default="mvp",
         description="Nível de entrega e maturidade: snippet, prototype, poc, mvp, production, enterprise",
@@ -70,6 +74,7 @@ class ProjectConfigManager:
             for k in [
                 "mode",
                 "autonomy",
+                "verbosity",
                 "delivery_target",
                 "backend_language",
                 "frontend_stack",
@@ -84,8 +89,15 @@ class ProjectConfigManager:
                 if k in raw_data and raw_data[k] is not None:
                     flat_data[k] = raw_data[k]
 
-            # Remove campos None
+            # Remove campos None e normaliza a verbosidade
             clean_data = {k: v for k, v in flat_data.items() if v is not None}
+            if "verbosity" in clean_data:
+                clean_data["verbosity"] = (
+                    "quiet"
+                    if str(clean_data["verbosity"]).strip().lower()
+                    in ("quiet", "silencioso", "silence")
+                    else "verbose"
+                )
             return ProjectConfig(**clean_data)
 
         except Exception as exc:  # noqa: BLE001
@@ -112,6 +124,7 @@ class ProjectConfigManager:
             },
             "mode": config.mode,
             "autonomy": config.autonomy,
+            "verbosity": config.verbosity,
             "delivery_target": config.delivery_target,
         }
 

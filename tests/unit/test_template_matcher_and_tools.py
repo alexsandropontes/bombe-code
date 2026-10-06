@@ -96,9 +96,7 @@ def test_template_tools_execution(tmp_path: Path):
     assert "manifest" in match_out
 
     # 2. Inspect tool
-    inspect_out = json.loads(
-        TEMPLATE_INSPECT_TOOL.execute({"starter_id": "python-mono"}, ctx)
-    )
+    inspect_out = json.loads(TEMPLATE_INSPECT_TOOL.execute({"starter_id": "python-mono"}, ctx))
     assert inspect_out["name"] == "python-mono"
     assert "composition" in inspect_out
     assert "react-portal" in inspect_out["composition"]

@@ -32,7 +32,6 @@ class Session(BaseModel):
     created_at: str = Field(default_factory=_now)
 
 
-
 class Message(BaseModel):
     id: str = Field(default_factory=lambda: _new_id("msg"))
     session_id: str

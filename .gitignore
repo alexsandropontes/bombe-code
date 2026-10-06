@@ -60,3 +60,7 @@ secrets/
 # Do projeto em si (produto) — versionável:
 # README.md, docs/ (do produto), src/, testes, configs do app
 # ============================================================
+
+# cobertura de testes
+.coverage
+htmlcov/

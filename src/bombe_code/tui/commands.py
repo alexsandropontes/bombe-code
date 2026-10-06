@@ -7,16 +7,219 @@ import logging
 import os
 import subprocess
 import tempfile
+import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import anyio
 import httpx
+from rich.markup import escape as _rich_escape
+from rich.text import Text as RichText
 from textual.widgets import Static
+
+from bombe_code.tui.cores import colorizar_handles, cor_agente, markup_turing
+from bombe_code.turing.autonomia import deve_encadear
 
 from .tokens import TOKENS
 
 logger = logging.getLogger(__name__)
+
+_STREAM_THROTTLE_MS = 35
+
+
+async def _run_orchestrator_with_stream(
+    chat: Any,
+    orch_call,
+    *args: Any,
+) -> dict[str, Any]:
+    """Executa o orquestrador em worker thread consumindo o TuringProgressBus.
+
+    Modo verboso (padrão): streama texto, pensamento e tool calls ao vivo.
+    Modo quiet: exibe apenas os anúncios canônicos (wave/etapa/veto/escalonamento).
+    """
+    from bombe_code.turing.progress import BUS
+
+    queue, unsubscribe = BUS.subscribe()
+    result: dict[str, Any] = {}
+
+    async def _worker() -> None:
+        result.update(await anyio.to_thread.run_sync(orch_call, *args))
+
+    live_widget: Static | None = None
+    live_agent: str = ""
+    buf_text = ""
+    buf_think = ""
+    tools_lines: list[RichText] = []
+    last_paint = 0.0
+
+    def _mount(line: str) -> None:
+        chat.mount(Static(line))
+
+    def _novo_widget(conteudo: str) -> Any:
+        fabrica = getattr(chat, "criar_static", None)
+        return fabrica(conteudo) if fabrica else Static(conteudo)
+
+    def _atualizar(widget: Any, conteudo: Any) -> None:
+        atualizar = getattr(chat, "atualizar_widget", None)
+        if atualizar:
+            atualizar(widget, conteudo)
+        else:
+            widget.update(conteudo)
+
+    def _linha_tool(agent: str, tool: str, args_resumo: str) -> RichText:
+        """Linha de tool em Rich Text — imune a markup vindo da LLM."""
+        t = RichText("🔧 ")
+        t.append(agent, style=f"bold {cor_agente(agent)}")
+        t.append(f" → {tool}({args_resumo})", style="magenta")
+        return t
+
+    def _linha_file(agent: str, path: str, preview: str) -> RichText:
+        t = RichText("📝 ")
+        t.append(agent, style=f"bold {cor_agente(agent)}")
+        t.append(f" → gravando {path}", style="green")
+        for linha in preview.splitlines()[:8]:
+            t.append(f"\n  │ {linha}", style="dim")
+        return t
+
+    def _linha_resultado(saida: str) -> RichText:
+        t = RichText()
+        for linha in saida.splitlines()[:6]:
+            t.append(f"  ← {linha}\n", style="dim")
+        return t
+
+    async def _finalize_live() -> None:
+        nonlocal live_widget, buf_text, buf_think, tools_lines
+        if live_widget is not None:
+            acc = RichText()
+            if buf_think.strip():
+                acc.append(f"🧠 {buf_think.strip()}\n", style="dim italic")
+            if buf_text.strip():
+                acc.append(buf_text.rstrip() + "\n")
+            for linha in tools_lines:
+                acc.append_text(linha)
+                acc.append("\n")
+            _atualizar(live_widget, acc)
+        live_widget = None
+        buf_text = ""
+        buf_think = ""
+        tools_lines = []
+
+    def _paint(force: bool = False) -> None:
+        nonlocal last_paint
+        now = time.monotonic()
+        if live_widget is None or (not force and (now - last_paint) * 1000 < _STREAM_THROTTLE_MS):
+            return
+        last_paint = now
+        acc = RichText()
+        if buf_think.strip():
+            acc.append(f"🧠 {buf_think.strip()[-400:]}\n", style="dim italic")
+        if buf_text.strip():
+            acc.append(buf_text.rstrip() + "\n")
+        for linha in tools_lines[-6:]:
+            acc.append_text(linha)
+            acc.append("\n")
+        _atualizar(live_widget, acc)
+
+    async def _drain() -> None:
+        nonlocal live_widget, live_agent, buf_text, buf_think, tools_lines
+        while True:
+            try:
+                ev = await asyncio.wait_for(queue.get(), timeout=0.15)
+            except TimeoutError:
+                continue
+            if ev is None:
+                break
+            etype = ev.type
+            agent = ev.agent or ""
+            ultimo_evento_ts[0] = time.monotonic()
+            if etype in ("text_delta", "thinking_delta", "tool_call", "tool_result", "file_write"):
+                if agent != live_agent:
+                    await _finalize_live()
+                    live_agent = agent
+                    live_widget = _novo_widget(
+                        f"[bold {cor_agente(agent)}]◈ {agent}[/bold {cor_agente(agent)}]"
+                    )
+                    await chat.mount(live_widget)
+                if etype == "text_delta":
+                    buf_text += ev.text
+                elif etype == "thinking_delta":
+                    buf_think += ev.text
+                elif etype == "tool_call":
+                    # IDENTIDADE (cor do agente) + IMUNIDADE a markup: Rich
+                    # Text — conteúdo da LLM nunca é parseado como markup.
+                    args = str((ev.data or {}).get("args", ""))
+                    resumo_args = args if len(args) <= 220 else args[:220] + "…"
+                    tools_lines.append(_linha_tool(agent, ev.text, resumo_args))
+                elif etype == "file_write":
+                    previa = str((ev.data or {}).get("preview", ""))
+                    tools_lines.append(_linha_file(agent, ev.text, previa))
+                elif etype == "tool_result":
+                    # Paridade opencode: a SAÍDA da tool aparece (antes era descartada)
+                    saida = (ev.text or "").strip()
+                    if saida:
+                        tools_lines.append(_linha_resultado(saida))
+                _paint()
+                continue
+
+            # Eventos canônicos (visíveis em qualquer modo)
+            await _finalize_live()
+            live_agent = ""
+            style = {
+                "wave_start": TOKENS["primary"],
+                "agent_start": TOKENS["secondary"],
+                "stage_start": TOKENS["secondary"],
+                "stage_end": TOKENS["success"],
+                "announcement": TOKENS["secondary"],
+                "veto_analysis": TOKENS["warning"],
+                "veto_rework": TOKENS["warning"],
+                "escalation": TOKENS["warning"],
+                "stage_failed": TOKENS["warning"],
+            }.get(etype, TOKENS["secondary"])
+            await chat.mount(
+                Static(f"[{style}]{colorizar_handles(_rich_escape(ev.text))}[/{style}]")
+            )
+
+    worker_task = asyncio.create_task(_worker())
+    drain_task = asyncio.create_task(_drain())
+
+    # WATCHDOG DE SILENCIO: mede desde o ÚLTIMO EVENTO (delta, tool, resultado)
+    # — trabalho saudável streamando NÃO dispara alarme; silêncio real, sim.
+    ultimo_evento_ts = [time.monotonic()]
+    heartbeat: Static | None = None
+
+    async def _heartbeat() -> None:
+        nonlocal heartbeat
+        while not worker_task.done():
+            await asyncio.sleep(5)
+            silencio = time.monotonic() - ultimo_evento_ts[0]
+            if silencio >= 45:
+                idle_limite = int(
+                    float(__import__("os").environ.get("BOMBE_AGENT_IDLE_TIMEOUT", "240"))
+                )
+                texto = (
+                    f"[dim]⏱ sem novos eventos há {silencio:.0f}s — agente pode estar em "
+                    f"chamada longa; sem resposta por mais de {idle_limite}s aborta automaticamente[/dim]"
+                )
+                if heartbeat is None:
+                    heartbeat = Static(texto)
+                    await chat.mount(heartbeat)
+                else:
+                    heartbeat.update(texto)
+
+    hb_task = asyncio.create_task(_heartbeat())
+    await worker_task
+    try:
+        await asyncio.wait_for(drain_task, timeout=2.0)
+    except TimeoutError:
+        drain_task.cancel()
+    finally:
+        hb_task.cancel()
+        if heartbeat is not None:
+            heartbeat.update("[dim]⏱ chamada concluída.[/dim]")
+        await _finalize_live()
+        unsubscribe()
+
+    return result
 
 
 async def _safe_set_model(client: Any, session_id: str, model: str) -> None:
@@ -76,6 +279,10 @@ COMMAND_HELP_CATALOG: list[dict[str, str]] = [
     {
         "name": "/wave <start|status|discuss|plan|cycle|execute|validate|end>",
         "desc": "Orquestração soberana da ONDA e fluxo de entrega",
+    },
+    {
+        "name": "/verbosity <verbose|quiet>",
+        "desc": "Verbosidade do runtime: verbose streama tudo (padrão); quiet mostra só anúncios",
     },
     {
         "name": "/project <config|detect|starter>",
@@ -720,6 +927,28 @@ async def handle_slash_command(app: BombeTuiApp, raw_text: str) -> bool:
         subcmd = subparts[0].lower() if subparts else "status"
         subarg = subparts[1].strip() if len(subparts) > 1 else ""
 
+        if subcmd == "resume":
+            saved = orch.db.load_wave_state() or {}
+            wave_id_salvo = str(saved.get("wave_id") or "").strip()
+            estado_salvo = str(saved.get("state") or "").strip().upper()
+            if not wave_id_salvo:
+                await chat.mount(
+                    Static(
+                        f"[{TOKENS['warning']}]Nenhuma ONDA persistida para retomar. "
+                        f"Inicie uma com: /wave start ONDA-001[/{TOKENS['warning']}]"
+                    )
+                )
+                return True
+            if estado_salvo in ("COMPLETED", ""):
+                await chat.mount(
+                    Static(
+                        f"[{TOKENS['warning']}]A {wave_id_salvo} está concluída ou sem checkpoint válido — nada a retomar. "
+                        f"Use: /wave start {wave_id_salvo} para uma nova execução.[/{TOKENS['warning']}]"
+                    )
+                )
+                return True
+            return await handle_slash_command(app, f"/wave start {wave_id_salvo}")
+
         if subcmd == "status":
             st = orch.get_status()
             summary = st["tasks_summary"]
@@ -761,9 +990,10 @@ async def handle_slash_command(app: BombeTuiApp, raw_text: str) -> bool:
             return True
 
         if subcmd == "start":
-            tokens = [p for p in subparts[1:] if p.strip()]
-            force = "--force" in tokens
-            clean_tokens = [t for t in tokens if t != "--force"]
+            # Autonomia total: --force é obsoleto (o Turing decide sozinho).
+            tokens = [p for p in subparts[1:] if p.strip() and p != "--force"]
+            force = False
+            clean_tokens = tokens
 
             autonomy = "AUTO"
             wave_id = None
@@ -789,32 +1019,132 @@ async def handle_slash_command(app: BombeTuiApp, raw_text: str) -> bool:
             res = orch.start_wave(wave_id=wave_id, autonomy_mode=autonomy, force=force)
             if res.get("success"):
                 app.mode = "TDD"
-                app.wave_station = "DISCUSS"
+                restored_stage = str(res.get("stage", "DISCUSS")).upper()
+                app.wave_station = restored_stage
                 app.update_status()
 
-                is_greenfield = wave_id in ("ONDA-000", "ONDA-0", "WAVE-0", "WAVE-000") or "DISCOVERY" in app.get_current_wave_stages()
+                if res.get("resumed"):
+                    await chat.mount(
+                        Static(
+                            f"[{TOKENS['success']} bold]✓ {res['message']}[/{TOKENS['success']} bold]"
+                        )
+                    )
+                    # MODO AUTO: a máquina se encadeia sozinha a partir do
+                    # checkpoint — o humano NUNCA digita o próximo comando.
+                    proximos = {
+                        "PLAN": "/wave plan",
+                        "REFINEMENT": "/wave plan",
+                        "EXECUTE": "/wave execute",
+                        "VALIDATE": "/wave validate",
+                    }
+                    autonomia_real = str(res.get("autonomy_mode", autonomy)).upper()
+                    if autonomia_real in ("AUTO", "SEMI_AUTO") and restored_stage in proximos:
+                        proximo = proximos[restored_stage]
+                        modo_tag = "AUTO" if autonomia_real == "AUTO" else "SEMI-AUTO"
+                        await chat.mount(
+                            Static(
+                                f"[{TOKENS['primary']} bold]{markup_turing('maestro')} [MODO {modo_tag}] Retomando de {restored_stage} — encadeando {proximo}...[/{TOKENS['primary']} bold]"
+                            )
+                        )
+                        await handle_slash_command(app, proximo)
+                    elif restored_stage in ("DISCUSS", "DISCOVERY"):
+                        # Autosserviço: se existe briefing/missão no disco, a
+                        # máquina roga sozinha — humano não digita comando.
+                        briefings_dir = Path(app.project_dir) / "docs" / "briefings"
+                        briefing = (
+                            next(
+                                (
+                                    b
+                                    for b in sorted(briefings_dir.glob("*.md"))
+                                    if b.name.upper() not in ("VIABILITY.MD", "PRD.MD")
+                                ),
+                                None,
+                            )
+                            if briefings_dir.is_dir()
+                            else None
+                        )
+                        if briefing:
+                            demanda = briefing.read_text(encoding="utf-8").strip()
+                            await chat.mount(
+                                Static(
+                                    f"[{TOKENS['primary']} bold]⚡ [MODO AUTO] Briefing humano encontrado em {briefing.name} — acionando DISCUSS automaticamente...[/{TOKENS['primary']} bold]"
+                                )
+                            )
+                            await handle_slash_command(app, f"/wave discuss {demanda}")
+                        else:
+                            # Único chamado legítimo: FURO DE INFORMAÇÃO (missão).
+                            await chat.mount(
+                                Static(
+                                    f"[{TOKENS['warning']} bold]❓ FURO DE INFORMAÇÃO — projeto sem missão definida.[/{TOKENS['warning']} bold]\n"
+                                    f"[dim]Nenhum briefing encontrado em docs/briefings/.[/dim]\n"
+                                    f"Descreva a missão/demanda do produto (responde à pergunta: o que deve ser construído?).\n"
+                                    f"[dim]Isto é informação de negócio — a única razão pela qual o runtime interrompe você.[/dim]"
+                                )
+                            )
+                    return True
+
+                etapa_real = str(res.get("stage", "DISCUSS")).upper()
+                is_greenfield = etapa_real in ("DISCOVERY", "DISCUSS") or (
+                    wave_id in ("ONDA-000", "ONDA-0", "WAVE-0", "WAVE-000")
+                    or "DISCOVERY" in app.get_current_wave_stages()
+                )
                 lines = [
                     f"[{TOKENS['success']} bold]✓ {res['message']}[/{TOKENS['success']} bold]",
-                    f"[dim]Modo de autonomia: {autonomy} | Etapa ativa: DISCUSS (Pressione Tab para navegar etapas ou Shift+Tab para VIBE)[/dim]",
+                    f"[dim]Modo de autonomia: {autonomy} | Etapa ativa: {etapa_real} (Pressione Tab para navegar etapas ou Shift+Tab para VIBE)[/dim]",
                     "",
                 ]
                 if is_greenfield:
-                    lines.extend([
-                        f"[{TOKENS['primary']} bold]📋 Novo Projeto Detectado (Onda 0 - Greenfield)[/{TOKENS['primary']} bold]",
-                        "Para que o time de especialistas (@meira e @grace) possa avaliar a viabilidade e gerar o PRD, precisamos da sua [bold]MISSÃO[/bold] ou [bold]BRIEFING[/bold].",
-                        "",
-                        f"[{TOKENS['secondary']} bold]👉 Como prosseguir agora:[/{TOKENS['secondary']} bold]",
-                        "  1. Digite a sua ideia diretamente no campo de texto abaixo (ex: [italic]Quero criar um SaaS de gestão de frotas com telemetria[/italic]).",
-                        "  2. Ou use o comando: [cyan]/wave discuss <sua ideia/briefing>[/cyan]",
-                        "",
-                        "[dim]Assim que você enviar a ideia, o orquestrador aciona @meira para viabilidade técnica e @grace para o PRD.[/dim]",
-                    ])
-                else:
-                    lines.extend([
-                        f"[{TOKENS['primary']} bold]📋 ONDA {wave_id} iniciada com sucesso![/{TOKENS['primary']} bold]",
-                        "Para iniciar a discussão de escopo, envie sua ideia no chat ou use: [cyan]/wave discuss <demanda>[/cyan]",
-                    ])
+                    lines.extend(
+                        [
+                            f"[{TOKENS['primary']} bold]📋 Novo Projeto Detectado (Onda 0 - Greenfield)[/{TOKENS['primary']} bold]",
+                            "Para que o time de especialistas (@meira e @grace) possa avaliar a viabilidade e gerar o PRD, precisamos da sua [bold]MISSÃO[/bold] ou [bold]BRIEFING[/bold].",
+                            "",
+                            f"[{TOKENS['secondary']} bold]👉 Como prosseguir agora:[/{TOKENS['secondary']} bold]",
+                            "  1. Digite a sua ideia diretamente no campo de texto abaixo (ex: [italic]Quero criar um SaaS de gestão de frotas com telemetria[/italic]).",
+                            "  2. Ou use o comando: [cyan]/wave discuss <sua ideia/briefing>[/cyan]",
+                            "",
+                            "[dim]Assim que você enviar a ideia, o orquestrador aciona @meira para viabilidade técnica e @grace para o PRD.[/dim]",
+                        ]
+                    )
+                    await chat.mount(Static("\n".join(lines)))
+                    return True
+
+                # Onda de Entrega: DISCUSS não existe — a fundação vem da Onda 0/PRD.
+                lines.append(
+                    f"[{TOKENS['primary']} bold]📋 ONDA {wave_id} iniciada na etapa {etapa_real} — fundação definida na Onda 0 (PRD + Sequenciador).[/{TOKENS['primary']} bold]"
+                )
                 await chat.mount(Static("\n".join(lines)))
+
+                autonomy_norm = autonomy.upper().replace("-", "_")
+                if autonomy_norm in ("AUTO", "SEMI_AUTO"):
+                    proximo = {
+                        "PLAN": "/wave plan",
+                        "REFINEMENT": "/wave plan",
+                        "EXECUTE": "/wave execute",
+                        "VALIDATE": "/wave validate",
+                    }.get(etapa_real)
+                    if proximo:
+                        modo_tag = "AUTO" if autonomy_norm == "AUTO" else "SEMI-AUTO"
+                        await chat.mount(
+                            Static(
+                                f"[{TOKENS['primary']} bold]{markup_turing('maestro')} [MODO {modo_tag}] Encadeando automaticamente a etapa {etapa_real}...[/{TOKENS['primary']} bold]"
+                            )
+                        )
+                        await handle_slash_command(app, proximo)
+                    else:
+                        await chat.mount(Static("[dim]Aguardando insumo para a etapa ativa.[/dim]"))
+                elif etapa_real in ("PLAN", "REFINEMENT"):
+                    await chat.mount(
+                        Static(
+                            "[dim]Próximo passo: /wave plan (arquitetura e stories com base no PRD).[/dim]"
+                        )
+                    )
+                elif etapa_real == "EXECUTE":
+                    await chat.mount(
+                        Static("[dim]Próximo passo: /wave execute ou /wave cycle.[/dim]")
+                    )
+                elif etapa_real == "VALIDATE":
+                    await chat.mount(Static("[dim]Próximo passo: /wave validate.[/dim]"))
             else:
                 await chat.mount(
                     Static(
@@ -822,7 +1152,6 @@ async def handle_slash_command(app: BombeTuiApp, raw_text: str) -> bool:
                     )
                 )
             return True
-
 
         if subcmd == "discuss":
             topic = subarg.strip()
@@ -845,31 +1174,24 @@ async def handle_slash_command(app: BombeTuiApp, raw_text: str) -> bool:
                 await chat.mount(Static("\n".join(msg)))
                 return True
 
-            await chat.mount(
-                Static(
-                    f"[{TOKENS['secondary']} bold]Iniciando etapa DISCUSS para:[/{TOKENS['secondary']} bold] {topic}"
-                )
-            )
-            res = await anyio.to_thread.run_sync(orch.run_discuss, topic)
+            res = await _run_orchestrator_with_stream(chat, orch.run_discuss, topic)
             if res.get("success"):
                 app.wave_station = "PLAN"
                 app.update_status()
                 saved_state = orch.db.load_wave_state() or {}
                 autonomy = saved_state.get("autonomy_mode", "AUTO")
-                if autonomy == "AUTO":
+                if deve_encadear(autonomy, "DISCUSS", "PLAN"):
+                    modo_tag = "AUTO" if autonomy.upper() == "AUTO" else "SEMI-AUTO"
                     await chat.mount(
                         Static(
-                            f"[{TOKENS['success']}]✓ Etapa DISCUSS concluída com sucesso com @meira e @grace.[/{TOKENS['success']}]\n"
-                            f"[dim]Artefatos gerados: docs/briefings/VIABILITY.md e docs/briefings/PRD.md.[/dim]\n"
-                            f"[{TOKENS['primary']} bold]⚡ [TURING DETERMINÍSTICO - MODO AUTO] Encadeando automaticamente para a etapa PLAN...[/{TOKENS['primary']} bold]"
+                            f"[{TOKENS['primary']} bold]{markup_turing('maestro')} [MODO {modo_tag}] Encadeando automaticamente para a etapa PLAN...[/{TOKENS['primary']} bold]"
                         )
                     )
                     await handle_slash_command(app, "/wave plan")
                 else:
                     await chat.mount(
                         Static(
-                            f"[{TOKENS['success']}]✓ Etapa DISCUSS concluída com sucesso com @meira e @grace.[/{TOKENS['success']}]\n"
-                            f"[dim]Artefatos gerados: docs/briefings/VIABILITY.md e docs/briefings/PRD.md. Próxima etapa: /wave plan[/dim]"
+                            f"[dim]⏸ Etapa DISCUSS concluída (agentes + gates rodaram) — modo {autonomy}: quando quiser, /wave plan[/dim]"
                         )
                     )
             else:
@@ -897,31 +1219,31 @@ async def handle_slash_command(app: BombeTuiApp, raw_text: str) -> bool:
                 await chat.mount(Static("\n".join(msg)))
                 return True
 
-            await chat.mount(
-                Static(
-                    f"[{TOKENS['secondary']} bold]Iniciando etapa PLAN com os arquitetos de Upstream (@ieru, @codd, @caroli)...[/{TOKENS['secondary']} bold]"
-                )
-            )
-            res = await anyio.to_thread.run_sync(orch.run_plan)
+            res = await _run_orchestrator_with_stream(chat, orch.run_plan)
             if res.get("success"):
                 app.wave_station = "EXECUTE"
                 app.update_status()
                 saved_state = orch.db.load_wave_state() or {}
                 autonomy = saved_state.get("autonomy_mode", "AUTO")
-                if autonomy == "AUTO":
+                if deve_encadear(autonomy, "PLAN", "EXECUTE"):
+                    modo_tag = "AUTO" if autonomy.upper() == "AUTO" else "SEMI-AUTO"
                     await chat.mount(
                         Static(
-                            f"[{TOKENS['success']}]✓ Etapa PLAN concluída. Backlog e arquitetura prontos para execução.[/{TOKENS['success']}]\n"
-                            f"[dim]Stories registradas no Kanban.[/dim]\n"
-                            f"[{TOKENS['primary']} bold]⚡ [TURING DETERMINÍSTICO - MODO AUTO] Encadeando automaticamente para a etapa EXECUTE...[/{TOKENS['primary']} bold]"
+                            f"[{TOKENS['primary']} bold]{markup_turing('maestro')} [MODO {modo_tag}] Encadeando automaticamente para a etapa EXECUTE...[/{TOKENS['primary']} bold]"
                         )
                     )
                     await handle_slash_command(app, "/wave execute")
+                elif autonomy.upper().replace("-", "_") == "SEMI_AUTO":
+                    await chat.mount(
+                        Static(
+                            f"[{TOKENS['warning']} bold]⏸ FASE UPSTREAM CONCLUÍDA (entendimento, viabilidade e planejamento + gates) — pausa do modo SEMI-AUTO.[/{TOKENS['warning']} bold]\n"
+                            f"[dim]Revise arquitetura e backlog. Autorize a construção com: /wave execute[/dim]"
+                        )
+                    )
                 else:
                     await chat.mount(
                         Static(
-                            f"[{TOKENS['success']}]✓ Etapa PLAN concluída. Backlog e arquitetura prontos para execução.[/{TOKENS['success']}]\n"
-                            f"[dim]Stories registradas no Kanban. Próxima etapa: /wave execute ou /wave cycle[/dim]"
+                            f"[dim]⏸ Etapa PLAN concluída (agentes + gates rodaram) — modo {autonomy}: quando quiser, /wave execute ou /wave cycle[/dim]"
                         )
                     )
             else:
@@ -954,7 +1276,7 @@ async def handle_slash_command(app: BombeTuiApp, raw_text: str) -> bool:
                     f"[{TOKENS['secondary']} bold]Executando ciclo atômico para {story_label}...[/{TOKENS['secondary']} bold]"
                 )
             )
-            res = await anyio.to_thread.run_sync(orch.run_cycle, target_story)
+            res = await _run_orchestrator_with_stream(chat, orch.run_cycle, target_story)
             if res.get("success"):
                 await chat.mount(
                     Static(f"[{TOKENS['success']}]✓ {res['message']}[/{TOKENS['success']}]")
@@ -973,49 +1295,145 @@ async def handle_slash_command(app: BombeTuiApp, raw_text: str) -> bool:
                     f"[{TOKENS['secondary']} bold]Iniciando execução em lote da ONDA (Cycle-Full)...[/{TOKENS['secondary']} bold]"
                 )
             )
-            res = await anyio.to_thread.run_sync(orch.run_execute)
+            res = await _run_orchestrator_with_stream(chat, orch.run_execute)
             if res.get("success"):
                 app.wave_station = "VALIDATE"
                 app.update_status()
                 saved_state = orch.db.load_wave_state() or {}
                 autonomy = saved_state.get("autonomy_mode", "AUTO")
-                if autonomy == "AUTO":
+                if deve_encadear(autonomy, "EXECUTE", "VALIDATE"):
+                    modo_tag = "AUTO" if autonomy.upper() == "AUTO" else "SEMI-AUTO"
                     await chat.mount(
                         Static(
-                            f"[{TOKENS['success']}]✓ {res['message']}[/{TOKENS['success']}]\n"
-                            f"[{TOKENS['primary']} bold]⚡ [TURING DETERMINÍSTICO - MODO AUTO] Encadeando automaticamente para a etapa VALIDATE...[/{TOKENS['primary']} bold]"
+                            f"[{TOKENS['primary']} bold]{markup_turing('maestro')} [MODO {modo_tag}] Encadeando automaticamente para a etapa VALIDATE...[/{TOKENS['primary']} bold]"
                         )
                     )
                     await handle_slash_command(app, "/wave validate")
                 else:
                     await chat.mount(
-                        Static(f"[{TOKENS['success']}]✓ {res['message']}[/{TOKENS['success']}]")
+                        Static(
+                            f"[{TOKENS['success']}]✓ {res['message']}[/{TOKENS['success']}]\n"
+                            f"[dim]⏸ Etapa EXECUTE concluída (todos os ciclos TDD + reviews) — modo {autonomy}: /wave validate quando quiser[/dim]"
+                        )
                     )
+            elif res.get("escalation"):
+                esc = res["escalation"]
+                await chat.mount(
+                    Static(
+                        f"[{TOKENS['warning']} bold]❓ DÚVIDA DE NEGÓCIO — {esc.get('story', 'story')} não convergiu.[/{TOKENS['warning']} bold]\n"
+                        f"{esc.get('message', '')}\n"
+                        f"[dim]Responsável técnico sugerido: {esc.get('suggested_owner')}[/dim]"
+                    )
+                )
             else:
                 await chat.mount(
                     Static(
-                        f"[{TOKENS['warning']}]Execução interrompida: {res.get('error')}[/{TOKENS['warning']}]"
+                        f"[{TOKENS['warning']}]Execução interrompida: {res.get('error') or res.get('message') or 'motivo não especificado'}[/{TOKENS['warning']}]"
                     )
                 )
             return True
 
         if subcmd == "validate":
-            await chat.mount(
-                Static(
-                    f"[{TOKENS['secondary']} bold]Iniciando auditoria de validação formal com @edith e @nina...[/{TOKENS['secondary']} bold]"
-                )
-            )
-            res = await anyio.to_thread.run_sync(orch.run_validate)
+            res = await _run_orchestrator_with_stream(chat, orch.run_validate)
             if res.get("success"):
                 await chat.mount(
                     Static(
                         f"[{TOKENS['success']}]✓ ONDA validada com sucesso com Selo de Homologação Final.[/{TOKENS['success']}]"
                     )
                 )
+                saved_state = orch.db.load_wave_state() or {}
+                autonomy = saved_state.get("autonomy_mode", "AUTO")
+                if autonomy != "AUTO":
+                    msg_pausa = (
+                        f"[{TOKENS['warning']} bold]⏸ FASE DOWNSTREAM CONCLUÍDA (construção + homologação) — pausa do modo SEMI-AUTO.[/{TOKENS['warning']} bold]\n"
+                        f"[dim]Navegue no entregável. Arquive com: /wave end[/dim]"
+                        if autonomy.upper().replace("-", "_") == "SEMI_AUTO"
+                        else f"[dim]⏸ Etapa VALIDATE concluída — modo {autonomy}: /wave end para arquivar.[/dim]"
+                    )
+                    await chat.mount(Static(msg_pausa))
+                    return True
+
+                # MODO AUTO: arquiva a onda e encadeia a próxima do Sequenciador.
+                end_res = orch.end_wave()
+                if end_res.get("success"):
+                    await chat.mount(
+                        Static(
+                            f"[{TOKENS['success']} bold]🏁 {end_res.get('message')}[/{TOKENS['success']} bold]"
+                        )
+                    )
+                from bombe_code.domain.wave.sequencer import WaveSequencer
+
+                prd_file = Path(app.project_dir) / "docs" / "briefings" / "PRD.md"
+                prd_content = prd_file.read_text(encoding="utf-8") if prd_file.exists() else ""
+                sequencer = WaveSequencer.from_markdown(prd_content)
+                current_id = end_res.get("wave_id") or saved_state.get("wave_id", "")
+                if sequencer.has_future_waves(current_id):
+                    idx = sequencer.get_plan_index(current_id)
+                    next_plan = sequencer.plans[idx + 1]
+                    await chat.mount(
+                        Static(
+                            f"[{TOKENS['primary']} bold]{markup_turing('maestro')} [MODO AUTO] Encadeando para a próxima onda: {next_plan.wave_id} ({next_plan.name})...[/{TOKENS['primary']} bold]"
+                        )
+                    )
+                    await handle_slash_command(app, f"/wave start {next_plan.wave_id}")
+                else:
+                    await chat.mount(
+                        Static(
+                            f"[{TOKENS['success']} bold]🏆 MVP completo — todas as ondas entregues e homologadas.[/{TOKENS['success']} bold]\n"
+                            f"[dim]Intervenção humana final: navegue no produto e valide a experiência.[/dim]"
+                        )
+                    )
+                return True
+            if res.get("blocked"):
+                escalation = (res.get("rework") or {}).get("escalation") or {}
+                bloqueios = escalation.get("blockers") or []
+                linhas_bloqueios = (
+                    "\n".join(f"  • {b}" for b in bloqueios) or f"  • {res.get('error')}"
+                )
+                await chat.mount(
+                    Static(
+                        f"[{TOKENS['warning']} bold]❓ DÚVIDA DE NEGÓCIO — intervenção humana solicitada (último recurso).[/{TOKENS['warning']} bold]\n"
+                        f"[{TOKENS['warning']}]O ciclo autônomo de retrabalho foi esgotado e a decisão excede a autonomia dos agentes.[/{TOKENS['warning']}]\n"
+                        f"[dim]Responsável técnico sugerido: {escalation.get('suggested_owner', '@turing')}[/dim]\n"
+                        f"{linhas_bloqueios}\n"
+                        f"[dim]Resolva e reexecute: /wave validate[/dim]"
+                    )
+                )
             else:
                 await chat.mount(
                     Static(
                         f"[{TOKENS['warning']}]Validação não aprovada: {res.get('error')}[/{TOKENS['warning']}]"
+                    )
+                )
+            return True
+
+        if subcmd == "audit":
+            alvo = subarg.strip().upper() or None
+            await chat.mount(
+                Static(
+                    f"[{TOKENS['secondary']} bold]🔍 Contra-Auditoria Forense (@hoare) — alvo: {alvo or 'onda ativa'}[/{TOKENS['secondary']} bold]"
+                )
+            )
+            res = await _run_orchestrator_with_stream(chat, orch.run_audit, alvo)
+            if res.get("success") and res.get("limpa"):
+                await chat.mount(
+                    Static(
+                        f"[{TOKENS['success']}]✅ AUDITORIA: LIMPA — pedido × entregue verificado no código, suíte real executada ({res.get('suite')}).[/{TOKENS['success']}]\n"
+                        f"[dim]Laudo: {res.get('laudo_path')}[/dim]"
+                    )
+                )
+            elif res.get("success"):
+                await chat.mount(
+                    Static(
+                        f"[{TOKENS['warning']} bold]🚨 {len(res.get('furos', []))} FURO(S) encontrado(s) na {res.get('wave_id')}.[/{TOKENS['warning']} bold]\n"
+                        + "\n".join(f"  • {f}" for f in res.get("furos", [])[:8])
+                        + f"\n[dim]{res.get('reexecucao', 'Cards bloqueados; ciclo de correção acionado.')}[/dim]"
+                    )
+                )
+            else:
+                await chat.mount(
+                    Static(
+                        f"[{TOKENS['warning']}]Auditoria falhou: {res.get('error')}[/{TOKENS['warning']}]"
                     )
                 )
             return True
@@ -1036,7 +1454,7 @@ async def handle_slash_command(app: BombeTuiApp, raw_text: str) -> bool:
 
         await chat.mount(
             Static(
-                f"[{TOKENS['warning']}]Subcomando do /wave desconhecido: '{subcmd}'. Use: start, status, discuss, plan, cycle, execute, validate, end.[/{TOKENS['warning']}]"
+                f"[{TOKENS['warning']}]Subcomando do /wave desconhecido: '{subcmd}'. Use: start, resume, status, discuss, plan, cycle, execute, validate, audit, end.[/{TOKENS['warning']}]"
             )
         )
         return True
@@ -1188,6 +1606,44 @@ async def handle_slash_command(app: BombeTuiApp, raw_text: str) -> bool:
                     Static(f"[{TOKENS['warning']}]{res.get('error')}[/{TOKENS['warning']}]")
                 )
             return True
+
+    if cmd == "verbosity":
+        from bombe_code.config.project_config import ProjectConfigManager
+        from bombe_code.turing.progress import BUS
+
+        alvo = arg.strip().lower()
+        if alvo in ("verbose", "quiet", "silencioso"):
+            modo = "quiet" if alvo in ("quiet", "silencioso") else "verbose"
+        elif not alvo:
+            modo = "quiet" if not BUS.is_quiet else "verbose"
+        else:
+            await chat.mount(
+                Static(
+                    f"[{TOKENS['warning']}]Uso: /verbosity <verbose|quiet> (sem argumento alterna o modo atual)[/{TOKENS['warning']}]"
+                )
+            )
+            return True
+
+        BUS.set_verbosity(modo)
+        os.environ["BOMBE_VERBOSITY"] = modo
+        try:
+            mgr = ProjectConfigManager(app.project_dir)
+            cfg = mgr.load()
+            cfg.verbosity = modo
+            mgr.save(cfg)
+        except Exception as exc:  # noqa: BLE001 — persistência é best-effort
+            logger.warning("Falha ao persistir verbosidade: %s", exc)
+        detalhe = (
+            "cada letra, raciocínio e tool call serão streamados na tela"
+            if modo == "verbose"
+            else "apenas anúncios de onda, etapas e vetos serão exibidos"
+        )
+        await chat.mount(
+            Static(
+                f"[{TOKENS['success']}]✓ Verbosidade definida como {modo.upper()} — {detalhe}.[/{TOKENS['success']}]"
+            )
+        )
+        return True
 
     if cmd == "mode":
         if not arg:

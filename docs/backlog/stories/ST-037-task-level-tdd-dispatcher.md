@@ -1,7 +1,7 @@
 # STORY ST-037: Despachante de Execução por Task no WaveOrchestrator
 
 > **Épico:** EP-008  
-> **Status:** READY  
+> **Status:** DONE
 > **Responsáveis:** @turing, @unclebob, @valim, @aniche  
 > **Prioridade:** ALTA  
 

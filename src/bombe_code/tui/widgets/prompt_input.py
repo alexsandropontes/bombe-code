@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 from typing import Any, ClassVar
 
@@ -12,6 +13,8 @@ from textual.suggester import Suggester
 from textual.widgets import TextArea
 
 from ..tokens import TOKENS
+
+logger = logging.getLogger(__name__)
 
 SLASH_COMMANDS: list[str] = [
     "/connect",
@@ -175,7 +178,9 @@ class PromptInput(TextArea):
 
     BINDINGS: ClassVar[list[Binding]] = [
         Binding("tab", "complete", "Autocompletar", show=False, priority=True),
-        Binding("shift+tab", "toggle_vibe_mode", "Alternar Modo VIBE/TDD", show=False, priority=True),
+        Binding(
+            "shift+tab", "toggle_vibe_mode", "Alternar Modo VIBE/TDD", show=False, priority=True
+        ),
     ]
 
     def __init__(self, project_dir: str = ".", **kwargs: Any) -> None:
@@ -247,8 +252,8 @@ class PromptInput(TextArea):
             import pyperclip
 
             text = pyperclip.paste()
-        except Exception:
-            pass
+        except Exception as exc:  # noqa: BLE001 — clipboard pode estar indisponível
+            logger.debug("Área de transferência indisponível: %s", exc)
         if not text:
             text = self.app.clipboard
         if text:

@@ -1,4 +1,5 @@
 ---
+status: "DONE"
 id: "ST-018"
 type: "feature"
 agent: "@ada"

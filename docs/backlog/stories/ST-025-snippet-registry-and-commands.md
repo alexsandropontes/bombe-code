@@ -1,7 +1,7 @@
 # STORY ST-025: SnippetRegistry & Comandos de Snippets (Fábrica de LEGO)
 
 > **Épico:** [EP-005: Starters Engine, Snippets Registry & LLM Snippet Tool](file:///home/lexpontes/projetos/struct/bombe-code/docs/backlog/epics/EP-005-starters-and-snippets-engine.md)  
-> **Status:** READY  
+> **Status:** DONE
 > **Prioridade:** ALTA  
 > **Responsáveis:** @ieru (Software Architecture), @unclebob (Clean Code)  
 > **Modo:** tdd-code  

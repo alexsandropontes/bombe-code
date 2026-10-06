@@ -1,6 +1,7 @@
 """Testes unitários para o WaveWorkspace (Governança Documental: Projeto vs Ondas)."""
 
 from pathlib import Path
+
 from bombe_code.domain.wave.workspace import WaveWorkspace
 
 
@@ -8,7 +9,9 @@ def test_global_project_paths(tmp_path: Path):
     ws = WaveWorkspace(project_dir=tmp_path)
     assert ws.prd_path == tmp_path / "docs" / "briefings" / "PRD.md"
     assert ws.journey_master_path == tmp_path / "docs" / "architecture" / "journey.md"
-    assert ws.system_architecture_path == tmp_path / "docs" / "architecture" / "SYSTEM_ARCHITECTURE.md"
+    assert (
+        ws.system_architecture_path == tmp_path / "docs" / "architecture" / "SYSTEM_ARCHITECTURE.md"
+    )
     assert ws.db_schema_path == tmp_path / "docs" / "architecture" / "db.md"
 
 
@@ -20,8 +23,14 @@ def test_wave_specific_paths(tmp_path: Path):
     assert ws.wave_epics_dir(wave_id) == tmp_path / "docs" / "waves" / "ONDA-001" / "epics"
     assert ws.wave_stories_dir(wave_id) == tmp_path / "docs" / "waves" / "ONDA-001" / "stories"
     assert ws.wave_qa_dir(wave_id) == tmp_path / "docs" / "waves" / "ONDA-001" / "qa"
-    assert ws.wave_journey_slice_path(wave_id) == tmp_path / "docs" / "waves" / "ONDA-001" / "journey-slice.md"
-    assert ws.wave_validation_report_path(wave_id) == tmp_path / "docs" / "waves" / "ONDA-001" / "validation_report.md"
+    assert (
+        ws.wave_journey_slice_path(wave_id)
+        == tmp_path / "docs" / "waves" / "ONDA-001" / "journey-slice.md"
+    )
+    assert (
+        ws.wave_validation_report_path(wave_id)
+        == tmp_path / "docs" / "waves" / "ONDA-001" / "validation_report.md"
+    )
 
 
 def test_ensure_wave_structure(tmp_path: Path):

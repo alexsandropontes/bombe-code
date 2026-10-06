@@ -110,6 +110,34 @@ def get_local_git_info(project_dir: str = ".") -> dict[str, str] | None:
     return None
 
 
+def ha_sessao_ativa() -> list[dict[str, str]]:
+    """Detecta sessões VIVAS do Bombe Code (TUI/CLI em execução).
+
+    REGRA OPERACIONAL: deploy (`upgrade`/`uv tool install`) NUNCA roda por
+    cima de uma sessão ativa — derruba trabalho em voo e deixa o usuário na
+    versão velha sem saber. Quem faz deploy primeiro GARANTE que parou.
+    """
+    import os as _os
+    import subprocess as _subprocess
+
+    try:
+        out = _subprocess.run(
+            ["pgrep", "-af", "bombe"], capture_output=True, text=True, check=False
+        )
+    except OSError:
+        return []
+    sessoes: list[dict[str, str]] = []
+    meu_pid = _os.getpid()
+    for linha in (out.stdout or "").splitlines():
+        pid, _, cmd = linha.strip().partition(" ")
+        if not pid.isdigit() or int(pid) == meu_pid:
+            continue
+        # Sessão real: binário do tool em execução (não greps/scripts acidentais)
+        if "bin/bombe-code" in cmd or "bin/python -m bombe_code" in cmd:
+            sessoes.append({"pid": pid, "cmd": cmd.strip()[:120]})
+    return sessoes
+
+
 def run_upgrade(
     git_url: str | None = None,
     branch: str | None = None,
@@ -224,7 +252,7 @@ def run_upgrade(
 
     # Tenta obter a nova versão instalada
     new_version = __version__
-    bombe_bin = shutil.which("bombe-code") or shutil.which("bombe")
+    bombe_bin = shutil.which("bombe-code")
     if bombe_bin:
         try:
             ver_proc = subprocess.run(

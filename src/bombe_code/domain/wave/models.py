@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 
@@ -127,9 +127,7 @@ class StoryCard:
     status: str = "BACKLOG"
     assigned_to: str = "@barbara"
     blocked_by: str | None = None
-    created_at: str = field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
-    )
+    created_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def is_blocked(self) -> bool:
@@ -166,9 +164,7 @@ class Wave:
     engineering_mode: EngineeringMode = EngineeringMode.TDD
     delivery_target: DeliveryTarget = DeliveryTarget.MVP
     project_dir: str = "."
-    started_at: str = field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
-    )
+    started_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
     completed_at: str | None = None
     telemetry: dict[str, Any] = field(default_factory=dict)
 
@@ -176,15 +172,54 @@ class Wave:
         # Suporta tanto o fluxo da Onda Zero (DISCOVERY -> INCEPTION -> COMPLETED)
         # quanto o fluxo das Ondas de Entrega (PLAN -> REFINEMENT -> EXECUTE -> VALIDATE -> COMPLETED)
         allowed_transitions: dict[WaveState, set[WaveState]] = {
-            WaveState.DISCOVERY: {WaveState.INCEPTION, WaveState.PLAN, WaveState.COMPLETED, WaveState.BLOCKED},
-            WaveState.DISCUSS: {WaveState.PLAN, WaveState.INCEPTION, WaveState.COMPLETED, WaveState.BLOCKED},
-            WaveState.INCEPTION: {WaveState.COMPLETED, WaveState.DISCOVERY, WaveState.PLAN, WaveState.BLOCKED},
-            WaveState.PLAN: {WaveState.REFINEMENT, WaveState.EXECUTE, WaveState.COMPLETED, WaveState.DISCUSS, WaveState.BLOCKED},
+            WaveState.DISCOVERY: {
+                WaveState.INCEPTION,
+                WaveState.PLAN,
+                WaveState.COMPLETED,
+                WaveState.BLOCKED,
+            },
+            WaveState.DISCUSS: {
+                WaveState.PLAN,
+                WaveState.INCEPTION,
+                WaveState.COMPLETED,
+                WaveState.BLOCKED,
+            },
+            WaveState.INCEPTION: {
+                WaveState.COMPLETED,
+                WaveState.DISCOVERY,
+                WaveState.PLAN,
+                WaveState.BLOCKED,
+            },
+            WaveState.PLAN: {
+                WaveState.REFINEMENT,
+                WaveState.EXECUTE,
+                WaveState.COMPLETED,
+                WaveState.DISCUSS,
+                WaveState.BLOCKED,
+            },
             WaveState.REFINEMENT: {WaveState.EXECUTE, WaveState.PLAN, WaveState.BLOCKED},
-            WaveState.EXECUTE: {WaveState.VALIDATE, WaveState.REFINEMENT, WaveState.PLAN, WaveState.BLOCKED, WaveState.COMPLETED},
+            WaveState.EXECUTE: {
+                WaveState.VALIDATE,
+                WaveState.REFINEMENT,
+                WaveState.PLAN,
+                WaveState.BLOCKED,
+                WaveState.COMPLETED,
+            },
             WaveState.VALIDATE: {WaveState.COMPLETED, WaveState.EXECUTE, WaveState.BLOCKED},
-            WaveState.COMPLETED: {WaveState.DISCOVERY, WaveState.DISCUSS, WaveState.PLAN, WaveState.EXECUTE},
-            WaveState.BLOCKED: {WaveState.DISCOVERY, WaveState.INCEPTION, WaveState.PLAN, WaveState.REFINEMENT, WaveState.EXECUTE, WaveState.VALIDATE},
+            WaveState.COMPLETED: {
+                WaveState.DISCOVERY,
+                WaveState.DISCUSS,
+                WaveState.PLAN,
+                WaveState.EXECUTE,
+            },
+            WaveState.BLOCKED: {
+                WaveState.DISCOVERY,
+                WaveState.INCEPTION,
+                WaveState.PLAN,
+                WaveState.REFINEMENT,
+                WaveState.EXECUTE,
+                WaveState.VALIDATE,
+            },
         }
         return target_state in allowed_transitions.get(self.state, set())
 
@@ -195,4 +230,4 @@ class Wave:
             )
         self.state = target_state
         if target_state == WaveState.COMPLETED:
-            self.completed_at = datetime.now(timezone.utc).isoformat()
+            self.completed_at = datetime.now(UTC).isoformat()

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from bombe_code.llm.provider_rotator import (
     ProviderFailoverConfig,
@@ -31,7 +31,7 @@ def test_provider_router_fails_over_on_quota_exhausted():
 
     router = ProviderFailoverRouter(slots=[slot1, slot2])
 
-    now = datetime(2026, 10, 3, 10, 0, 0, tzinfo=timezone.utc)
+    now = datetime(2026, 10, 3, 10, 0, 0, tzinfo=UTC)
     quota_info = QuotaResetInfo(
         is_exhausted=True,
         retry_after_seconds=300.0,
@@ -49,7 +49,7 @@ def test_provider_router_fails_over_on_quota_exhausted():
 
 
 def test_provider_router_restores_primary_after_cooldown():
-    now = datetime(2026, 10, 3, 10, 0, 0, tzinfo=timezone.utc)
+    now = datetime(2026, 10, 3, 10, 0, 0, tzinfo=UTC)
     slot1 = ProviderSlot(
         name="zai",
         model="glm-5.3-flash",
@@ -67,7 +67,7 @@ def test_provider_router_restores_primary_after_cooldown():
 
 
 def test_provider_router_timer_evaluation():
-    now = datetime(2026, 10, 3, 10, 0, 0, tzinfo=timezone.utc)
+    now = datetime(2026, 10, 3, 10, 0, 0, tzinfo=UTC)
     slot1 = ProviderSlot(
         name="zai",
         model="glm-5.3-flash",

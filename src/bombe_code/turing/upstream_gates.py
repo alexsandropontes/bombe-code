@@ -30,13 +30,44 @@ class PRDQualityGate:
             # Checa correspondência flexível com sinônimos semânticos de engenharia de produto
             keywords = [sec.lower()]
             if "visão" in sec.lower():
-                keywords.extend(["visão", "visao", "visão do produto", "visao do produto", "overview", "visão geral"])
+                keywords.extend(
+                    [
+                        "visão",
+                        "visao",
+                        "visão do produto",
+                        "visao do produto",
+                        "overview",
+                        "visão geral",
+                    ]
+                )
             if "problema" in sec.lower():
-                keywords.extend(["problema", "dor", "dores", "necessidade", "contexto", "motivação", "motivacao"])
+                keywords.extend(
+                    [
+                        "problema",
+                        "dor",
+                        "dores",
+                        "necessidade",
+                        "contexto",
+                        "motivação",
+                        "motivacao",
+                    ]
+                )
             if "personas" in sec.lower():
-                keywords.extend(["persona", "personas", "público", "publico", "usuário", "usuario", "stakeholder"])
+                keywords.extend(
+                    [
+                        "persona",
+                        "personas",
+                        "público",
+                        "publico",
+                        "usuário",
+                        "usuario",
+                        "stakeholder",
+                    ]
+                )
             if "rice" in sec.lower():
-                keywords.extend(["rice", "wsjf", "moscow", "ice", "priorização", "priorizacao", "prioridade"])
+                keywords.extend(
+                    ["rice", "wsjf", "moscow", "ice", "priorização", "priorizacao", "prioridade"]
+                )
             if "mvp" in sec.lower():
                 keywords.extend(["mvp", "faseamento", "escopo mínimo", "operacional", "f0"])
 
@@ -99,9 +130,7 @@ class ArchitectureGate:
         "Stack",
     ]
 
-    def evaluate(
-        self, content: str, project_dir: Any = None
-    ) -> dict[str, Any]:
+    def evaluate(self, content: str, project_dir: Any = None) -> dict[str, Any]:
         from ..starters.decision import load_starter_decision
 
         normalized = content.lower()
@@ -123,7 +152,12 @@ class ArchitectureGate:
                 s_id = str(starter_data.get("starter_id", "")).lower()
                 starter_info = starter_data
                 # Checa se o ADR ou documento referencia o starter selecionado
-                if s_id and s_id not in normalized and "starter" not in normalized and "template" not in normalized:
+                if (
+                    s_id
+                    and s_id not in normalized
+                    and "starter" not in normalized
+                    and "template" not in normalized
+                ):
                     missing.append(f"Referência ao Starter selecionado ({s_id})")
 
         approved = len(missing) == 0
@@ -234,7 +268,9 @@ class DatabaseQualityGate:
             if "schema" in sec.lower():
                 keywords.extend(["tabela", "ddl", "create table", "modelo"])
             if "constraints" in sec.lower():
-                keywords.extend(["foreign key", "primary key", "constraint", "integridade", "índice", "indice"])
+                keywords.extend(
+                    ["foreign key", "primary key", "constraint", "integridade", "índice", "indice"]
+                )
 
             if not any(kw in normalized for kw in keywords):
                 missing.append(sec)

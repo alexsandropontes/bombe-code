@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from bombe_code.llm.quota_detector import QuotaResetInfo
@@ -37,7 +37,7 @@ class ProviderSlot:
             return False
         if self.exhausted_until_utc is None:
             return True
-        now = current_time or datetime.now(timezone.utc)
+        now = current_time or datetime.now(UTC)
         return now >= self.exhausted_until_utc
 
     def seconds_until_available(self, current_time: datetime | None = None) -> float:
@@ -46,7 +46,7 @@ class ProviderSlot:
             return 0.0
         if self.exhausted_until_utc is None:
             return 0.0
-        now = current_time or datetime.now(timezone.utc)
+        now = current_time or datetime.now(UTC)
         diff = (self.exhausted_until_utc - now).total_seconds()
         return max(0.0, diff)
 
@@ -101,11 +101,12 @@ class ProviderFailoverRouter:
         if quota_info.reset_at_utc:
             slot.exhausted_until_utc = quota_info.reset_at_utc
         elif quota_info.retry_after_seconds:
-            now = current_time or datetime.now(timezone.utc)
+            now = current_time or datetime.now(UTC)
             slot.exhausted_until_utc = now + quota_info.retry_after_seconds  # type: ignore[operator]
         else:
             from datetime import timedelta
-            now = current_time or datetime.now(timezone.utc)
+
+            now = current_time or datetime.now(UTC)
             slot.exhausted_until_utc = now + timedelta(seconds=60)
 
         logger.warning(
@@ -162,7 +163,11 @@ class ProviderFailoverRouter:
             )
 
         mins = round(min_wait / 60, 1)
-        return True, min_wait, f"Timer authorized: waiting {min_wait:.0f}s ({mins}m) for provider recovery."
+        return (
+            True,
+            min_wait,
+            f"Timer authorized: waiting {min_wait:.0f}s ({mins}m) for provider recovery.",
+        )
 
     @classmethod
     def from_environment(
@@ -172,6 +177,7 @@ class ProviderFailoverRouter:
     ) -> ProviderFailoverRouter:
         """Constructs a ProviderFailoverRouter automatically inspecting available credentials."""
         import os
+
         from bombe_code.providers.auth import load_auth
 
         data = auth_data if auth_data is not None else load_auth()
@@ -196,28 +202,49 @@ class ProviderFailoverRouter:
             priority += 1
 
         # 3. Anthropic
-        anthropic_key = os.environ.get("ANTHROPIC_API_KEY") or data.get("anthropic", {}).get("api_key")
+        anthropic_key = os.environ.get("ANTHROPIC_API_KEY") or data.get("anthropic", {}).get(
+            "api_key"
+        )
         if anthropic_key:
-            slots.append(ProviderSlot(name="anthropic", model="anthropic:claude-3-5-sonnet-20241022", priority=priority))
+            slots.append(
+                ProviderSlot(
+                    name="anthropic",
+                    model="anthropic:claude-3-5-sonnet-20241022",
+                    priority=priority,
+                )
+            )
             priority += 1
 
         # 4. Groq
         groq_key = os.environ.get("GROQ_API_KEY") or data.get("groq", {}).get("api_key")
         if groq_key:
-            slots.append(ProviderSlot(name="groq", model="groq/llama-3.3-70b-versatile", priority=priority))
+            slots.append(
+                ProviderSlot(name="groq", model="groq/llama-3.3-70b-versatile", priority=priority)
+            )
             priority += 1
 
         # 5. OpenRouter
-        openrouter_key = os.environ.get("OPENROUTER_API_KEY") or data.get("openrouter", {}).get("api_key")
+        openrouter_key = os.environ.get("OPENROUTER_API_KEY") or data.get("openrouter", {}).get(
+            "api_key"
+        )
         if openrouter_key:
-            slots.append(ProviderSlot(name="openrouter", model="openrouter/qwen/qwen-2.5-coder-32b-instruct", priority=priority))
+            slots.append(
+                ProviderSlot(
+                    name="openrouter",
+                    model="openrouter/qwen/qwen-2.5-coder-32b-instruct",
+                    priority=priority,
+                )
+            )
             priority += 1
 
         # 6. llama.cpp / Local server
-        local_base = os.environ.get("LLAMA_CPP_BASE_URL") or data.get("llama.cpp", {}).get("base_url")
+        local_base = os.environ.get("LLAMA_CPP_BASE_URL") or data.get("llama.cpp", {}).get(
+            "base_url"
+        )
         if local_base:
-            slots.append(ProviderSlot(name="llama.cpp", model="llama.cpp/mimo-qwen-9b", priority=priority))
+            slots.append(
+                ProviderSlot(name="llama.cpp", model="llama.cpp/mimo-qwen-9b", priority=priority)
+            )
             priority += 1
 
         return cls(slots=slots, config=config)
-

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+
 import pytest
 from textual.app import App, ComposeResult
 
@@ -49,6 +51,7 @@ async def test_thinking_widget_animation_and_unmount():
 async def test_fixed_processing_status_bar_in_app():
     """Garante que a barra de processamento é fixa acima do input e nunca polui o chat."""
     from unittest.mock import AsyncMock, MagicMock
+
     from bombe_code.tui.app import BombeTuiApp
 
     async def mock_stream_events(*args, **kwargs):

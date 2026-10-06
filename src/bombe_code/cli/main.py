@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import sys
 import threading
 import time
@@ -105,11 +106,13 @@ def wave_start(
         str, typer.Option("--mode", "-m", help="Modo de autonomia (auto, semi-auto, manual)")
     ] = "auto",
     target: Annotated[
-        str, typer.Option("--target", "-t", help="Nível de maturidade/objetivo da entrega (snippet, poc, prototype, mvp, production, enterprise)")
+        str,
+        typer.Option(
+            "--target",
+            "-t",
+            help="Nível de maturidade/objetivo da entrega (snippet, poc, prototype, mvp, production, enterprise)",
+        ),
     ] = "mvp",
-    force: Annotated[
-        bool, typer.Option("--force", "-f", help="Força inicialização sobrescrevendo onda anterior")
-    ] = False,
     project_dir: Annotated[str, typer.Option("--project-dir", help="Pasta do projeto")] = ".",
 ) -> None:
     """Inicializa uma nova ONDA."""
@@ -123,7 +126,7 @@ def wave_start(
             target_wave = str(saved["wave_id"])
         else:
             target_wave = "ONDA-001"
-    res = orch.start_wave(target_wave, force=force, delivery_target=target)
+    res = orch.start_wave(target_wave, delivery_target=target)
     if mode:
         orch.set_mode(mode)
     typer.echo(res["message"])
@@ -137,8 +140,8 @@ def wave_run(
     project_dir: Annotated[str, typer.Option("--project-dir", help="Pasta do projeto")] = ".",
 ) -> None:
     """Executa o pipeline completo da ONDA ativa de acordo com seu modo de autonomia."""
-    from bombe_code.turing.orchestrator import WaveOrchestrator
     from bombe_code.domain.wave.sequencer import WaveSequencer
+    from bombe_code.turing.orchestrator import WaveOrchestrator
     from bombe_code.turing.state_machine import WaveType
 
     while True:
@@ -156,7 +159,9 @@ def wave_run(
                 # Checa se existe briefing humano prévio em docs/briefings/
                 briefing_dir = Path(project_dir) / "docs" / "briefings"
                 human_briefings = list(briefing_dir.glob("*.md")) if briefing_dir.exists() else []
-                human_briefings = [b for b in human_briefings if b.name not in ("VIABILITY.md", "PRD.md")]
+                human_briefings = [
+                    b for b in human_briefings if b.name not in ("VIABILITY.md", "PRD.md")
+                ]
                 if human_briefings:
                     final_topic = human_briefings[0].read_text(encoding="utf-8")
                 else:
@@ -167,7 +172,7 @@ def wave_run(
                         typer.echo(
                             "⚠️ Nenhum tópico informado e nenhum briefing prévio encontrado em docs/briefings/.\n"
                             "Para iniciar a execução, informe a missão usando:\n"
-                            "  bombe-code wave run --topic \"Descreva sua ideia aqui\"",
+                            '  bombe-code wave run --topic "Descreva sua ideia aqui"',
                             err=True,
                         )
                         raise typer.Exit(code=1)
@@ -178,6 +183,11 @@ def wave_run(
                 typer.echo(f"❌ Falha em DISCOVERY: {res_disc.get('error')}", err=True)
                 return
             typer.echo("✅ DISCOVERY concluído com sucesso e PRD gerado.")
+            if st.get("autonomy_mode", "").upper().replace("-", "_") == "MANUAL":
+                typer.echo(
+                    "⏸ Etapa DISCOVERY concluída (modo MANUAL). Continua com: bombe-code wave run"
+                )
+                return
 
         # 2. INCEPTION / PLAN
         st = orch.get_status()
@@ -189,6 +199,11 @@ def wave_run(
                 typer.echo(f"❌ Falha em {stage_to_run}: {res_plan.get('error')}", err=True)
                 return
             typer.echo(f"✅ {stage_to_run} concluído.")
+            if st.get("autonomy_mode", "").upper().replace("-", "_") == "MANUAL":
+                typer.echo(
+                    "⏸ Etapa PLAN concluída (modo MANUAL). Continua com: bombe-code wave run"
+                )
+                return
 
         # Na Onda Zero, concluímos aqui e passamos para a Onda 1
         if is_wave_zero:
@@ -196,7 +211,7 @@ def wave_run(
             typer.echo(f"🎉 Onda Zero concluída: {res_end.get('message', 'Upstream OK')}")
             if st["autonomy_mode"] == "AUTO":
                 typer.echo("⚡ [TURING MODO AUTO] Encadeando automaticamente para a ONDA-001...")
-                orch.start_wave("ONDA-001", autonomy_mode="AUTO", force=True)
+                orch.start_wave("ONDA-001", autonomy_mode="AUTO")
                 continue
             else:
                 break
@@ -212,6 +227,11 @@ def wave_run(
                 typer.echo(f"❌ Falha em EXECUTE: {res_exec.get('error')}", err=True)
                 return
             typer.echo("✅ Ciclos de engenharia concluídos (DEV_DONE).")
+            if st.get("autonomy_mode", "").upper().replace("-", "_") == "MANUAL":
+                typer.echo(
+                    "⏸ Etapa EXECUTE concluída (modo MANUAL). Homologa com: bombe-code wave validate"
+                )
+                return
 
         # 4. VALIDATE (Ondas de Entrega)
         st = orch.get_status()
@@ -221,9 +241,14 @@ def wave_run(
             if not res_val.get("success"):
                 typer.echo(f"❌ Falha em VALIDATE: {res_val.get('error')}", err=True)
                 return
-            typer.echo(f"✅ VALIDATE aprovado com sucesso para {st['wave_id']}! Stories marcadas como DONE.")
+            typer.echo(
+                f"✅ VALIDATE aprovado com sucesso para {st['wave_id']}! Stories marcadas como DONE."
+            )
 
         # 5. END / COMPLETED
+        if st.get("autonomy_mode", "").upper().replace("-", "_") == "MANUAL":
+            typer.echo("⏸ Etapa VALIDATE concluída (modo MANUAL). Arquiva com: bombe-code wave end")
+            return
         res_end = orch.end_wave()
         typer.echo(f"🎉 {res_end.get('message', 'ONDA concluída!')}")
 
@@ -235,11 +260,13 @@ def wave_run(
         if st["autonomy_mode"] == "AUTO" and sequencer.has_future_waves(st["wave_id"]):
             current_idx = sequencer.get_plan_index(st["wave_id"])
             next_plan = sequencer.plans[current_idx + 1]
-            typer.echo(f"\n⚡ [TURING MODO AUTO] Encadeando para a próxima onda: {next_plan.wave_id} ({next_plan.name})...")
-            orch.start_wave(next_plan.wave_id, autonomy_mode="AUTO", force=True)
+            typer.echo(
+                f"\n⚡ [TURING MODO AUTO] Encadeando para a próxima onda: {next_plan.wave_id} ({next_plan.name})..."
+            )
+            orch.start_wave(next_plan.wave_id, autonomy_mode="AUTO")
             continue
         else:
-            typer.echo(f"\n🏆 Ciclo completo de todas as ondas finalizado com sucesso!")
+            typer.echo("\n🏆 Ciclo completo de todas as ondas finalizado com sucesso!")
             break
 
 
@@ -288,7 +315,7 @@ def wave_discuss(
     if not topic or not topic.strip():
         typer.echo(
             "⚠️ O comando 'bombe-code wave discuss' requer a descrição da missão ou produto.\n"
-            "Exemplo: bombe-code wave discuss \"App de Onboarding com Quiz Financeiro\"",
+            'Exemplo: bombe-code wave discuss "App de Onboarding com Quiz Financeiro"',
             err=True,
         )
         raise typer.Exit(code=1)
@@ -313,7 +340,7 @@ def wave_plan(
         typer.echo(
             "⚠️ Não é possível executar a etapa PLAN sem um PRD aprovado.\n"
             "Execute primeiro a etapa DISCUSS com sua ideia:\n"
-            "  bombe-code wave discuss \"Descreva sua ideia aqui\"",
+            '  bombe-code wave discuss "Descreva sua ideia aqui"',
             err=True,
         )
         raise typer.Exit(code=1)
@@ -359,15 +386,83 @@ def wave_execute(
 def wave_validate(
     project_dir: Annotated[str, typer.Option("--project-dir", help="Pasta do projeto")] = ".",
 ) -> None:
-    """Executa a validação formal da ONDA com @edith e @nina."""
+    """Executa a validação formal da ONDA com @edith e @nina (com ciclo de retrabalho em AUTO)."""
     from bombe_code.turing.orchestrator import WaveOrchestrator
 
     orch = WaveOrchestrator(project_dir=project_dir)
     res = orch.run_validate()
     if res.get("success"):
         typer.echo("ONDA homologada com sucesso.")
+    elif res.get("blocked"):
+        escalation = (res.get("rework") or {}).get("escalation") or {}
+        typer.echo(
+            "❓ DÚVIDA DE NEGÓCIO — intervenção humana solicitada (último recurso).", err=True
+        )
+        typer.echo(
+            f"Responsável técnico sugerido: {escalation.get('suggested_owner', '@turing')}",
+            err=True,
+        )
+        for bloqueio in escalation.get("blockers", []):
+            typer.echo(f"  • {bloqueio}", err=True)
+        typer.echo(res.get("error") or "", err=True)
+        typer.echo("Resolva e reexecute: bombe-code wave validate", err=True)
     else:
         typer.echo(f"Validação não aprovada: {res.get('error')}", err=True)
+
+
+@wave_cli.command("audit")
+def wave_audit(
+    wave_id: Annotated[str | None, typer.Argument(help="ONDA alvo (padrão: onda ativa)")] = None,
+    project_dir: Annotated[str, typer.Option("--project-dir", help="Pasta do projeto")] = ".",
+) -> None:
+    """Contra-Auditoria Forense (@hoare): 'pedido vs. entregue' com o código como verdade."""
+    from bombe_code.turing.orchestrator import WaveOrchestrator
+
+    orch = WaveOrchestrator(project_dir=project_dir)
+    res = orch.run_audit(wave_id)
+    typer.echo(res.get("message", "Auditoria concluída."))
+    if res.get("success") and res.get("limpa"):
+        typer.echo(
+            f"✅ AUDITORIA: LIMPA (suíte real: {res.get('suite')}). Laudo: {res.get('laudo_path')}"
+        )
+    elif res.get("success"):
+        typer.echo("🚨 FUROS ENCONTRADOS:")
+        for furo in res.get("furos", []):
+            typer.echo(f"  • {furo}")
+        if res.get("reexecucao"):
+            typer.echo(res["reexecucao"])
+
+
+@wave_cli.command("resume")
+def wave_resume(
+    project_dir: Annotated[str, typer.Option("--project-dir", help="Pasta do projeto")] = ".",
+) -> None:
+    """Retoma a ONDA ativa exatamente do checkpoint onde o processo anterior parou."""
+    from bombe_code.turing.orchestrator import WaveOrchestrator
+
+    orch = WaveOrchestrator(project_dir=project_dir)
+    saved = orch.db.load_wave_state() or {}
+    wave_id_salvo = str(saved.get("wave_id") or "").strip()
+    estado_salvo = str(saved.get("state") or "").strip().upper()
+    if not wave_id_salvo:
+        typer.echo(
+            "Nenhuma ONDA persistida para retomar. Inicie com: bombe-code wave start ONDA-001",
+            err=True,
+        )
+        raise typer.Exit(code=1)
+    if estado_salvo in ("COMPLETED", ""):
+        typer.echo(
+            f"A {wave_id_salvo} está concluída ou sem checkpoint válido — nada a retomar. "
+            f"Use: bombe-code wave start {wave_id_salvo}",
+            err=True,
+        )
+        raise typer.Exit(code=1)
+    res = orch.start_wave(wave_id_salvo)
+    typer.echo(res.get("message", "ONDA retomada."))
+    diagnostico = (res.get("diagnosis") or {}).get("summary")
+    if diagnostico:
+        typer.echo(f"Diagnóstico do Kanban: {diagnostico}")
+    typer.echo(f"Etapa ativa: {res.get('stage')}. Continue com: bombe-code wave run")
 
 
 @wave_cli.command("end")
@@ -624,7 +719,11 @@ def version() -> None:
 def upgrade_cmd(
     branch: Annotated[
         str | None,
-        typer.Option("--branch", "-b", help="Branch do repositório Git para upgrade (ex: main, dev-working-ia)"),
+        typer.Option(
+            "--branch",
+            "-b",
+            help="Branch do repositório Git para upgrade (ex: main, dev-working-ia)",
+        ),
     ] = None,
     tag: Annotated[
         str | None,
@@ -644,10 +743,26 @@ def upgrade_cmd(
     ] = True,
     check_only: Annotated[
         bool,
-        typer.Option("--check", "-c", help="Apenas verifica se há novas versões disponíveis no Git sem instalar"),
+        typer.Option(
+            "--check",
+            "-c",
+            help="Apenas verifica se há novas versões disponíveis no Git sem instalar",
+        ),
     ] = False,
 ) -> None:
     """Atualiza a instalação do Bombe Code via Git usando uv tool install."""
+    from .updater import ha_sessao_ativa
+
+    sessoes = ha_sessao_ativa()
+    if sessoes:
+        detalhes = ", ".join(f"PID {s['pid']}" for s in sessoes)
+        typer.echo(
+            f"⏸ Deploy BLOQUEADO: há sessão(ões) do Bombe Code rodando ({detalhes}).\n"
+            "Feche-a(s) antes de atualizar — deploy por cima derruba trabalho em voo "
+            "e deixa o usuário na versão velha sem saber.",
+            err=True,
+        )
+        raise typer.Exit(code=1)
     from .updater import run_upgrade
 
     typer.echo("🔄 Verificando atualizações do Bombe Code...")
@@ -775,10 +890,35 @@ def tui(
     agent: Annotated[str | None, typer.Option("--agent", "-a", help="Agente")] = None,
     session: Annotated[str | None, typer.Option("--session", "-s", help="ID da sessão")] = None,
     project_dir: Annotated[str, typer.Option("--project-dir", help="Diretório")] = ".",
+    quiet: Annotated[
+        bool,
+        typer.Option(
+            "--quiet",
+            "-q",
+            help="Modo menos verboso: apenas anúncios de onda, etapas e vetos (padrão é verboso: streama tudo)",
+        ),
+    ] = False,
 ) -> None:
     """Abre a interface interativa de terminal (TUI Textual)."""
     from ..tui.app import BombeTuiApp
     from ..tui.client import BombeClient
+    from ..turing.progress import BUS
+
+    def _restaurar_terminal() -> None:
+        """Desliga modos de rastreio (mouse/bracketed) deixados por um crash.
+
+        Sem isso, após uma morte abrupta o shell ecoa códigos como
+        '35;100;2M' a cada movimento do mouse (opencode original sofre igual).
+        """
+        try:
+            sys.stdout.write("\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?2004l\x1b[?25h")
+            sys.stdout.flush()
+        except (OSError, ValueError):
+            pass
+
+    if quiet:
+        BUS.set_verbosity("quiet")
+        os.environ["BOMBE_VERBOSITY"] = "quiet"
 
     server_thread: ServerThread | None = None
     if port is None:
@@ -793,6 +933,9 @@ def tui(
         base_url = f"http://127.0.0.1:{port}"
         auth = ("bombe", password)
 
+    import atexit
+
+    atexit.register(_restaurar_terminal)
     try:
         try:
             client = BombeClient(base_url, auth=auth)
@@ -801,6 +944,7 @@ def tui(
             )
             tui_app.run()
         finally:
+            _restaurar_terminal()
             if server_thread:
                 server_thread.stop()
     except Exception as exc:

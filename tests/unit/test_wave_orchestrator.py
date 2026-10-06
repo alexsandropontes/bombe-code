@@ -85,7 +85,7 @@ def test_wave_orchestrator_run_discuss_and_plan(project_env):
 
     mock_factory = MagicMock()
     mock_agent = MagicMock()
-    
+
     def side_effect_run(prompt, context=None):
         m = MagicMock()
         m.data = (
@@ -141,7 +141,9 @@ def test_wave_orchestrator_run_cycle_atomic(project_env):
     # Cria story pré-requisito no disco
     stories_dir = tmp_path / "docs" / "stories"
     stories_dir.mkdir(parents=True, exist_ok=True)
-    (stories_dir / "ST-015.md").write_text("# STORY ST-015\n## INVEST\n## Critérios de Aceite\n### Cenários BDD\n- Dado X\n- Quando Y\n- Então Z\n")
+    (stories_dir / "ST-015.md").write_text(
+        "# STORY ST-015\n## INVEST\n## Critérios de Aceite\n### Cenários BDD\n- Dado X\n- Quando Y\n- Então Z\n"
+    )
 
     mock_factory = MagicMock()
     mock_agent = MagicMock()
@@ -172,7 +174,9 @@ def test_wave_orchestrator_run_execute_batch_and_manual_pause(project_env):
     stories_dir = tmp_path / "docs" / "stories"
     stories_dir.mkdir(parents=True, exist_ok=True)
     for sid in ["ST-001", "ST-002", "ST-003"]:
-        (stories_dir / f"{sid}.md").write_text(f"# STORY {sid}\n## INVEST\n## Critérios de Aceite\n### Cenários BDD\n- Dado X\n- Quando Y\n- Então Z\n")
+        (stories_dir / f"{sid}.md").write_text(
+            f"# STORY {sid}\n## INVEST\n## Critérios de Aceite\n### Cenários BDD\n- Dado X\n- Quando Y\n- Então Z\n"
+        )
 
     mock_factory = MagicMock()
     mock_agent = MagicMock()
@@ -240,6 +244,7 @@ def test_wave_orchestrator_validate_and_end(project_env):
 
 def test_wave_orchestrator_meira_viability_persistence_and_approval(project_env):
     from unittest.mock import MagicMock
+
     from bombe_code.agents.runner import AgentExecutionResult
 
     tmp_path, db = project_env
@@ -268,7 +273,7 @@ def test_wave_orchestrator_meira_viability_persistence_and_approval(project_env)
 
     orchestrator._get_runner = mock_get_runner
 
-    res = orchestrator.run_discuss("Sistema de Pagamentos")
+    orchestrator.run_discuss("Sistema de Pagamentos")
     viab_file = tmp_path / "docs" / "briefings" / "VIABILITY.md"
     assert viab_file.exists()
     assert "Status: APROVADO" in viab_file.read_text(encoding="utf-8")
@@ -276,6 +281,7 @@ def test_wave_orchestrator_meira_viability_persistence_and_approval(project_env)
 
 def test_wave_orchestrator_caroli_dor_disk_inspection(project_env):
     from unittest.mock import MagicMock
+
     from bombe_code.agents.runner import AgentExecutionResult
 
     tmp_path, db = project_env
@@ -319,7 +325,9 @@ def test_wave_orchestrator_caroli_dor_disk_inspection(project_env):
     # Mock runners retornando saídas válidas
     mock_runner_alan = MagicMock()
     mock_runner_alan.run.return_value = AgentExecutionResult(
-        agent_handle="@alan", success=True, output="## Entry Points\n## Fluxo de Navegação\n## Telas"
+        agent_handle="@alan",
+        success=True,
+        output="## Entry Points\n## Fluxo de Navegação\n## Telas",
     )
     mock_runner_ieru = MagicMock()
     mock_runner_ieru.run.return_value = AgentExecutionResult(
@@ -403,4 +411,3 @@ def test_start_wave_greenfield_and_zero_tasks_transition(project_env):
     assert res["success"] is True
     assert res["wave_id"] == "ONDA-001"
     assert orchestrator.state_machine.wave_id == "ONDA-001"
-

@@ -62,7 +62,7 @@ def test_resolve_model_raises_when_no_provider_configured(monkeypatch):
     import pytest
 
     # Mock sem credenciais e sem env
-    monkeypatch.setattr("bombe_code.llm.pydantic_factory.load_auth", lambda: {})
+    monkeypatch.setattr("bombe_code.llm.pydantic_factory.load_auth", dict)
     for k in (
         "ZAI_API_KEY",
         "ZHIPU_API_KEY",
@@ -81,6 +81,3 @@ def test_resolve_model_raises_when_no_provider_configured(monkeypatch):
 
     assert "Nenhum provedor de IA configurado" in str(exc_info.value)
     assert "/connect" in str(exc_info.value)
-
-
-

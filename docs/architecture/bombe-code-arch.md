@@ -1,63 +1,83 @@
 # Arquitetura — Bombe Code
 
 > Reimplementação Python do opencode (MIT). Padrão: monolito modular em camadas com fronteiras explícitas — cada subpacote espelha um pacote do original (ver `docs/research/opencode-dissection.md`).
+> **Atualização as-is (pós-DDD, commits `4e3cbef`/`d84b00e`):** o núcleo de sessão/providers/tools/server permanece parity com o original; o orquestrador ganhou camadas DDD (`domain/`, `application/`, `infrastructure/`) e o motor Turing (`turing/`).
 
-## 1. Estrutura de módulos
+## 1. Estrutura de módulos (as-is, 188 módulos)
 
 ```
 src/bombe_code/                  # backend (path configurado em .bombeconfig)
-├── __init__.py
-├── main.py                      # wiring: monta app FastAPI + CLI (composition root)
+├── __init__.py / __main__.py    # boot + __version__
 ├── config/                      # F1 — parity: opencode/src/config + core/v1/config
 │   ├── paths.py                 # XDG (platformdirs) + descoberta de bombe.json(c)
 │   ├── loader.py                # merge profundo, concat de arrays
-│   └── schema.py                # Pydantic: campos do config (parity com Info)
+│   └── project_config.py        # ProjectConfigManager (.bombeconfig YAML, ST-019)
 ├── storage/                     # F1 — parity: opencode/src/storage/storage.ts
 │   ├── kv.py                    # JSON por arquivo + lock
-│   └── session_store.py         # info/message/part
+│   ├── session_store.py         # info/message/part
+│   └── project_db.py            # SQLite .bombe-code/state.db (Turing/Kanban — Onda 2)
 ├── providers/                   # F2 — parity: provider/provider.ts, auth, models-dev
 │   ├── registry.py              # list/get/parseModel/closest/defaultModel
-│   ├── models_dev.py            # catálogo + cache TTL 5min
+│   ├── models_dev.py            # catálogo + cache TTL
 │   ├── auth.py                  # auth.json (0600)
-│   └── adapters/                # parity: llm/src/providers (anthropic, openai, …)
+│   ├── resolver.py              # resolução hierárquica + failover de provedores
+│   └── adapters/                # parity: llm/src/providers (anthropic, openai, z.ai, …)
+├── llm/                         # Onda 2 — PydanticAiFactory e rotas de provedor
+│   ├── pydantic_factory.py      # fábrica tipada de agentes (pydantic-ai)
+│   ├── provider_rotator.py      # rotação/failover com cooldown
+│   └── quota_detector.py        # detecção de quota/timeout por provedor
 ├── session/                     # F3/F4 — parity: session/*.ts
-│   ├── models.py                # Session, Message, Part (Pydantic) — parity schema/v1
-│   ├── crud.py                  # persistência via storage
-│   ├── system.py                # system prompt
-│   ├── loop.py                  # runLoop — parity session/prompt.ts
-│   ├── processor.py             # stream → Parts — parity session/processor.ts
-│   └── to_provider.py           # mensagens → formato do provider
+│   ├── models.py / crud.py / system.py
+│   ├── loop.py / processor.py / to_provider.py / lifecycle.py
+├── domain/                      # DDD — entidades e regras puras (sem I/O)
+│   ├── wave/                    # models (WaveState/Wave), sequencer, workspace, repository
+│   ├── intent/                  # vocabulário de intenções
+│   └── session/                 # regras de sessão
+├── application/                 # DDD — casos de uso
+│   ├── wave/service.py          # orquestração de alto nível da ONDA
+│   └── intent/                  # aplicação de intenções
+├── infrastructure/storage/      # DDD — adaptadores de persistência
+├── turing/                      # ⭐ Turing Runtime Engine (Onda 2, EP-006..010)
+│   ├── state_machine.py         # FSM da ONDA (WaveType, sub-stages)
+│   ├── orchestrator.py          # run_discuss/run_plan/run_cycle/run_validate/…
+│   ├── classifier.py            # NLU determinística local (0 tokens)
+│   ├── waiter.py                # espera 3-tiers / auto-cascade
+│   ├── gates.py                 # TemplateGate, SealGate, ConsumerHandoffGate
+│   ├── upstream_gates.py        # PRD, Journey, Architecture, DB, StoryDoR (INVEST)
+│   ├── upstream_profiler.py     # perfil Lean Inception adaptativo
+│   ├── review_gate.py           # duplo review @aniche + @unclebob + anti-fraude
+│   ├── handoff_gate.py          # gate de entrada do consumidor
+│   ├── kanban.py                # KanbanManager (SQLite + markdown, Andon flag)
+│   ├── pbb.py                   # decomposição PBB em tarefas atômicas
+│   └── prompt_assembler.py      # LEGO de prompts por DeliveryTarget
+├── agents/                      # EP-003 — 23 definições (definitions/*.md) + registry/runner
+├── skills/                      # EP-003 — discovery, manifest, registry on-demand
+├── commands/                    # slash commands (loader, templates)
 ├── tools/                       # F5 — parity: opencode/src/tool/*
-│   ├── base.py                  # Def, ctx, truncate
-│   ├── registry.py              # builtins + custom + plugins
-│   └── builtin/                 # read, write, edit, shell, grep, glob, …
+│   ├── base.py / registry.py
+│   └── builtin/                 # read, write, edit, shell, grep, glob, snippet_*, …
 ├── permissions/                 # F6 — parity: permission/index.ts
-│   ├── rules.py                 # evaluate (última regra vence)
-│   ├── ask.py                   # fila de aprovação (asyncio) ligada ao server
-│   └── shell_scan.py            # AST scan → permissões bash/external_directory
+│   ├── rules.py / shell_scan.py
+│   └── stage_guard.py           # trava de escrita em src/ nas etapas Upstream
 ├── server/                      # F7 — parity: server/server.ts + routes
-│   ├── app.py                   # FastAPI, auth basic, CORS localhost
-│   ├── routes/                  # session, event(SSE), model, agent, fs, permission, …
-│   └── events.py                # barramento + SSE batching ~16ms + Last-Event-ID
-├── cli/                         # F9 (path configurado: services) — parity yargs + packages/cli
-│   └── main.py                  # Typer: run, tui(default), serve, web, models, …
-├── tui/                         # F8/F15 (path configurado: frontend) — parity packages/tui
-│   ├── app.py                   # Textual App
-│   ├── screens/                 # chat, permission, question, dialogs, palette
-│   ├── widgets/                 # parts, diff, prompt input
-│   └── theme/assets/            # themes JSON (dracula, catppuccin, …)
-├── web/                         # F11 (bônus) — parity packages/app (Reflex)
-├── desktop/                     # F16 (bônus) — parity packages/desktop (pywebview)
-├── sdk/                         # F10 (bônus) — cliente gerado do OpenAPI
-├── plugins/                     # F13 (bônus) — parity packages/plugin
-├── lsp/                         # F12 (bônus) — parity opencode/src/lsp
-├── snapshot/                    # F12 (bônus) — parity snapshot/ (git)
-├── mcp/                         # F14 (bônus)
-└── acp/                         # F14 (bônus)
-tests/
-├── unit/                        # mocks/fakes permitidos
-├── integration/                 # DB real → aqui: storage real em tmp, HTTP real
-└── e2e/                         # HTTP real ponta-a-ponta (harness)
+│   ├── app.py / bus.py / questions.py / deps.py
+│   └── routes/                  # session, meta, wave (SSE real)
+├── cli/                         # F9 — Typer: run, tui(default), serve, wave, project, snippet, mode, …
+├── tui/                         # F8/F15 — Textual: app, client, commands, widgets/, themes
+├── registry/                    # EP-009 — catálogo declarativo v2
+│   ├── starters/                # 38 manifests YAML + 27 blueprints físicos
+│   └── snippets/                # 55 snippets testados (python/node/go/java/dotnet/react)
+├── starters/                    # EP-005 — engine de scaffolding, matcher, decision
+├── snippets/                    # EP-005 — registry v1 (legado, baseline)
+├── worktree/                    # git worktrees por onda/stories
+├── sdk/                         # F10 (bônus) — cliente do OpenAPI
+├── web/                         # F11 (bônus) — Reflex (extra opcional `web`)
+├── desktop/                     # F16 (bônus) — pywebview (extra opcional `desktop`)
+├── plugins/ / lsp/ / snapshot/ / mcp/ / acp/ / images/ / formatters/   # bônus parity
+└── models/                      # state (modelos de estado do runtime)
+tests/                           # 90 arquivos — 414 testes verdes
+├── unit/                        # 72 arquivos (mocks/fakes permitidos)
+└── integration/                 # 18 arquivos (storage/HTTP REAIS, sem mocks)
 ```
 
 Guard rail: NENHUM arquivo fora de `src/bombe_code/`, `tests/`, `docs/`.
@@ -96,21 +116,24 @@ Guard rail: NENHUM arquivo fora de `src/bombe_code/`, `tests/`, `docs/`.
 ## 4. Estratégia de dependências (UV)
 
 - `uv` + `pyproject.toml` (workspace único). Runtime: `fastapi`, `uvicorn`, `typer`, `pydantic`, `platformdirs`, `httpx`, `textual`, `rich`, `jsonpath`/`jsonc` para config, `tree-sitter`/`bashlex` (scan shell), `pygls` (LSP), `sse-starlette` ou FastAPI nativo.
-- Reflex e webview entram como extras opcionais: `uv sync --extra web`, `--extra desktop`.
+- Reflex entra como **dependência obrigatória** (web UI é feature interna); pywebview como extra opcional: `--extra desktop`.
 - Testes: `pytest`, `pytest-asyncio`, `respx` (HTTP), `coverage`.
 
-## 5. Camadas e responsabilidades
+## 5. Camadas e responsabilidades (as-is pós-DDD)
 
 ```
 cli / tui / web / sdk      →  interface (consomem server ou core in-process)
-server                     →  contratos HTTP/SSE + auth + permissão ponta
+server                     →  contratos HTTP/SSE + auth + permissão ponte
+application (wave/intent)  →  casos de uso da ONDA (orquestração de alto nível)
+turing                     →  motor determinístico: FSM, gates, kanban, PBB, prompts
+domain (wave/intent/session) → entidades e regras puras (zero I/O)
 session (loop/processor)   →  orquestração do turno (harness)
 tools / permissions        →  ação no mundo (isoladas, testáveis sem LLM)
-providers                  →  fronteira externa LLM (adapters)
-storage / config           →  fronteira disco (XDG)
+llm / providers            →  fronteira externa LLM (adapters + failover)
+storage / config           →  fronteira disco (XDG JSON + SQLite .bombe-code/)
 ```
 
-Regras de dependência: `interface → server → session → {tools, providers}`; `storage/config` só é dependido pelo core; nada importa de `tui/web/cli` (evita ciclo).
+Regras de dependência: `interface → server → application → {turing, session} → {tools, providers}`; `domain` não importa de ninguém; `storage/config` só é dependido pelo core e pela infraestrutura; nada importa de `tui/web/cli` (evita ciclo).
 
 ## 6. Decisões-chave (ADR curtos)
 
@@ -119,3 +142,7 @@ Regras de dependência: `interface → server → session → {tools, providers}
 3. **Server in-process na TUI** — parity com worker do original; mesmo event bus.
 4. **Um `LLMEvent` unificado** por provider — adapters traduzem streams.
 5. **Harness é a spine** — F1..F9 na ordem fixa; bônus só após harness green.
+6. **Refactor DDD (pós-v0.1.19)** — domínio da ONDA extraído para `domain/` (regras puras) + `application/` (casos de uso) + `infrastructure/` (persistência), mantendo o harness parity intacto.
+7. **SQLite só para estado do Turing** — `state.db` em `.bombe-code/` guarda onda ativa, kanban e checkpoints; sessões continuam em JSON XDG.
+8. **Registry declarativo v2 (YAML)** — 38 starters e 55 snippets em `registry/` substituem os builtins em código como fonte oficial; `starters/`/`snippets/` v1 permanecem como baseline/legado.
+9. **NLU determinística primeiro** — `turing/classifier.py` resolve intenções rotineiras com 0 tokens; LLM classificadora só entra sob ambiguidade (`needs_llm=True`).

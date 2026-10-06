@@ -52,7 +52,12 @@ Modelagem alinhada com as entidades padrão do template."""
 def test_pbb_caroli_mandatory_story_zero(tmp_path: Path):
     # Sem starter decision: backlog normal
     stories = [
-        {"id": "ST-001", "title": "Cadastro de Usuários", "requires_db": True, "requires_frontend": True},
+        {
+            "id": "ST-001",
+            "title": "Cadastro de Usuários",
+            "requires_db": True,
+            "requires_frontend": True,
+        },
     ]
     tasks_normal = PBBDecomposer.decompose_backlog(stories, project_dir=tmp_path)
     task_ids_normal = [t.id for t in tasks_normal]
@@ -85,7 +90,9 @@ def test_downstream_execution_story_zero(tmp_path: Path):
     save_starter_decision(tmp_path, match_res)
 
     orch = WaveOrchestrator(project_dir=tmp_path)
-    orch.kanban.add_card(story_id="STORY-0", wave_id="ONDA-001", title="Fundação Starter", agent="@unclebob")
+    orch.kanban.add_card(
+        story_id="STORY-0", wave_id="ONDA-001", title="Fundação Starter", agent="@unclebob"
+    )
 
     s0_tasks = PBBDecomposer.create_story_zero("python-mono", match_res.to_dict())
 

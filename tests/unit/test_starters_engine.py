@@ -99,8 +99,12 @@ def test_apply_chatbot_starter(tmp_path: Path):
 
     assert res["success"] is True
     assert (target / ".bombeconfig").is_file()
-    assert (target / "src" / "backend" / "app" / "main.py").is_file() or (target / "backend" / "app" / "main.py").is_file()
-    assert (target / "src" / "frontend" / "app.py").is_file() or (target / "frontend" / "app.py").is_file()
+    assert (target / "src" / "backend" / "app" / "main.py").is_file() or (
+        target / "backend" / "app" / "main.py"
+    ).is_file()
+    assert (target / "src" / "frontend" / "app.py").is_file() or (
+        target / "frontend" / "app.py"
+    ).is_file()
 
 
 def test_apply_backend_blueprint_starter(tmp_path: Path):

@@ -1,7 +1,7 @@
 # STORY ST-024: Catálogo de Starters Oficiais (Python, Go, Node, React)
 
 > **Épico:** [EP-005: Starters Engine, Snippets Registry & LLM Snippet Tool](file:///home/lexpontes/projetos/struct/bombe-code/docs/backlog/epics/EP-005-starters-and-snippets-engine.md)  
-> **Status:** READY  
+> **Status:** DONE
 > **Prioridade:** ALTA  
 > **Responsáveis:** @barbara (Python/Go), @ryan (Node/TS), @ada (Frontend), @unclebob (Clean Code)  
 > **Modo:** tdd-code  

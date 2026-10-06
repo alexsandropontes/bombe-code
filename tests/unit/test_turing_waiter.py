@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+
 from bombe_code.turing.waiter import TuringAction, TuringWaiter
 
 
@@ -71,5 +72,5 @@ async def test_waiter_tier_2_resume():
     action = await waiter.attend("continue de onde parou por favor")
     assert action.tier == 2
     assert action.intention == "workflow_resume"
-    assert action.command == "/wave start"
+    assert action.command == "/wave resume"
     assert not action.needs_llm

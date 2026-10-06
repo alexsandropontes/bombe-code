@@ -135,4 +135,3 @@ def test_check_explicit_approval_inspects_artifact_content():
     ok, reason = TuringWaveOrchestrator._check_explicit_approval(res, artifact)
     assert ok is True
     assert "Aprovado" in reason
-

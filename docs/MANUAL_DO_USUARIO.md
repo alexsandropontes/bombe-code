@@ -1,6 +1,6 @@
 # 📖 Manual do Usuário — Bombe Code
 
-Bem-vindo ao **Bombe Code**, o ambiente soberano de engenharia de software com **Governança Determinística pelo Turing Runtime**, suporte híbrido a **TDD Formal** e **Vibe Coding**, e orquestração de **23 Agentes Especialistas**.
+Bem-vindo ao **Bombe Code**, o ambiente soberano de engenharia de software com **Governança Determinística pelo Turing Runtime**, suporte híbrido a **TDD Formal** e **Vibe Coding**, e orquestração de **24 Agentes Especialistas**.
 
 ---
 
@@ -18,7 +18,7 @@ Bem-vindo ao **Bombe Code**, o ambiente soberano de engenharia de software com *
    - [Iniciar uma Nova ONDA (`/wave start`)](#iniciar-uma-nova-onda-wave-start)
    - [Alerta de Ondas Incompletas & Proteção `--force`](#alerta-de-ondas-incompletas--proteção---force)
    - [Execução Passo a Passo vs Modo Automático](#execução-passo-a-passo-vs-modo-automático)
-6. [Elenco Oficial de 23 Agentes Especialistas](#-elenco-oficial-de-23-agentes-especialistas)
+6. [Elenco Oficial de 24 Agentes Especialistas](#-elenco-oficial-de-23-agentes-especialistas)
 7. [Atalhos de Teclado na TUI](#-atalhos-de-teclado-na-tui)
 8. [Caixa de Entrada Multilinha & Colagem Segura (Paste Support)](#-caixa-de-entrada-multilinha--colagem-segura-paste-support)
 9. [Streaming em Tempo Real & Raciocínio ao Vivo](#-streaming-em-tempo-real--raciocínio-ao-vivo)
@@ -159,9 +159,9 @@ Você tem dois jeitos elegantes de trabalhar:
 
 ---
 
-## 👥 Elenco Oficial de 23 Agentes Especialistas
+## 👥 Elenco Oficial de 24 Agentes Especialistas
 
-O Bombe Code conta com 23 agentes especialistas de elite (12 brasileiros e 11 internacionais) que podem ser chamados com `@nome`:
+O Bombe Code conta com 24 agentes especialistas de elite (12 brasileiros e 11 internacionais) que podem ser chamados com `@nome`:
 
 ### Upstream (Concepção, Inception, Arquitetura & Refinamento)
 * **`@meira`** (Silvio Meira — Brasil): Senior Research & Viability Analyst. Análise de viabilidade técnica, mercado e inovação.
@@ -247,7 +247,21 @@ Digite `/` no campo de prompt para ter sugestões instantâneas:
 * `/undo` — Reverte o último turno e alterações de arquivo via git.
 * `/rca <incidente>` — Executa Análise de Causa Raiz determinística com `@unclebob`.
 * `/simplify <alvo>` — Conduz auditoria de simplificação de código com `@ieru` e `@unclebob`.
+* `/verbosity [verbose|quiet]` — Alterna a verbosidade do runtime: `verbose` (padrão) streama cada letra, raciocínio e tool call dos agentes ao vivo; `quiet` exibe apenas anúncios de onda, etapas e vetos.
 * `/exit` — Sai da aplicação.
+
+### 🤖 Autonomia Total: o que acontece quando algo é vetado
+
+Em modo `AUTO`, nenhum veto interrompe o processo. Quando um validador reprova a ONDA, o Turing determinístico:
+1. **Classifica** a causa do veto (formato do parecer, gap de produto, falha de testes ou bloqueio declarado);
+2. **Rastreia o autor** do artefato causador (PRD→`@grace`, story→`@caroli`, schema→`@codd`, arquitetura→`@ieru`, testes→`@aniche`);
+3. **Devolve o bloqueio** para esse autor corrigir o artefato upstream;
+4. **Re-queima as stories afetadas** no ciclo TDD (RED→GREEN→REFACTOR);
+5. **Re-auditá** com o validador original — e repete até aprovar (2 rodadas autônomas).
+
+Somente após esgotar o ciclo autônomo você é convocado — com uma **Dúvida de Negócio** estruturada (bloqueios listados + responsável técnico sugerido). Ao validar cada onda, o runtime arquiva e encadeia a próxima automaticamente; na onda final, o produto está pronto para a sua navegação de aceite.
+
+**Dica:** para acompanhar tudo que os agentes pensam e fazem, fique no modo `verbose` (padrão). Para uma execução executiva enxuta, use `bombe-code tui --quiet`.
 
 ---
 

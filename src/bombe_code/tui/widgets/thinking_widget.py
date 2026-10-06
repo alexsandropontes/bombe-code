@@ -70,11 +70,13 @@ class ThinkingWidget(Static):
         if not self.active or not self.message:
             self.update("")
             return
+        from rich.markup import escape
+
         icon = self.FRAMES[self._frame_idx]
         dots = self.DOTS[self._dot_idx]
         self.update(
-            f"[{TOKENS['secondary']} bold]{icon}[/{TOKENS['secondary']} bold] "
-            f"[{TOKENS['text_muted']} italic]{self.message}{dots}[/{TOKENS['text_muted']} italic]"
+            f"[{TOKENS['secondary']} bold]{icon}[/] "
+            f"[{TOKENS['text_muted']} italic]{escape(self.message)}{dots}[/]"
         )
 
     def on_unmount(self) -> None:

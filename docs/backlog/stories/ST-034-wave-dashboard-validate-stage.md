@@ -1,7 +1,7 @@
 # STORY ST-034: Visualização de Bloqueios e DEV_DONE no Dashboard da ONDA
 
 > **Épico:** EP-007  
-> **Status:** IN_PROGRESS  
+> **Status:** DONE
 > **Responsáveis:** @turing, @alan, @norman  
 > **Prioridade:** MÉDIA  
 

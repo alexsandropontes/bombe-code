@@ -1,6 +1,7 @@
 """Testes unitários para UpstreamProfiler (Lean Inception & PBB)."""
 
 from pathlib import Path
+
 from bombe_code.turing.prompt_assembler import DeliveryTarget
 from bombe_code.turing.upstream_profiler import (
     InceptionLevel,
