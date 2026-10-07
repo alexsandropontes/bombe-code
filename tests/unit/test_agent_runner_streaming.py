@@ -229,7 +229,6 @@ def test_tool_result_do_pydantic_real_extrai_de_part_content(monkeypatch):
 def test_abort_ativo_nem_invoca_o_provedor(monkeypatch):
     """Fechamento graceful: com ABORT_EVENT ativo, o runner retorna imediatamente
     sem chamar o provedor — zumbis de background nunca mais."""
-    from types import SimpleNamespace as NS
 
     from bombe_code.agents.runner import AgentRunner
     from bombe_code.turing.progress import ABORT_EVENT
