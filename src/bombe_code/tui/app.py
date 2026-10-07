@@ -80,8 +80,14 @@ class BombeTuiApp(App):
         # PARIDADE OPENCODE: Ctrl+C fecha a aplicação; Ctrl+Shift+C é a cópia
         # (na maioria dos terminais o próprio terminal copia — o app não segura
         # a tecla; quando o terminal entrega, o app copia a transcrição).
-        Binding("ctrl+c", "quit", "Sair (opencode)", show=False),
-        Binding("ctrl+shift+c", "copiar_tela", "Copiar transcrição", show=False),
+        # CÓPIA REMOTA (opencode original): Ctrl+Shift+C copia via OSC52 —
+        # funciona com o app rodando em SSH (o terminal LOCAL escreve na
+        # área de transferência da sua máquina).
+        Binding("ctrl+shift+c", "copiar_tela", "Copiar", show=False),
+        # Ctrl+C e Ctrl+Shift+W JAMAIS fecham sozinhos (terminais entregam os
+        # combos como Ctrl+C puro). Sair = Ctrl+C 2× ou Ctrl+Q.
+        Binding("ctrl+c", "ctrl_c_press", "Sair (2×)", show=False),
+        Binding("ctrl+shift+w", "noop", show=False),
         Binding("escape", "escape_press", "Interromper (2× ESC)", show=False),
         Binding("ctrl+p", "command_palette", "Paleta de Comandos", show=True),
         Binding("ctrl+b", "toggle_sidebar", "Painel Lateral", show=True),
@@ -734,6 +740,9 @@ class BombeTuiApp(App):
 
     _last_ctrl_c_ts: float = 0.0
 
+    def action_noop(self) -> None:
+        """Combo mudo: Ctrl+Shift+W/Ctrl+Shift+afins nunca fecham o app."""
+
     def action_ctrl_c_press(self) -> None:
         """Ctrl+C SÓ fecha com DUPLO aperto (1º = dica). Nada de sair sozinho."""
         import time as _t
@@ -744,7 +753,9 @@ class BombeTuiApp(App):
             return
         self._last_ctrl_c_ts = agora
         chat = self.query_one("#chat-view", ChatView)
-        chat.mount(Static("[dim]⏸ pressione Ctrl+C novamente para sair · cópia = Ctrl+Shift+C[/dim]"))
+        chat.mount(
+            Static("[dim]⏸ pressione Ctrl+C novamente para sair · cópia = Ctrl+Shift+C[/dim]")
+        )
 
     def action_copiar_tela(self) -> None:
         """Copia a transcrição: OSC52 (funciona sobre SSH) + pyperclip local."""
@@ -753,8 +764,7 @@ class BombeTuiApp(App):
 
         chat = self.query_one("#chat-view", ChatView)
         texto = "\n\n".join(
-            str(getattr(w, "renderable", None) or getattr(w, "content", ""))
-            for w in chat.children
+            str(getattr(w, "renderable", None) or getattr(w, "content", "")) for w in chat.children
         ).strip()
         try:
             # OSC52: o TERMINAL LOCAL escreve na área de transferência da sua

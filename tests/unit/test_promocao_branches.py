@@ -125,6 +125,10 @@ def test_release_calcula_versao_por_tema_dos_commits(repo_ia: Path):
     import subprocess as _sp
 
     tags = _sp.run(
-        ["git", "tag", "-l", "v*"], cwd=str(repo_ia), capture_output=True, text=True
+        ["git", "tag", "-l", "v*"],
+        cwd=str(repo_ia),
+        capture_output=True,
+        text=True,
+        check=False,
     ).stdout.split()
     assert "v9.9.9" in tags and "v0.1.0" in tags

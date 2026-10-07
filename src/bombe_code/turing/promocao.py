@@ -21,6 +21,7 @@ import logging
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -122,7 +123,7 @@ class PromotorDeBranches:
             maior, menor, patch = (int(x) for x in tag.lstrip("v").split("."))
         except ValueError:
             return "0.1.0"
-        rc, logs = self._git("log", f"{tag}..{BRANCH_TRABALHO}", "--pretty=%s")
+        _, logs = self._git("log", f"{tag}..{BRANCH_TRABALHO}", "--pretty=%s")
         temas = (logs or "").lower()
         if "feat" in temas:
             return f"{maior}.{menor + 1}.0"
@@ -218,7 +219,7 @@ class PromotorDeBranches:
         """Analisa os commits desde a última tag e sugere a próxima versão."""
         tag, _ = self.ultima_versao()
         faixa = f"{tag}..{BRANCH_TRABALHO}" if tag else BRANCH_TRABALHO
-        rc, logs = self._git("log", faixa, "--pretty=%s")
+        _, logs = self._git("log", faixa, "--pretty=%s")
         temas = [t.strip() for t in (logs or "").splitlines() if t.strip()]
         sugestao = self.calcular_proxima_versao()
         return {
