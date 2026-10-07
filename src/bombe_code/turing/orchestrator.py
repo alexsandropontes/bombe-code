@@ -2344,23 +2344,62 @@ class WaveOrchestrator:
                     or "reprovado pelo review"
                 )
 
-                # ── CICLO AUTÔNOMO DE RETRABALHO DIRECIONADO ──
-                # Review reprovou? Re-queima a story com o feedback do review
-                # ANEXADO ao prompt do dev (não é chute de agente por keyword).
+                # ── ESCADA DE CONVERGÊNCIA (tudo autônomo em matéria técnica) ──
+                # Degrau 1-2: re-burn dirigido (dev + feedback do review)
+                # Degrau 3-4: @caroli REFINA a story com o feedback (pode ser a
+                #             story mal escrita) e o ciclo TDD roda de novo
+                # Só APÓS a escada completa → escalação ao humano (furo real)
+                escalacao = None
+                assinaturas_veto = [motivo]
                 retrabalho_ok = False
-                for tentativa in range(1, 3):  # 2 tentativas de correção dirigida
+
+                def _sig(t: str) -> str:
+                    import re as _re
+
+                    return "|".join(sorted(set(_re.findall(r"[a-zà-ú]{6,}", t.lower())))[:10])
+
+                for degrau, refinar_story in ((1, False), (2, False), (3, True), (4, True)):
+                    if refinar_story:
+                        BUS.publish(
+                            "veto_rework",
+                            agent="@caroli",
+                            text=(
+                                f"📝 [DEGRAU {degrau}/4] Dois ciclos reprovados com o mesmo teor — "
+                                f"a STORY pode estar ambígua. @caroli refinando critérios com o "
+                                f"feedback do review..."
+                            ),
+                        )
+                        runner_caroli = self._get_runner("@caroli")
+                        if runner_caroli:
+                            prompt_refino = (
+                                f"A story {story} foi REPROVADA duas vezes pelo Tech Lead no mesmo ponto.\n"
+                                f"Feedback do review: {motivo}\n\n"
+                                f"Refine a story (critérios de aceite/BDD) eliminando a ambiguidade apontada — "
+                                f"sem cortar escopo contratado. Salve o arquivo atualizado da story."
+                            )
+                            res_caroli = runner_caroli.run(
+                                self._assemble_prompt("@caroli", prompt_refino)
+                            )
+                            self._record_telemetry(
+                                "EXECUTE", "@caroli (refino de story)", res_caroli
+                            )
+                            self._extract_and_write_project_files(getattr(res_caroli, "output", ""))
+
                     BUS.publish(
                         "veto_rework",
                         agent="@unclebob",
                         text=(
-                            f"🔁 Ciclo reprovado para {story} (tentativa {tentativa}/2). "
-                            f"Motivo: {motivo[:180]}. Re-queimando com feedback direcionado..."
+                            f"🔥 [DEGRAU {degrau}/4] Re-queimando {story} no ciclo TDD"
+                            + (
+                                " com story refinada."
+                                if refinar_story
+                                else " com feedback direcionado."
+                            )
                         ),
                     )
                     cycle_res = self._run_cycle_inner(story, rework_feedback=motivo)
                     if cycle_res.get("success"):
                         retrabalho_ok = True
-                        # Andon: correção dirigida convergiu → card flui de novo
                         card_pos = self.kanban.get_card(story)
                         if card_pos and card_pos.get("is_blocked"):
                             self.kanban.unblock_card(story)
@@ -2371,39 +2410,23 @@ class WaveOrchestrator:
                         or cycle_res.get("error")
                         or motivo
                     )
-                    # NÃO-CONVERGÊNCIA: mesmo veto repetido → não insiste
-                    import re as _re
-
-                    def _sig(t: str) -> str:
-                        return "|".join(sorted(set(_re.findall(r"[a-zà-ú]{6,}", t.lower())))[:10])
-
-                    if _sig(novo_motivo) == _sig(motivo):
-                        BUS.publish(
-                            "escalation",
-                            agent="@turing",
-                            text=(
-                                f"🔁 [NÃO-CONVERGÊNCIA] {story}: o mesmo veto persiste após correção "
-                                "dirigida. Insistir não resolve — escalando com o parecer completo."
-                            ),
-                        )
-                        motivo = novo_motivo
-                        break
+                    assinaturas_veto.append(_sig(novo_motivo))
                     motivo = novo_motivo
 
-                if not retrabalho_ok and not cycle_res.get("success"):
+                if not retrabalho_ok:
                     escalacao = {
                         "type": "business_question",
                         "story": story,
                         "reason": motivo,
                         "review_output": cycle_res.get("review_output", ""),
                         "message": (
-                            f"❓ DÚVIDA DE NEGÓCIO — {story} não convergiu após 2 correções dirigidas.\n"
-                            f"Motivo do veto: {motivo}\n\n"
-                            "Como PM você pode (a resposta é roteada ao responsável e o ciclo segue sozinho):\n"
-                            "1. INFORMAR — digite a informação que falta (biblioteca, serviço aceito, restrição)\n"
-                            "2. SIMPLIFICAR O ACEITE — diga o novo critério mínimo desta story\n"
+                            f"❓ DÚVIDA DE NEGÓCIO — {story} não convergiu na escada completa "
+                            "(2× correção dirigida + 2× refinamento de story).\n"
+                            f"Último veto: {motivo}\n\n"
+                            "1. INFORMAR — digite a informação que falta\n"
+                            "2. SIMPLIFICAR O ACEITE — diga o novo critério mínimo\n"
                             "3. ADIAR — mover a story para a próxima onda\n"
-                            f"Parecer completo do review: {cycle_res.get('review_output', '')[:2000]}"
+                            f"Parecer do review: {cycle_res.get('review_output', '')[:2000]}"
                         ),
                         "suggested_owner": "@unclebob",
                     }
@@ -2417,6 +2440,9 @@ class WaveOrchestrator:
                         "escalation": escalacao,
                         "error": escalacao["message"],
                     }
+                cycle_res.setdefault(
+                    "message", f"Story {story} aprovada na escada de convergência."
+                )
                 # Retrabalho dirigido convergiu: segue para a próxima story
                 cycle_res.setdefault("message", f"Story {story} aprovada após retrabalho dirigido.")
 
