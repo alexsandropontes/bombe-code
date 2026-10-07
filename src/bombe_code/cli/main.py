@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import subprocess
 import sys
 import threading
 import time
@@ -509,6 +510,102 @@ project_cli = typer.Typer(
     name="project", help="Comandos de configuração do projeto (.bombeconfig)."
 )
 app.add_typer(project_cli, name="project")
+
+
+@project_cli.command("release")
+def project_release(
+    versao: Annotated[
+        str | None, typer.Argument(help="Versão explícita (ex: 0.3.0). Vazio = sugestão automática")
+    ] = None,
+    mensagem: Annotated[
+        str | None, typer.Option("--mensagem", "-m", help="Mensagem do commit de release")
+    ] = None,
+    project_dir: Annotated[str, typer.Option("--project-dir", help="Pasta do projeto")] = ".",
+) -> None:
+    """Empacota e TAGA a versão (feat → +0.1.0, correção → +0.0.1; você pode impor outra)."""
+    from bombe_code.turing.promocao import PromotorDeBranches
+
+    promotor = PromotorDeBranches(project_dir)
+    analise = promotor.analisar_release()
+    typer.echo(f"Última tag: {analise['ultima_tag']} | commits desde: {analise['total']}")
+    typer.echo(
+        f"Versão sugerida: {analise['versao_sugerida']}"
+        + (f" | imposta: {versao}" if versao else "")
+    )
+    res = promotor.gerar_release(mensagem=mensagem, versao=versao)
+    if res.success:
+        typer.echo(f"✅ {res.mensagem}")
+        for d in res.detalhes:
+            typer.echo(f"  • {d}")
+    else:
+        typer.echo(f"❌ {res.mensagem}", err=True)
+        raise typer.Exit(code=1)
+
+
+@project_cli.command("ship")
+def project_ship(
+    destino: Annotated[
+        str,
+        typer.Argument(help="Destino do ship: dev (padrão) | hml (pré-produção) | main (produção)"),
+    ] = "dev",
+    versao: Annotated[
+        str | None,
+        typer.Option("--versao", "-v", help="Versão do release (vazio = sugestão automática)"),
+    ] = None,
+    mensagem: Annotated[
+        str | None, typer.Option("--mensagem", "-m", help="Mensagem do release/squash")
+    ] = None,
+    project_dir: Annotated[str, typer.Option("--project-dir", help="Pasta do projeto")] = ".",
+) -> None:
+    """Release + promoção + push do destino (dev | hml | main)."""
+    from bombe_code.turing.promocao import PROXIMA_PROMOCAO, PromotorDeBranches
+
+    promotor = PromotorDeBranches(project_dir)
+    destino_norm = destino.strip().lower()
+    if destino_norm not in PROXIMA_PROMOCAO and destino_norm != "dev":
+        typer.echo(f"❌ Destino inválido: {destino}. Use dev, hml ou main.", err=True)
+        raise typer.Exit(code=1)
+
+    # 1. Release (versão + tag) — sempre antes do ship
+    res_rel = promotor.gerar_release(mensagem=mensagem, versao=versao)
+    if not res_rel.success:
+        typer.echo(f"❌ Release: {res_rel.mensagem}", err=True)
+        raise typer.Exit(code=1)
+    typer.echo(f"✅ {res_rel.mensagem}")
+
+    # 2. Promoção ao destino
+    if destino_norm == "dev":
+        res_promo = promotor.promover_para_dev(mensagem or f"feat: release v{versao or 'auto'}")
+    else:
+        res_promo = promotor.promover_fase(destino_norm)
+    if not res_promo.success:
+        typer.echo(f"❌ Promoção: {res_promo.mensagem}", err=True)
+        raise typer.Exit(code=1)
+    typer.echo(f"✅ {res_promo.mensagem}")
+
+    # 3. Push do destino + tag (humano no remoto: aqui é o ship explícito dele)
+    rc_push = subprocess.run(
+        ["git", "push", "--no-verify", "origin", destino_norm],
+        cwd=project_dir,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if rc_push.returncode == 0:
+        rc_tag = subprocess.run(
+            ["git", "push", "--no-verify", "origin", "--tags"],
+            cwd=project_dir,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        typer.echo(
+            "🚀 Ship concluído — remoto atualizado."
+            if rc_tag.returncode == 0
+            else "🚀 Ship concluído (branch enviada; tags falharam)."
+        )
+    else:
+        typer.echo(f"⚠️ Promoção local concluída; o push falhou: {rc_push.stderr.strip()}", err=True)
 
 
 @project_cli.command("detect")
