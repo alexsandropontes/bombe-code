@@ -579,3 +579,36 @@ def test_escada_completa_antes_de_escalar_humano(project_env):
     assert chamadas["ciclo"] == 5  # 1 original + 4 degraus
     assert chamadas["caroli"] == 2  # degraus 3 e 4
     assert res["escalation"]["type"] == "business_question"
+
+
+def test_andon_impedimento_para_a_linha_nenhuma_story_avanca(project_env):
+    """REGRA ABSOLUTA: bandeira vermelha = IMPEDIMENTO para a linha inteira.
+    Com a ST-003 flagada, a ST-004 NÃO pode ser executada — a linha só
+    trabalha a história flagada até resolver."""
+    tmp_path, db = project_env
+    (tmp_path / "app.py").write_text("def app():\n    return 1\n", encoding="utf-8")
+    orch = WaveOrchestrator(project_dir=str(tmp_path), db=db)
+    orch.start_wave("ONDA-001", autonomy_mode="AUTO")
+    orch.transition_to(TuringStage.PLAN)
+    orch.transition_to(TuringStage.EXECUTE)
+
+    # ST-003 flagada (impedimento ativo)
+    orch.kanban.add_card(
+        story_id="ST-003",
+        wave_id="ONDA-001",
+        title="Bloqueada",
+        agent="@valim",
+        status="IN_PROGRESS",
+    )
+    orch.kanban.block_card(
+        "ST-003", reason="Tech Lead: veredito de REJEIÇÃO", blocked_by="@unclebob"
+    )
+
+    res = orch.run_execute(stories=["ST-004", "ST-003"])
+
+    # A linha parou NO IMPEDIMENTO: ST-004 jamais foi tocada — a flagada
+    # foi trabalhada primeiro (ciclo + escada) e a escalação é o desfecho.
+    assert res["success"] is False
+    assert res["failed_story"] == "ST-003"
+    card = orch.kanban.get_card("ST-003")
+    assert card["is_blocked"] == 1  # flag continua até resolvida
