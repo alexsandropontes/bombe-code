@@ -1808,6 +1808,23 @@ class WaveOrchestrator:
                     "error": f"Etapa atual é {self.state_machine.current_state.value}, esperado EXECUTE.",
                 }
 
+        # 🚩 IMPEDIMENTO: com bandeira vermelha em outra história, NADA inicia.
+        bloqueadas = [
+            c
+            for c in self.kanban.list_cards(wave_id=self.state_machine.wave_id)
+            if c.get("is_blocked") and c.get("story_id") != story_id
+        ]
+        if bloqueadas:
+            return {
+                "success": False,
+                "is_blocked": True,
+                "blocked_by": "@turing",
+                "error": (
+                    f"🚩 IMPEDIMENTO: bandeira vermelha na {bloqueadas[0]['story_id']} — "
+                    "a linha está parada. Resolva o impedimento antes de iniciar outra história."
+                ),
+            }
+
         target_story = story_id or "ST-001"
 
         # Atualiza card no Kanban para IN_PROGRESS
@@ -1892,6 +1909,11 @@ class WaveOrchestrator:
         from concurrent.futures import ThreadPoolExecutor
 
         story_title = target_story
+        story_content = (
+            story_file.read_text(encoding="utf-8", errors="replace")
+            if story_file and story_file.exists()
+            else ""
+        )
         try:
             primeira_linha = next(
                 (
@@ -1903,8 +1925,8 @@ class WaveOrchestrator:
             )
             if primeira_linha:
                 story_title = primeira_linha
-        except Exception:  # noqa: BLE001 — título é cosmético
-            pass
+        except Exception as exc:  # noqa: BLE001 — título é cosmético
+            logger.debug("Sem título extraível da story: %s", exc)
 
         from bombe_code.turing.pbb import PBBDecomposer
 
@@ -2414,6 +2436,32 @@ class WaveOrchestrator:
         )
 
         for story in target_stories:
+            # 🚩 IMPEDIMENTO — REGRA ABSOLUTA: bandeira vermelha PARA A LINHA
+            # INTEIRA. Não se segue com erro, não se pula fila, não existe
+            # tolerância. Enquanto houver bandeira erguida, a ÚNICA coisa que a
+            # linha faz é resolver a história flagada — as demais aguardam.
+            bandeiras = [
+                c
+                for c in self.kanban.list_cards(wave_id=self.state_machine.wave_id)
+                if c.get("is_blocked")
+            ]
+            if bandeiras:
+                bandeira = bandeiras[0]
+                story_bandeira = bandeira["story_id"]
+                if story_bandeira != story:
+                    BUS.publish(
+                        "announcement",
+                        agent="@turing",
+                        text=(
+                            f"🚩 IMPEDIMENTO: bandeira vermelha na {story_bandeira} — a LINHA "
+                            f"INTEIRA PAROU. {story} aguarda: nada avança sem resolver o "
+                            "impedimento."
+                        ),
+                        wave_id=self.state_machine.wave_id,
+                    )
+                    story = story_bandeira
+                # A história flagada é processada AQUI (ciclo + escada de correção).
+
             # Pula stories já concluídas no modo AUTO, a menos que force=True ou confirm_callback seja fornecido
             card = self.kanban.get_card(story)
             if (
