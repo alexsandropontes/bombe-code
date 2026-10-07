@@ -37,6 +37,8 @@ class AtomicTask:
     title: str
     description: str
     responsible_agent: str
+    problema_unico: str = ""  # "Uma frase = UM problema da story" (gate de atomicidade)
+    ca_ref: str = ""  # CA (ou fatia de CA) que esta tarefa resolve
     depends_on: list[str] = field(default_factory=list)
     status: str = "PENDING"
     output: str | None = None
