@@ -737,7 +737,7 @@ class WaveOrchestrator:
                         stage_reason
                         or "Erro: Operação bloqueada pelas regras da etapa atual da ONDA."
                     )
-                # GUARDIÃ DETERMINÍSTICA DE AÇÕES: valida o conteúdo ANTES de
+                # GUARDIÃO DETERMINÍSTICA DE AÇÕES: valida o conteúdo ANTES de
                 # gravar (anti-alucinação por ação, não por relógio).
                 if guarda is not None:
                     veto = guarda.validar_escrita(path, content)
