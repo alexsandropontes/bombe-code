@@ -78,6 +78,7 @@ class BombeTuiApp(App):
         Binding("shift+tab", "toggle_vibe_mode", "Alternar VIBE/TDD", show=True),
         Binding("tab", "cycle_stage", "Alternar Etapa (TDD)", show=True),
         Binding("ctrl+c", "noop", show=False),
+        Binding("ctrl+shift+c", "copiar_tela", "Copiar transcrição", show=False),
         Binding("escape", "escape_press", "Interromper (2× ESC)", show=False),
         Binding("ctrl+p", "command_palette", "Paleta de Comandos", show=True),
         Binding("ctrl+b", "toggle_sidebar", "Painel Lateral", show=True),
@@ -730,6 +731,23 @@ class BombeTuiApp(App):
 
     def action_noop(self) -> None:
         """Ctrl+C NÃO interrompe fluxo nenhum (cópia de tela não é pausa)."""
+
+    def action_copiar_tela(self) -> None:
+        """Ctrl+Shift+C copia a transcrição visível para a área de transferência."""
+        try:
+            import pyperclip
+
+            chat = self.query_one("#chat-view", ChatView)
+            partes = [
+                str(getattr(w, "renderable", None) or getattr(w, "content", ""))
+                for w in chat.children
+            ]
+            texto = "\n\n".join(p for p in partes if p.strip())
+            pyperclip.copy(texto)
+            self.notify(f"📋 Transcrição copiada ({len(texto)} caracteres)", severity="information")
+        except Exception as exc:  # noqa: BLE001 — clipboard pode estar indisponível
+            logger.warning("Falha ao copiar transcrição: %s", exc)
+            self.notify("❌ Não foi possível copiar (clipboard indisponível)", severity="warning")
 
     async def action_escape_press(self) -> None:
         """ESCAPE DUPLO (janela 1.8s) = interromper. ESC único = dica."""

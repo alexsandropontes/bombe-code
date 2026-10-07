@@ -465,3 +465,117 @@ def test_nao_convergencia_no_ciclo_escala_duvida_de_negocio_com_parecer(project_
     assert esc["suggested_owner"] == "@unclebob"
     card = orch.kanban.get_card("ST-001")
     assert card["is_blocked"] == 1
+
+
+def test_escada_de_convergencia_refina_story_e_aprova_no_degrau_3(project_env):
+    """Dois ciclos dirigidos reprovados com o MESMO teor → @caroli refinando a
+    story (degrau 3) → re-burn → aprovação. Nada de parar para o humano
+    chamar o Tech Lead: matéria técnica, a plataforma resolve sozinha."""
+    tmp_path, db = project_env
+    (tmp_path / "app.py").write_text("def app():\n    return 1\n", encoding="utf-8")
+    orch = WaveOrchestrator(project_dir=str(tmp_path), db=db)
+    orch.start_wave("ONDA-001", autonomy_mode="AUTO")
+    orch.transition_to(TuringStage.PLAN)
+    orch.transition_to(TuringStage.EXECUTE)
+    orch.kanban.add_card(
+        story_id="ST-001", wave_id="ONDA-001", title="Story 1", agent="@valim", status="IN_PROGRESS"
+    )
+
+    degraus: list[str] = []
+
+    def fake_cycle(story_id=None, rework_feedback=None):
+        degraus.append(rework_feedback or "inicial")
+        if len(degraus) <= 3:  # inicial + degraus 1 e 2 vetados; degrau 3 (pós-refino) aprova
+            orch.kanban.block_card(
+                story_id,
+                reason="Tech Lead: veredito de REJEIÇÃO — 'bloqueante'",
+                blocked_by="@unclebob",
+            )
+            return {
+                "success": False,
+                "is_blocked": True,
+                "error": "Tech Lead: REJEIÇÃO",
+                "review_output": "parecer",
+            }
+        orch.state_machine.transition_to(WaveState.VALIDATE)
+        return {"success": True, "message": "aprovado no degrau 3"}
+
+    orch._run_cycle_inner = fake_cycle
+
+    refinamentos: list[str] = []
+
+    def fake_get_runner(handle):
+        if handle == "@caroli":
+            runner = MagicMock()
+
+            def run(prompt, *a, **k):
+                refinamentos.append(prompt)
+                return AgentExecutionResult(
+                    agent_handle="@caroli", success=True, output="story refinada"
+                )
+
+            runner.run.side_effect = run
+            return runner
+        return MagicMock()
+
+    orch._get_runner = fake_get_runner
+
+    res = orch.run_execute(stories=["ST-001"])
+
+    assert res["success"] is True, res.get("error")
+    assert len(degraus) == 4  # 2 dirigidos + 2 pós-refino
+    assert refinamentos, "@caroli refinou a story no degrau 3"
+    assert "REPROVADA duas vezes" in refinamentos[0]
+    card = orch.kanban.get_card("ST-001")
+    assert card["is_blocked"] == 0
+
+
+def test_escada_completa_antes_de_escalar_humano(project_env):
+    """Só escala para o humano APÓS a escada completa (4 degraus)."""
+    tmp_path, db = project_env
+    (tmp_path / "app.py").write_text("def app():\n    return 1\n", encoding="utf-8")
+    orch = WaveOrchestrator(project_dir=str(tmp_path), db=db)
+    orch.start_wave("ONDA-001", autonomy_mode="AUTO")
+    orch.transition_to(TuringStage.PLAN)
+    orch.transition_to(TuringStage.EXECUTE)
+    orch.kanban.add_card(
+        story_id="ST-001", wave_id="ONDA-001", title="Story 1", agent="@valim", status="IN_PROGRESS"
+    )
+
+    chamadas = {"ciclo": 0, "caroli": 0}
+
+    def fake_cycle(story_id=None, rework_feedback=None):
+        chamadas["ciclo"] += 1
+        orch.kanban.block_card(
+            story_id, reason="Tech Lead: veredito de REJEIÇÃO variada", blocked_by="@unclebob"
+        )
+        return {
+            "success": False,
+            "is_blocked": True,
+            "error": "Tech Lead: REJEIÇÃO",
+            "review_output": "p",
+        }
+
+    orch._run_cycle_inner = fake_cycle
+
+    def fake_get_runner(handle):
+        if handle == "@caroli":
+            runner = MagicMock()
+
+            def run(prompt, *a, **k):
+                chamadas["caroli"] += 1
+                return AgentExecutionResult(agent_handle="@caroli", success=True, output="refinada")
+
+            runner.run.side_effect = run
+            return runner
+        return MagicMock()
+
+    orch._get_runner = fake_get_runner
+
+    res = orch.run_execute(stories=["ST-001"])
+
+    assert res["success"] is False
+    assert res["blocked"] is True
+    assert chamadas["ciclo"] == 5  # 1 original + 4 degraus
+    assert chamadas["caroli"] == 2  # degraus 3 e 4
+    assert res["escalation"]["type"] == "business_question"
