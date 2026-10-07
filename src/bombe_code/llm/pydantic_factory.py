@@ -177,7 +177,7 @@ class PydanticAiFactory:
 
                 def run_stream_events(self, prompt: str, usage_limits: Any = None) -> Any:
                     class _CM:
-                        async def __aenter__(self_inner) -> _CM:
+                        async def __aenter__(self_inner) -> Any:
                             return self_inner
 
                         async def __aexit__(self_inner, *a: object) -> bool:

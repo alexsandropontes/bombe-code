@@ -2889,18 +2889,8 @@ class WaveOrchestrator:
         attempt = 0
         last_analysis = None
         is_wave_zero = self.state_machine.wave_type == WaveType.WAVE_ZERO
-        wave_key = self.state_machine.wave_id.upper()
-
-        # ORÇAMENTO DE SESSÃO DE RETRABALHO (persistente): sem isso o ciclo
-        # veto → re-burn → validate queima tokens para sempre sem convergir.
-        MAX_ROUNDS_SESSAO = 3
-        rodadas_acumuladas = int(self.db.get_meta(f"rework_rounds:{wave_key}") or 0)
-        assinatura_anterior = self.db.get_meta(f"veto_sig:{wave_key}") or ""
-        ultima_rota_foi_burn = False
-
-        def _assinatura_veto(razoes: list[str]) -> str:
-            tokens = sorted(set(re.findall(r"[a-zà-ú]{6,}", " ".join(razoes).lower())))
-            return "|".join(tokens[:12])
+        # Cada RESUME/turno roda a escada COMPLETA (do zero). O orçamento é
+        # por turno: o humano acompanha pelo status; não intervém em técnica.
 
         while attempt < engine.max_attempts:
             if ABORT_EVENT.is_set():
@@ -2918,79 +2908,6 @@ class WaveOrchestrator:
             }
             if not failed:
                 break
-
-            # TETO DA SESSÃO: esgotado? Escala com evidência em vez de queimar tokens.
-            if rodadas_acumuladas >= MAX_ROUNDS_SESSAO:
-                BUS.publish(
-                    "escalation",
-                    agent="@turing",
-                    text=(
-                        f"🛑 [ORÇAMENTO DE RETRABALHO ESGOTADO] A {self.state_machine.wave_id} acumulou "
-                        f"{rodadas_acumuladas} rodadas de retrabalho nesta sessão sem convergir. "
-                        "O Ciclo Autônomo para aqui: se o problema persiste, falta informação de negócio "
-                        "ou a correção excede a capacidade autônoma. Intervenção humana necessária."
-                    ),
-                )
-                last_analysis = last_analysis or engine.classify(
-                    "Orçamento de retrabalho esgotado sem convergência", target_agent="@edith"
-                )
-                escalation = engine.build_escalation(
-                    last_analysis,
-                    rodadas_acumuladas,
-                    {name: info["output"] for name, info in validators.items()},
-                )
-                escalation["message"] = (
-                    f"🛑 ORÇAMENTO DE RETRABALHO ESGOTADO ({rodadas_acumuladas} rodadas na sessão). "
-                    + escalation["message"]
-                )
-                # Escalation JAMAIS aprova: testes passarem não homologa onda.
-                return (
-                    False,
-                    [escalation["message"]],
-                    {
-                        "attempts": rodadas_acumuladas,
-                        "escalation": escalation,
-                    },
-                )
-
-            # NÃO-CONVERGÊNCIA: o mesmo veto repetido após um BURN autônomo
-            # indica insistência inútil (rotas RE_AUDIT repetem por natureza).
-            assinatura_atual = _assinatura_veto(
-                [i["reason"] for i in validators.values() if not i["approved"]]
-            )
-            if (
-                assinatura_anterior
-                and assinatura_atual == assinatura_anterior
-                and ultima_rota_foi_burn
-            ):
-                BUS.publish(
-                    "escalation",
-                    agent="@turing",
-                    text=(
-                        f"🔁 [NÃO-CONVERGÊNCIA] O mesmo veto persiste idêntico após o retrabalho "
-                        f"na {self.state_machine.wave_id}. Insistir não resolve: escalando com evidências."
-                    ),
-                )
-                last_analysis = last_analysis or engine.classify(
-                    assinatura_atual, target_agent="@edith"
-                )
-                escalation = engine.build_escalation(
-                    last_analysis,
-                    rodadas_acumuladas + 1,
-                    {name: info["output"] for name, info in validators.items()},
-                )
-                escalation["message"] = (
-                    "🔁 NÃO-CONVERGÊNCIA: veto idêntico repetido após retrabalho. "
-                    + escalation["message"]
-                )
-                return (
-                    False,
-                    [escalation["message"]],
-                    {
-                        "attempts": rodadas_acumuladas + 1,
-                        "escalation": escalation,
-                    },
-                )
 
             for name, info in failed.items():
                 analysis = engine.classify(info["reason"], info["output"], target_agent=name)
@@ -3011,7 +2928,6 @@ class WaveOrchestrator:
                     veto_class=analysis.veto_class.value,
                 )
 
-                ultima_rota_foi_burn = analysis.veto_class is not VetoClass.APPROVAL_MISSING
                 if analysis.veto_class is VetoClass.APPROVAL_MISSING:
                     # Rota RE_AUDIT: o validador re-emite o parecer.
                     res = info["runner"].run(engine.build_rework_prompt(analysis, original_demand))
@@ -3034,20 +2950,10 @@ class WaveOrchestrator:
                 # Rota autônoma: consertar a causa e queimar de novo.
                 self._autonomous_rework_burn(engine, analysis, name, info, attempt, is_wave_zero)
 
-            rodadas_acumuladas += 1
-            self.db.set_meta(f"rework_rounds:{wave_key}", str(rodadas_acumuladas))
-            self.db.set_meta(
-                f"veto_sig:{wave_key}",
-                _assinatura_veto([i["reason"] for i in validators.values() if not i["approved"]]),
-            )
-
             if all(info["approved"] for info in validators.values()):
                 break
 
         if all(info["approved"] for info in validators.values()):
-            # Sucesso: orçamento de sessão é zerado (onda convergiu).
-            self.db.set_meta(f"rework_rounds:{wave_key}", "0")
-            self.db.set_meta(f"veto_sig:{wave_key}", "")
             return (
                 integration_tests_info["all_passed"],
                 [] if integration_tests_info["all_passed"] else [integration_tests_info["details"]],
@@ -3061,25 +2967,35 @@ class WaveOrchestrator:
                 ),
                 target_agent="@edith",
             )
-        escalation = engine.build_escalation(
-            last_analysis,
-            attempt,
-            {name: info["output"] for name, info in validators.items()},
+        falhas_resumo = "; ".join(
+            f"{name}: {info['reason']}" for name, info in validators.items() if not info["approved"]
+        )
+        mensagem_parada = (
+            f"🛑 VALIDATE não aprovado após {attempt} rodada(s) de correção autônoma.\n"
+            f"Impedimentos técnicos em aberto: {falhas_resumo}\n"
+            "São ajustes técnicos já mapeados — nada precisa de você agora. "
+            "Dê resume: o Turing refaz o ciclo focado nos impedimentos."
         )
         BUS.publish(
             "escalation",
             agent="@turing",
-            text=escalation["message"],
-            escalation=escalation,
+            text=mensagem_parada,
+            escalation={"type": "technical_status", "message": mensagem_parada},
         )
-        reasons = []
+        reasons = [mensagem_parada]
         if not integration_tests_info["all_passed"]:
             reasons.append(integration_tests_info["details"])
         for name, info in validators.items():
             if not info["approved"]:
                 reasons.append(f"{name}: {info['reason']}")
-        reasons.append(escalation["message"])
-        return False, reasons, {"attempts": attempt, "escalation": escalation}
+        return (
+            False,
+            reasons,
+            {
+                "attempts": attempt,
+                "escalation": {"type": "technical_status", "message": mensagem_parada},
+            },
+        )
 
     def _autonomous_rework_burn(
         self,

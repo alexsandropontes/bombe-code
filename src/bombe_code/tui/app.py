@@ -767,29 +767,24 @@ class BombeTuiApp(App):
 
     def action_copiar_tela(self) -> None:
         """Copia a transcrição: OSC52 (funciona sobre SSH) + pyperclip local."""
-        import base64
-        import sys
-
         chat = self.query_one("#chat-view", ChatView)
         texto = "\n\n".join(
             str(getattr(w, "renderable", None) or getattr(w, "content", "")) for w in chat.children
         ).strip()
+        # Canal NATIVO do Textual: o driver emite OSC52 corretamente (funciona
+        # sobre SSH) e faz fallback local — mesmo mecanismo do opencode.
         try:
-            # OSC52: o TERMINAL LOCAL escreve na área de transferência da sua
-            # máquina — o mecanismo do opencode original p/ sessões remotas.
-            payload = base64.b64encode(texto.encode("utf-8")).decode("ascii")
-            sys.stdout.write(f"\x1b]52;c;{payload}\x07")
-            sys.stdout.flush()
-            try:
-                import pyperclip
+            self.copy_to_clipboard(texto)
+        except Exception as exc:  # noqa: BLE001 — driver pode não suportar
+            logger.debug("copy_to_clipboard indisponível: %s", exc)
+        # 2. pyperclip como redundância local (falha isolada, nunca derruba a 1ª)
+        try:
+            import pyperclip
 
-                pyperclip.copy(texto)
-            except Exception as exc:  # noqa: BLE001 — pyperclip é redundância
-                logger.debug("pyperclip indisponível: %s", exc)
-            self.notify(f"📋 Copiado ({len(texto)} caracteres)", severity="information")
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("Falha ao copiar transcrição: %s", exc)
-            self.notify("❌ Falha ao copiar", severity="warning")
+            pyperclip.copy(texto)
+        except Exception as exc:  # noqa: BLE001 — clipboard pode estar indisponível
+            logger.debug("pyperclip indisponível: %s", exc)
+        self.notify(f"📋 Copiado ({len(texto)} caracteres)", severity="information")
 
     async def action_escape_press(self) -> None:
         """ESCAPE DUPLO (janela 1.8s) = interromper. ESC único = dica."""

@@ -190,46 +190,30 @@ def test_product_gap_dispara_retrabalho_upstream_e_re_burn_autonomo(project_env)
     assert edith.run.call_count == 2
 
 
-def test_ciclo_autonomo_esgota_e_converte_em_duvida_de_negocio(project_env):
+def test_ciclo_autonomo_esgota_e_para_com_status_tecnico_honesto(project_env):
+    """Escada esgotada → STATUS TÉCNICO honesto (não falsa dúvida de negócio):
+    o Turing sabe por que parou e a ação é resume (ele mesmo refaz focado)."""
     tmp_path, db = project_env
     orch = _prepara_orchestrator(tmp_path, db)
-
     orch.kanban.add_card(
-        story_id="ST-003",
-        wave_id="ONDA-001",
-        title="Story ST-003",
-        agent="@valim",
-        status="DEV_DONE",
+        story_id="ST-001", wave_id="ONDA-001", title="Story 1", agent="@valim", status="IN_PROGRESS"
     )
 
-    veto_persistente = (
-        "🔴 REJEITADO\n**Bloqueios:**\n1. Requisito RF-03 do PRD não atendido pelo editor."
-    )
+    veto_persistente = "🔴 REJEITADO — achados técnicos: commit pós-dequeue ausente."
     edith = _runner_fake([veto_persistente])
     nina = _runner_fake(["Governança: APROVADO."])
-    autor = _runner_fake(["RETRABALHO UPSTREAM CONCLUÍDO."])
-    runners = {"@edith": edith, "@nina": nina, "@grace": autor}
+    runners = {"@edith": edith, "@nina": nina}
     orch._get_runner = lambda handle: runners.get(handle)
-
-    def fake_cycle(story_id=None):
-        orch.state_machine.transition_to(WaveState.VALIDATE)
-        return {"success": True, "message": "re-queimada"}
-
-    orch._run_cycle_inner = fake_cycle
 
     res = orch.run_validate()
 
     assert res["success"] is False
     assert res["blocked"] is True
-    escalation = res["rework"]["escalation"]
-    # Escalonamento é DÚVIDA DE NEGÓCIO estruturada (último recurso)
-    assert escalation["type"] == "business_question"
-    assert "DÚVIDA DE NEGÓCIO" in escalation["question"]
-    assert escalation["suggested_owner"] == "@grace"  # rastreado do PRD
-    assert escalation["attempts"] >= 1
-    # Rodadas autônomas limitadas pelo orçamento de sessão (máx. 3) — a dupla
-    # defesa (rework + rede de segurança) nunca ultrapassa o teto
-    assert res["rework"]["attempts"] <= 3
+    esc = res["rework"]["escalation"]
+    assert esc["type"] == "technical_status"
+    assert "VALIDATE não aprovado" in esc["message"]
+    # Linguagem de negócio sem falso pedido de decisão
+    assert "decisão de negócio" not in esc["message"]
 
 
 def test_modo_manual_nao_executa_ciclo_autonomo(project_env):
