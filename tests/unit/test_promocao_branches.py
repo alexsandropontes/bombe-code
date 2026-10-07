@@ -93,3 +93,38 @@ def test_promocao_sem_repositorio_falha_limpo(tmp_path: Path):
     res = PromotorDeBranches(tmp_path).promover_para_dev("qualquer")
     assert res.success is False
     assert "Git" in res.mensagem
+
+
+def test_release_calcula_versao_por_tema_dos_commits(repo_ia: Path):
+    """feat desde a última tag → minor; só correção → patch."""
+    promotor = PromotorDeBranches(repo_ia)
+
+    # Sem tag ainda: 0.1.0
+    assert promotor.calcular_proxima_versao() == "0.1.0"
+    r = promotor.gerar_release(mensagem="chore(release): v0.1.0")
+    assert r.success and r.mensagem.startswith("Release v0.1.0")
+
+    # Só correções → patch
+    def git(*args: str) -> None:
+        subprocess.run(["git", *args], cwd=str(repo_ia), capture_output=True, check=True)
+
+    (repo_ia / "fix.txt").write_text("x\n")
+    git("add", "-A")
+    git("commit", "-m", "fix: corrige overflow")
+    assert promotor.calcular_proxima_versao() == "0.1.1"
+
+    # Com feat → minor
+    (repo_ia / "feat.txt").write_text("y\n")
+    git("add", "-A")
+    git("commit", "-m", "feat: nova funcionalidade")
+    assert promotor.calcular_proxima_versao() == "0.2.0"
+
+    # Versão IMPOSTA pelo usuário vence a sugestão
+    r = promotor.gerar_release(mensagem="chore(release): v9.9.9", versao="9.9.9")
+    assert r.success and "v9.9.9" in r.mensagem
+    import subprocess as _sp
+
+    tags = _sp.run(
+        ["git", "tag", "-l", "v*"], cwd=str(repo_ia), capture_output=True, text=True
+    ).stdout.split()
+    assert "v9.9.9" in tags and "v0.1.0" in tags

@@ -219,3 +219,38 @@ def test_agent_usage_alimenta_sidebar_custo_oculto():
     assert final["tokens"] == 8_000  # acumulado dos dois agentes
     assert final["percent"] == int(8_000 / 128_000 * 100)
     assert final["cost"] == 0.02  # custo medido (exibição é oculta na sidebar)
+
+
+def test_copiar_tela_envia_transcricao_ao_clipboard(monkeypatch):
+    """Ctrl+C / Ctrl+Shift+C copiam a transcrição — nunca interrompem."""
+    import pyperclip
+
+    from bombe_code.tui.app import BombeTuiApp
+    from bombe_code.tui.client import BombeClient
+
+    copiado = {}
+    monkeypatch.setattr(pyperclip, "copy", lambda t: copiado.update(texto=t))
+
+    client = BombeClient("http://127.0.0.1:9999")
+    app = BombeTuiApp(client=client, session_id="ses_copy")
+    chat = type(
+        "FakeChatView",
+        (),
+        {
+            "children": [
+                type("W", (), {"content": "mensagem 1"})(),
+                type("W", (), {"content": "mensagem 2"})(),
+            ]
+        },
+    )()
+    monkeypatch.setattr(
+        type(app),
+        "query_one",
+        lambda self, _sel, _t=None: chat,
+        raising=False,
+    )
+
+    app.action_copiar_tela()
+
+    assert "mensagem 1" in copiado["texto"]
+    assert "mensagem 2" in copiado["texto"]

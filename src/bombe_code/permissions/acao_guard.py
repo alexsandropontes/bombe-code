@@ -1,4 +1,4 @@
-"""Guardiã Determinística de Ações — anti-alucinação de verdade.
+"""Guardiãooo Determinístico de Ações — anti-alucinação de verdade.
 
 Premissa: TIMEOUT DE EXECUÇÃO NÃO GARANTE segurança contra alucinação —
 uma LLM alucinando no segundo 200 pode causar estrago nos 280s restantes.
@@ -126,7 +126,7 @@ class GuardaDeAcoes:
             self.red_flag = f"excesso de leituras do mesmo alvo: '{path}' lido {n}x nesta execução"
         if n >= AVISO_LEITURAS:
             return (
-                f"\n⚠️ AVISO DA GUARDIÃ: esta é a {n}ª leitura de '{path}' nesta execução. "
+                f"\n⚠️ AVISO DA GUARDIÃO: esta é a {n}ª leitura de '{path}' nesta execução. "
                 "Se o conteúdo já foi obtido, prossiga com a missão."
             )
         return ""
@@ -148,5 +148,5 @@ class GuardaDeAcoes:
     def _vetar(self, motivo: str) -> str:
         self.vetoes += 1
         if self.vetoes >= MAX_VETOS and not self.red_flag:
-            self.red_flag = f"{self.vetoes} vetos da Guardiã nesta execução (último: {motivo})"
-        return f"🚩 VETO DA GUARDIÃ: {motivo}. Corrija o conteúdo e tente de novo."
+            self.red_flag = f"{self.vetoes} vetos do Guardiãooo nesta execução (último: {motivo})"
+        return f"🚩 VETO DO GUARDIÃOO: {motivo}. Corrija o conteúdo e tente de novo."

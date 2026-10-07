@@ -268,7 +268,7 @@ class AgentRunner:
                 logger.error("Falha na execução do agente %s: %s", self.agent.handle, exc)
 
                 # BANDEIRA VERMELHA: comportamento indevido determinado pela
-                # Guardiã — escala para o humano com evidência (a exceção do
+                # Guardiãoo — escala para o humano com evidência (a exceção do
                 # processo), sem apagar o trabalho já gravado.
                 if isinstance(exc, InterruptedError):
                     motivo = f"⏸ {exc}"
@@ -398,7 +398,7 @@ class AgentRunner:
 
         handle = self.agent.handle
         # SEMÂNTICA DE TEMPO: só existe o IDLE (provedor sem resposta) —
-        # a proteção contra alucinação é a Guardiã de Ações (por ação),
+        # a proteção contra alucinação é a Guardiãoo de Ações (por ação),
         # não um relógio de duração que mata trabalho legítimo.
         import os
         import time as _time
@@ -448,7 +448,7 @@ class AgentRunner:
                             f"execução do agente {handle} abortada. (ajuste com BOMBE_AGENT_IDLE_TIMEOUT)"
                         )
                     ultimo_evento = agora
-                    # BANDEIRA VERMELHA: a Guardiã vetou ações demais — a LLM
+                    # BANDEIRA VERMELHA: a Guardiãoo vetou ações demais — a LLM
                     # perde o direito de continuar (exceção, não timeout).
                     if self.guarda is not None and self.guarda.red_flag:
                         from bombe_code.permissions.acao_guard import RedFlagError

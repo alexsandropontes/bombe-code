@@ -50,14 +50,20 @@ async def _run_orchestrator_with_stream(
         ABORT_EVENT.clear()
         result.update(await anyio.to_thread.run_sync(orch_call, *args))
 
-    # ── ESTADO LINEAR (append-only): a tela NUNCA volta atrás ──
+    # ── ESTADO LINEAR: a RESPOSTA nunca volta atrás ──
+    # Pensamento = área META (um bloco dim por agente; não fragiliza a resposta)
+    # Texto = resposta linear (só fecha em evento de AÇÃO, nunca em alternância)
     live_agent: str = ""
-    bloco_tipo: str | None = None  # "thinking" | "text" | None
-    bloco_widget: Any | None = None
-    bloco_texto: RichText = RichText()
+    bloco_texto_widget: Any | None = None
+    bloco_texto_acc: RichText | None = None
+    thinking_widget: Any | None = None
+    thinking_acc: RichText | None = None
+    ultimo_tipo: str | None = None
     tokens_sessao = 0
     custo_sessao = 0.0
     ultimo_evento_ts = [time.monotonic()]
+    heartbeat: Static | None = None
+    hb_task: asyncio.Task | None = None
 
     def _novo_widget(conteudo: Any) -> Any:
         fabrica = getattr(chat, "criar_static", None)
@@ -70,50 +76,32 @@ async def _run_orchestrator_with_stream(
         else:
             widget.update(conteudo)
 
-    def _fechar_bloco() -> None:
-        nonlocal bloco_tipo, bloco_widget, bloco_texto
-        bloco_tipo = None
-        bloco_widget = None
-        bloco_texto = RichText()
+    def _fechar_bloco_texto() -> None:
+        nonlocal bloco_texto_widget, bloco_texto_acc
+        bloco_texto_widget = None
+        bloco_texto_acc = None
 
-    async def _montar_linha(linha: RichText) -> None:
-        """Linha completa (tool/resultado): append-only, nunca reaberta."""
-        _fechar_bloco()
-        await chat.mount(_novo_widget(linha))
-
-    def _abrir_bloco_delta(tipo: str, agente: str, primeiro_pedaco: str) -> None:
-        nonlocal bloco_tipo, bloco_widget, bloco_texto
-        _fechar_bloco()
-        bloco_tipo = tipo
-        estilo = "dim italic" if tipo == "thinking" else ""
-        prefixo = "🧠 " if tipo == "thinking" else ""
-        bloco_texto = RichText()
-        bloco_texto.append(f"{prefixo}{primeiro_pedaco}", style=estilo)
-        cabecalho = RichText()
-        cabecalho.append("◈ ", style=f"bold {cor_agente(agente)}")
-        cabecalho.append(agente, style=f"bold {cor_agente(agente)}")
-        bloco_widget = _novo_widget(cabecalho)
-        chat.mount(bloco_widget)
-        linha_delta = RichText()
-        linha_delta.append(f"{prefixo}{primeiro_pedaco}", style=estilo)
-        bloco_widget = _novo_widget(linha_delta)
-        chat.mount(bloco_widget)
-
-    def _appender_delta(tipo: str, pedaco: str) -> None:
-        nonlocal bloco_texto
-        estilo = "dim italic" if tipo == "thinking" else ""
-        bloco_texto.append(pedaco, style=estilo)
-        _atualizar(bloco_widget, bloco_texto)
-
-    def _linha_tool(agent: str, tool: str, args_resumo: str) -> RichText:
-        """Linha de tool em Rich Text — imune a markup vindo da LLM."""
+    def _linha_tool(agente: str, tool: str, args_resumo: str) -> RichText:
+        """Ação rotineira = cor calma; vermelho é só para erro."""
         t = RichText("🔧 ")
-        t.append(agent, style=f"bold {cor_agente(agent)}")
-        t.append(f" → {tool}({args_resumo})", style="magenta")
+        t.append(agente, style=f"bold {cor_agente(agente)}")
+        t.append(f" → {tool}({args_resumo})", style=TOKENS["text_muted"])
         return t
 
+    async def _montar_linha(linha: RichText) -> None:
+        _fechar_bloco_texto()
+        await chat.mount(_novo_widget(linha))
+
     async def _drain() -> None:
-        nonlocal live_agent, bloco_tipo, bloco_widget, bloco_texto, tokens_sessao, custo_sessao
+        nonlocal \
+            live_agent, \
+            bloco_texto_widget, \
+            bloco_texto_acc, \
+            tokens_sessao, \
+            custo_sessao, \
+            thinking_widget, \
+            thinking_acc, \
+            ultimo_tipo
         while True:
             try:
                 ev = await asyncio.wait_for(queue.get(), timeout=0.15)
@@ -144,9 +132,9 @@ async def _run_orchestrator_with_stream(
                 continue
 
             if etype == "agent_start":
-                _fechar_bloco()
-                if agent != live_agent:
-                    live_agent = agent
+                _fechar_bloco_texto()
+                ultimo_tipo = None
+                live_agent = agent
                 await chat.mount(
                     _novo_widget(
                         f"[bold {cor_agente(agent)}]🤖 [{agent}][/bold {cor_agente(agent)}]"
@@ -156,49 +144,68 @@ async def _run_orchestrator_with_stream(
                 continue
 
             if etype in ("text_delta", "thinking_delta"):
-                tipo = "thinking" if etype == "thinking_delta" else "text"
-                if bloco_tipo != tipo:
-                    _fechar_bloco()
-                    bloco_tipo = tipo
-                    primeiro = ev.text
-                    estilo = "dim italic" if tipo == "thinking" else ""
-                    prefixo = "🧠 " if tipo == "thinking" else ""
-                    bloco_texto = RichText()
-                    bloco_texto.append(f"{prefixo}{primeiro}", style=estilo)
-                    bloco_widget = _novo_widget(bloco_texto)
-                    await chat.mount(bloco_widget)
+                # REGRA ANTI-COME-PALAVRAS: a alternância pensamento⇄texto NÃO
+                # fecha o bloco de texto — frases não se partem em dois blocos.
+                # REGRA LINEAR: pensamento após uma ação = bloco NOVO abaixo.
+                if etype == "thinking_delta":
+                    if ultimo_tipo == "thinking" and thinking_widget is not None:
+                        thinking_acc.append(ev.text, style="dim italic")
+                        _atualizar(thinking_widget, thinking_acc)
+                    else:
+                        thinking_acc = RichText()
+                        thinking_acc.append(f"🧠 (cont.) {ev.text}", style="dim italic")
+                        thinking_widget = _novo_widget(thinking_acc)
+                        await chat.mount(thinking_widget)
+                    ultimo_tipo = "thinking"
+                    continue
+                if bloco_texto_widget is None:
+                    bloco_texto_acc = RichText()
+                    bloco_texto_acc.append(ev.text)
+                    bloco_texto_widget = _novo_widget(bloco_texto_acc)
+                    await chat.mount(bloco_texto_widget)
                 else:
-                    bloco_texto.append(ev.text, style="dim italic" if tipo == "thinking" else "")
-                    _atualizar(bloco_widget, bloco_texto)
+                    bloco_texto_acc.append(ev.text)
+                    _atualizar(bloco_texto_widget, bloco_texto_acc)
+                ultimo_tipo = "text"
                 continue
 
             if etype == "tool_call":
+                _fechar_bloco_texto()
+                ultimo_tipo = None
                 args = str((ev.data or {}).get("args", ""))
                 resumo_args = args if len(args) <= 220 else args[:220] + "…"
-                await _montar_linha(_linha_tool(agent, ev.text, resumo_args))
+                t = RichText("🔧 ")
+                t.append(agent, style=f"bold {cor_agente(agent)}")
+                t.append(f" → {ev.text}({resumo_args})", style=TOKENS["text_muted"])
+                await chat.mount(_novo_widget(t))
                 continue
 
             if etype == "file_write":
+                _fechar_bloco_texto()
+                ultimo_tipo = None
                 previa = str((ev.data or {}).get("preview", ""))
                 t = RichText("📝 ")
                 t.append(agent, style=f"bold {cor_agente(agent)}")
-                t.append(f" → gravando {ev.text}", style="green")
+                t.append(f" → gravando {ev.text}", style=TOKENS["success"])
                 for linha in previa.splitlines()[:8]:
                     t.append(f"\n  │ {linha}", style="dim")
-                await _montar_linha(t)
+                await chat.mount(_novo_widget(t))
                 continue
 
             if etype == "tool_result":
+                _fechar_bloco_texto()
+                ultimo_tipo = None
                 saida = (ev.text or "").strip()
                 if saida and saida != "None":
                     t = RichText()
                     for linha in saida.splitlines()[:6]:
                         t.append(f"  ← {linha}\n", style="dim")
-                    await _montar_linha(t)
+                    await chat.mount(_novo_widget(t))
                 continue
 
-            # ── Anúncios canônicos (visíveis em qualquer modo) ──
-            _fechar_bloco()
+            # ── Anúncios canônicos (qualquer modo) ──
+            _fechar_bloco_texto()
+            ultimo_tipo = None
             live_agent = ""
             style = {
                 "wave_start": TOKENS["primary"],
@@ -217,10 +224,7 @@ async def _run_orchestrator_with_stream(
     worker_task = asyncio.create_task(_worker())
     drain_task = asyncio.create_task(_drain())
 
-    # WATCHDOG DE SILENCIO: mede desde o ÚLTIMO EVENTO — trabalho saudável
-    # streamando NÃO dispara alarme; silêncio real, sim.
-    heartbeat: Static | None = None
-
+    # WATCHDOG DE SILENCIO: desde o ÚLTIMO EVENTO — stream saudável não alarma.
     async def _heartbeat() -> None:
         nonlocal heartbeat
         while not worker_task.done():
@@ -248,9 +252,6 @@ async def _run_orchestrator_with_stream(
         drain_task.cancel()
     finally:
         hb_task.cancel()
-        if heartbeat is not None:
-            heartbeat.update("[dim]⏱ chamada concluída.[/dim]")
-        _fechar_bloco()
         unsubscribe()
 
     return result

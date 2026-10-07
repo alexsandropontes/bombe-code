@@ -1,4 +1,4 @@
-"""Testes da Guardiã Determinística de Ações — anti-alucinação por AÇÃO,
+"""Testes do Guardiãoooo Determinístico de Ações — anti-alucinação por AÇÃO,
 não por relógio (timeout de execução não protege contra alucinação)."""
 
 from bombe_code.permissions.acao_guard import GuardaDeAcoes

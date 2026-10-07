@@ -737,7 +737,7 @@ class WaveOrchestrator:
                         stage_reason
                         or "Erro: Operação bloqueada pelas regras da etapa atual da ONDA."
                     )
-                # GUARDIÃ DETERMINÍSTICA DE AÇÕES: valida o conteúdo ANTES de
+                # GUARDIÃO DETERMINÍSTICA DE AÇÕES: valida o conteúdo ANTES de
                 # gravar (anti-alucinação por ação, não por relógio).
                 if guarda is not None:
                     veto = guarda.validar_escrita(path, content)
@@ -1846,7 +1846,6 @@ class WaveOrchestrator:
         plan_file = (
             self.workspace.wave_qa_dir(self.state_machine.wave_id) / f"{target_story}_test_plan.md"
         )
-        plan_rel = plan_file.relative_to(self.project_dir).as_posix()
 
         runner_aniche = self._get_runner("@aniche")
         test_plan_res = None
@@ -1887,54 +1886,168 @@ class WaveOrchestrator:
                     "test_plan_output": getattr(test_plan_res, "output", ""),
                 }
 
-        # 2. FASE GREEN: Dev implementa o código necessário para satisfazer os testes do QA
-        runner_dev = self._get_runner("@valim")
-        dev_res = None
-        if runner_dev:
-            feedback_bloco = (
-                f"\n🔁 RETRABALHO DIRECIONADO: o ciclo anterior desta story foi REPROVADO pelo review. "
-                f"Motivo registrado pelo Tech Lead: {rework_feedback}\n"
-                "Corrija ESPECIFICAMENTE os apontamentos acima (não refaça tudo).\n"
-                if rework_feedback
-                else ""
-            )
-            raw_dev_prompt = (
-                f"Implemente o código estritamente necessário para fazer a suíte de testes passar para a story {target_story}.\n"
-                f"Consulte os requisitos em '{story_rel}' e o plano/testes em '{plan_rel}' (e pasta 'tests/').\n"
-                f"Siga TDD (GREEN) e refatore com Clean Code. Salve os arquivos de código de produção nos caminhos relativos apropriados (ex: 'js/logic.js', 'index.html').\n"
-                f"{feedback_bloco}"
-            )
-            dev_prompt = self._assemble_prompt("@valim", raw_dev_prompt)
-            dev_res = runner_dev.run(prompt=dev_prompt)
-            self._record_telemetry("EXECUTE", "@valim (Dev)", dev_res)
+        # 2. FASE GREEN — EXECUÇÃO TASK-A-TASK com agendador por camada:
+        # tarefas independentes de camadas distintas rodam EM PARALELO (o
+        # contrato do arquiteto é a barreira); review é da STORY inteira.
+        from concurrent.futures import ThreadPoolExecutor
 
-            if dev_res and (
-                getattr(dev_res, "is_blocked", False) or not getattr(dev_res, "success", True)
-            ):
-                block_reason = (
-                    getattr(dev_res, "block_reason", None)
-                    or "Dev (@valim) bloqueou a implementação"
+        story_title = target_story
+        try:
+            primeira_linha = next(
+                (
+                    l.strip("# ").strip()
+                    for l in story_content.splitlines()
+                    if l.strip().startswith("# ")
+                ),
+                "",
+            )
+            if primeira_linha:
+                story_title = primeira_linha
+        except Exception:  # noqa: BLE001 — título é cosmético
+            pass
+
+        from bombe_code.turing.pbb import PBBDecomposer
+
+        tarefas = PBBDecomposer.decompose_story(
+            story_id=target_story,
+            story_title=story_title,
+            requires_db=True,
+            requires_frontend=True,
+        )
+        BUS.publish(
+            "announcement",
+            agent="@turing",
+            text=(
+                f"🧩 {target_story} decomposta em {len(tarefas)} tarefas atômicas — "
+                "execução task-a-task, paralelismo por camada, review no fim da story."
+            ),
+        )
+
+        story_content = (
+            story_file.read_text(encoding="utf-8", errors="replace")
+            if story_file and story_file.exists()
+            else ""
+        )
+        objetivo_story = " ".join(story_content.split())[:400] if story_content else ""
+        entregues: list[str] = []
+        dev_outputs: list[str] = []
+        concluidas_ids: set[str] = set()
+        pendentes = list(tarefas)
+
+        def _executa_tarefa(tarefa_exec: Any) -> str:
+            """Uma tarefa = RED (aniche, escopo do trecho) + GREEN (dev da camada)."""
+            if runner_aniche:
+                raw_red = (
+                    f"Story: {objetivo_story}\n"
+                    f"TAREFA ATUAL: [{tarefa_exec.task_type.value}] {tarefa_exec.title}\n"
+                    f"Problema único desta tarefa: {tarefa_exec.problema_unico or tarefa_exec.description}\n"
+                    "Escreva APENAS os testes que falham para ESTE trecho — nada de outras "
+                    f"tarefas. Declare no fim: 'Testes falhando (RED) para a tarefa {tarefa_exec.id}'."
                 )
-                self.kanban.block_card(target_story, reason=block_reason, blocked_by="@valim")
+                runner_aniche.run(self._assemble_prompt("@aniche", raw_red))
+
+            executor_handle = {
+                "DATABASE": "@codd",
+                "CONTRACT": "@ieru",
+                "BACKEND_TDD": "@valim",
+                "FRONTEND_UI": "@ada",
+                "E2E_INTEGRATION": "@aniche",
+                "FOUNDATION": "@unclebob",
+            }.get(tarefa_exec.task_type.value, "@valim")
+            runner_executor = self._get_runner(executor_handle)
+            if not runner_executor:
+                return ""
+
+            contexto = (
+                "\nJÁ ENTREGUE (para integração, não refaça):\n- " + "\n- ".join(entregues)
+                if entregues
+                else "\nPrimeira tarefa da story."
+            )
+            raw_dev = (
+                f"OBJETIVO DA STORY COMPLETA: {objetivo_story}\n\n"
+                f"TAREFA ATUAL (sua entrega): [{tarefa_exec.task_type.value}] {tarefa_exec.title}\n"
+                f"Problema único: {tarefa_exec.problema_unico or tarefa_exec.description}\n"
+                f"Testes (RED) já escritos pelo @aniche em 'tests/'.\n"
+                f"{contexto}\n"
+                "REGRA RÍGIDA DE ESCOPO: entregue APENAS o trecho em TAREFA ATUAL. As demais "
+                "tarefas da story NÃO são suas — não as implemente, não as antecipe, não as "
+                "declare como entregues. Observações fora do escopo: registre e siga o trecho.\n"
+                "Implemente o mínimo para ESTES testes passarem (GREEN) e refatore (Clean Code)."
+            )
+            res_t = runner_executor.run(self._assemble_prompt(executor_handle, raw_dev))
+            return getattr(res_t, "output", "")
+
+        while pendentes:
+            if ABORT_EVENT.is_set():
+                BUS.publish(
+                    "announcement",
+                    agent="@turing",
+                    text=f"⏸ Interrompido com {len(pendentes)} tarefa(s) pendente(s) — checkpoint salvo.",
+                )
                 return {
                     "success": False,
                     "is_blocked": True,
-                    "blocked_by": "@valim",
-                    "error": block_reason,
-                    "message": f"Story {target_story} bloqueada no Dev: {block_reason}",
-                    "dev_output": getattr(dev_res, "output", ""),
+                    "blocked_by": "@turing",
+                    "error": "Interrompido pelo usuário (checkpoint salvo).",
+                    "completed_tasks": sorted(concluidas_ids),
                 }
 
-            # Extrai e grava arquivos físicos gerados
-            if dev_res and getattr(dev_res, "output", None):
-                self._extract_and_write_project_files(dev_res.output)
+            # Lote: prontas (dependências satisfeitas), UMA por camada
+            prontas = [t for t in pendentes if all(dep in concluidas_ids for dep in t.depends_on)]
+            lote: list = []
+            camadas: set[str] = set()
+            for t in prontas:
+                if t.task_type.value not in camadas:
+                    lote.append(t)
+                    camadas.add(t.task_type.value)
+            if not lote:
+                lote = [pendentes[0]]  # dependências circulares: sequencial
 
-        # 3. FASE REVIEW: @unclebob (Tech Lead) revisa Clean Code, SOLID e padrões arquiteturais
+            if len(lote) == 1:
+                saidas_lote = [_executa_tarefa(lote[0])]
+            else:
+                BUS.publish(
+                    "announcement",
+                    agent="@turing",
+                    text=(
+                        "⚡ Paralelismo por camada: "
+                        + ", ".join(f"{t.task_type.value} ({t.id})" for t in lote)
+                        + " rodando juntos (contratos já definidos pelo arquiteto)."
+                    ),
+                )
+                with ThreadPoolExecutor(max_workers=len(lote)) as pool:
+                    saidas_lote = list(pool.map(_executa_tarefa, lote))
+
+            for t_exec, saida in zip(lote, saidas_lote):
+                concluidas_ids.add(t_exec.id)
+                pendentes.remove(t_exec)
+                entregues.append(
+                    f"{t_exec.id} — {t_exec.title} ({t_exec.problema_unico or t_exec.description})"
+                )
+                dev_outputs.append(f"[{t_exec.task_type.value}] {t_exec.title}: {saida}")
+
+        dev_res_texto = "\n\n".join(dev_outputs)
+
+        class _DevConsolidado:
+            """Consolidado das entregas task-a-task (mesma interface de resultado)."""
+
+            output = dev_res_texto
+            success = bool(dev_outputs)
+            is_blocked = False
+            block_reason = None
+
+        dev_res = _DevConsolidado()
+
+        # 3. FASE REVIEW: @unclebob (Tech Lead) revisa Clean Code, SOLID e padrões
+        # arquiteturais — DA STORY INTEIRA, só quando TODAS as tarefas fecharem.
         runner_bob = self._get_runner("@unclebob")
         bob_res = None
         if runner_bob:
             raw_bob_prompt = (
                 f"Faça o code review de Clean Code e SOLID para {target_story}.\n"
+                f"FORMATO OBRIGATÓRIO por achado: 'ACHADO: <problema>' seguido de "
+                f"'SOLUÇÃO: <correção específica — arquivo, o que mudar e como>'. "
+                f"Achado sem solução proposta é parecer incompleto.\n"
                 f"Inspecione os arquivos de código implementados pelo Dev ('js/', raiz) e os testes em 'tests/'.\n"
                 f"Se o código e os testes estiverem aprovados, declare explicitamente: 'Review: APROVADO'. Caso contrário, aponte os problemas.\n"
             )

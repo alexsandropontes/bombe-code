@@ -101,11 +101,59 @@ class PromotorDeBranches:
         return ResultadoPromocao(False, "commit", f"Falha ao commitar estado da IA: {saida}")
 
     # ---------------------------------------------------------- dev (squash)
+    def ultima_versao(self) -> tuple[str, str]:
+        """Última tag de versão (vX.Y.Z) e o commit dela. ("", "") se nenhuma."""
+        rc, saida = self._git("tag", "--list", "v*", "--sort=-v:refname")
+        if rc != 0 or not saida.strip():
+            return "", ""
+        tag = saida.splitlines()[0].strip()
+        rc, commit = self._git("rev-parse", f"{tag}^{{commit}}")
+        return (tag, commit.strip() if rc == 0 else "")
+
+    def calcular_proxima_versao(self) -> str:
+        """feat: desde a última tag → +0.1.0; só correções/outros → +0.0.1.
+
+        Sem tag anterior: parte de 0.1.0.
+        """
+        tag, _ = self.ultima_versao()
+        if not tag:
+            return "0.1.0"
+        try:
+            maior, menor, patch = (int(x) for x in tag.lstrip("v").split("."))
+        except ValueError:
+            return "0.1.0"
+        rc, logs = self._git("log", f"{tag}..{BRANCH_TRABALHO}", "--pretty=%s")
+        temas = (logs or "").lower()
+        if "feat" in temas:
+            return f"{maior}.{menor + 1}.0"
+        return f"{maior}.{menor}.{patch + 1}"
+
+    def _aplicar_versao_no_estado(self, versao: str) -> None:
+        """Aplica a versão no pyproject.toml e __init__.py do estado corrente."""
+        import re as _re
+
+        for rel, pattern in (
+            ("pyproject.toml", r'(^version\s*=\s*")[^"]+(")'),
+            ("src/bombe_code/__init__.py", r'(^__version__\s*=\s*")[^"]+(")'),
+        ):
+            caminho = self.project_dir / rel
+            if not caminho.exists():
+                continue
+            conteudo = caminho.read_text(encoding="utf-8")
+            novo = _re.sub(
+                pattern,
+                lambda m: f"{m.group(1)}{versao}{m.group(2)}",
+                conteudo,
+                count=1,
+                flags=_re.MULTILINE,
+            )
+            caminho.write_text(novo, encoding="utf-8")
+
     def promover_para_dev(self, mensagem: str) -> ResultadoPromocao:
         """Promove o ESTADO FINAL de `dev-working-ia` para `dev` em UM commit (squash).
 
-        Acionada apenas por fim de onda homologada ou pedido explícito do humano.
-        Nunca faz push — o remoto é do humano.
+        Embalagem pura — versão e tag são responsabilidade de `/project release`.
+        Acionada por fim de onda homologada, pedido do humano ou ship. Nunca push.
         """
         detalhes: list[str] = []
 
@@ -164,6 +212,63 @@ class PromotorDeBranches:
         self._git("switch", BRANCH_TRABALHO)
         detalhes.append(f"Retornando ao trabalho em {BRANCH_TRABALHO}.")
         return ResultadoPromocao(True, "dev", f"ONDA promovida para dev: {mensagem}", detalhes)
+
+    # ----------------------------------------------------------- release
+    def analisar_release(self) -> dict[str, Any]:
+        """Analisa os commits desde a última tag e sugere a próxima versão."""
+        tag, _ = self.ultima_versao()
+        faixa = f"{tag}..{BRANCH_TRABALHO}" if tag else BRANCH_TRABALHO
+        rc, logs = self._git("log", faixa, "--pretty=%s")
+        temas = [t.strip() for t in (logs or "").splitlines() if t.strip()]
+        sugestao = self.calcular_proxima_versao()
+        return {
+            "ultima_tag": tag or "nenhuma",
+            "commits": temas,
+            "total": len(temas),
+            "tem_feat": any(t.lower().startswith("feat") for t in temas),
+            "versao_sugerida": sugestao,
+        }
+
+    def gerar_release(
+        self, mensagem: str | None = None, versao: str | None = None
+    ) -> ResultadoPromocao:
+        """Empacota e TAGA a versão: analisa commits, aplica a versão (sugerida
+        ou imposta pelo usuário), commita `chore(release)` e cria a tag vXY.Z
+        na branch de trabalho. Não promove nem faz push (isso é o ship)."""
+        if not self.eh_repositorio():
+            return ResultadoPromocao(False, "release", "Projeto não é um repositório Git.")
+
+        garantia = self.garantir_branch_trabalho()
+        detalhes = [garantia.mensagem]
+        if not garantia.success:
+            return ResultadoPromocao(False, "release", garantia.mensagem, detalhes)
+
+        analise = self.analisar_release()
+        versao_final = (versao or "").strip() or analise["versao_sugerida"]
+        msg_release = (
+            mensagem
+            or f"chore(release): v{versao_final} ({analise['total']} commits desde {analise['ultima_tag']})"
+        )
+
+        self._aplicar_versao_no_estado(versao_final)
+        commit = self._commit_estado_da_ia(msg_release)
+        detalhes.append(commit.mensagem)
+
+        rc, _ = self._git("tag", "-a", f"v{versao_final}", "-m", f"v{versao_final} — release")
+        if rc != 0:
+            return ResultadoPromocao(
+                False, "release", f"Falha ao criar a tag v{versao_final} (já existe?)", detalhes
+            )
+
+        detalhes.append(
+            f"Commits considerados: {analise['total']} (feat presente: {analise['tem_feat']})."
+        )
+        return ResultadoPromocao(
+            True,
+            "release",
+            f"Release v{versao_final} gerado e tagado em {BRANCH_TRABALHO}.",
+            detalhes,
+        )
 
     # ------------------------------------------------------ hml / main
     def promover_fase(self, destino: str) -> ResultadoPromocao:

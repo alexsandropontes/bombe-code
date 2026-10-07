@@ -77,7 +77,10 @@ class BombeTuiApp(App):
     BINDINGS: ClassVar[list[Binding]] = [
         Binding("shift+tab", "toggle_vibe_mode", "Alternar VIBE/TDD", show=True),
         Binding("tab", "cycle_stage", "Alternar Etapa (TDD)", show=True),
-        Binding("ctrl+c", "noop", show=False),
+        # PARIDADE OPENCODE: Ctrl+C fecha a aplicação; Ctrl+Shift+C é a cópia
+        # (na maioria dos terminais o próprio terminal copia — o app não segura
+        # a tecla; quando o terminal entrega, o app copia a transcrição).
+        Binding("ctrl+c", "quit", "Sair (opencode)", show=False),
         Binding("ctrl+shift+c", "copiar_tela", "Copiar transcrição", show=False),
         Binding("escape", "escape_press", "Interromper (2× ESC)", show=False),
         Binding("ctrl+p", "command_palette", "Paleta de Comandos", show=True),
@@ -728,9 +731,6 @@ class BombeTuiApp(App):
             pass
 
     _last_escape_ts: float = 0.0
-
-    def action_noop(self) -> None:
-        """Ctrl+C NÃO interrompe fluxo nenhum (cópia de tela não é pausa)."""
 
     def action_copiar_tela(self) -> None:
         """Ctrl+Shift+C copia a transcrição visível para a área de transferência."""
