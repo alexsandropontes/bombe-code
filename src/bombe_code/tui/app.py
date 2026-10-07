@@ -77,7 +77,9 @@ class BombeTuiApp(App):
     BINDINGS: ClassVar[list[Binding]] = [
         Binding("shift+tab", "toggle_vibe_mode", "Alternar VIBE/TDD", show=True),
         Binding("tab", "cycle_stage", "Alternar Etapa (TDD)", show=True),
-        Binding("ctrl+c", "noop", show=False),
+        # Terminais entregam Ctrl+Shift+C como Ctrl+C puro — então Ctrl+C
+        # COPIA a transcrição (nunca interrompe). Interromper é ESC 2×.
+        Binding("ctrl+c", "copiar_tela", "Copiar transcrição", show=False),
         Binding("ctrl+shift+c", "copiar_tela", "Copiar transcrição", show=False),
         Binding("escape", "escape_press", "Interromper (2× ESC)", show=False),
         Binding("ctrl+p", "command_palette", "Paleta de Comandos", show=True),

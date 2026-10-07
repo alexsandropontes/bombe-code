@@ -106,10 +106,11 @@ async def _run_orchestrator_with_stream(
         _atualizar(bloco_widget, bloco_texto)
 
     def _linha_tool(agent: str, tool: str, args_resumo: str) -> RichText:
-        """Linha de tool em Rich Text — imune a markup vindo da LLM."""
+        """Linha de tool em Rich Text — imune a markup vindo da LLM.
+        Ação rotineira = cor calma (cinza suave); vermelho é só para erro."""
         t = RichText("🔧 ")
         t.append(agent, style=f"bold {cor_agente(agent)}")
-        t.append(f" → {tool}({args_resumo})", style="magenta")
+        t.append(f" → {tool}({args_resumo})", style=TOKENS["text_muted"])
         return t
 
     async def _drain() -> None:
