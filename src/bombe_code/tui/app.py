@@ -744,18 +744,26 @@ class BombeTuiApp(App):
         """Combo mudo: Ctrl+Shift+W/Ctrl+Shift+afins nunca fecham o app."""
 
     def action_ctrl_c_press(self) -> None:
-        """Ctrl+C SÓ fecha com DUPLO aperto (1º = dica). Nada de sair sozinho."""
+        """Ctrl+C SÓ fecha com DUPLO aperto (1º = dica). Saída é graceful:
+        aborta workers com checkpoint salvo — sem zumbis em background."""
         import time as _t
+
+        from bombe_code.turing.progress import ABORT_EVENT
 
         agora = _t.monotonic()
         if agora - self._last_ctrl_c_ts <= 1.8:
+            if self._is_active_turn:
+                ABORT_EVENT.set()  # workers salvam checkpoint e terminam
             self.exit()
             return
         self._last_ctrl_c_ts = agora
         chat = self.query_one("#chat-view", ChatView)
-        chat.mount(
-            Static("[dim]⏸ pressione Ctrl+C novamente para sair · cópia = Ctrl+Shift+C[/dim]")
+        aviso = (
+            "⏸ pressione Ctrl+C novamente para SAIR (aborta com checkpoint)"
+            if self._is_active_turn
+            else "⏸ pressione Ctrl+C novamente para sair · cópia = Ctrl+Shift+C"
         )
+        chat.mount(Static(f"[dim]{aviso}[/dim]"))
 
     def action_copiar_tela(self) -> None:
         """Copia a transcrição: OSC52 (funciona sobre SSH) + pyperclip local."""

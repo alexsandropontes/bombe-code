@@ -14,7 +14,8 @@ class ReviewOutput(BaseModel):
     issues: list[str]
 
 
-def test_create_agent_with_custom_model_and_result_type():
+def test_create_agent_with_custom_model_and_result_type(monkeypatch):
+    monkeypatch.setenv("BOMBE_TEST_REAL_LLM", "1")
     factory = PydanticAiFactory()
     agent = factory.create_agent(
         model_name="test",
@@ -33,14 +34,16 @@ def test_resolve_local_llama_model():
     assert model_instance is not None
 
 
-def test_create_agent_defaults_to_string_result():
+def test_create_agent_defaults_to_string_result(monkeypatch):
+    monkeypatch.setenv("BOMBE_TEST_REAL_LLM", "1")
     factory = PydanticAiFactory()
     agent = factory.create_agent(model_name="test")
     assert isinstance(agent, Agent)
     assert agent.output_type is str
 
 
-def test_create_agent_injects_thinking_disabled_for_zai_glm():
+def test_create_agent_injects_thinking_disabled_for_zai_glm(monkeypatch):
+    monkeypatch.setenv("BOMBE_TEST_REAL_LLM", "1")
     factory = PydanticAiFactory()
     agent = factory.create_agent(model_name="glm-5.3-flash")
     assert isinstance(agent, Agent)

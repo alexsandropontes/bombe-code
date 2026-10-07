@@ -84,6 +84,20 @@ class AgentRunner:
         publicados no TuringProgressBus em tempo real (streaming token-a-token).
         No modo quiet, o barramento filtra os deltas e mantém apenas anúncios.
         """
+        # FECHAMENTO GRACEFUL: com abort ativo (TUI fechada), nem invocar o
+        # provedor — zumbis de background nunca mais.
+        from bombe_code.turing.progress import ABORT_EVENT
+
+        if ABORT_EVENT.is_set():
+            return AgentExecutionResult(
+                agent_handle=self.agent.handle,
+                success=False,
+                status="INTERRUPTED",
+                is_blocked=True,
+                block_reason="⏸ Execução abortada: aplicação encerrada pelo usuário.",
+                error="ABORT_EVENT ativo",
+            )
+
         task_id: str | None = None
 
         if self.project_db:

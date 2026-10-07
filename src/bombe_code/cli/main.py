@@ -1069,6 +1069,9 @@ def tui(
             )
             tui_app.run()
         finally:
+            from ..turing.progress import ABORT_EVENT
+
+            ABORT_EVENT.set()  # fechamento graceful: workers salvam e terminam
             _restaurar_terminal()
             if server_thread:
                 server_thread.stop()
