@@ -1,6 +1,6 @@
 [project]
 name = "bombe-code"
-version = "0.2.0"
+version = "0.3.0"
 description = "Bombe Code — agente de código com harness vibe (reimplementação Python do opencode)"
 license = "MIT"
 requires-python = ">=3.13"
