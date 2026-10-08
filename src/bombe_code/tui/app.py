@@ -86,6 +86,7 @@ class BombeTuiApp(App):
         # área de transferência da sua máquina).
         Binding("ctrl+shift+c", "copiar_tela", "Copiar", show=False),
         Binding("f2", "copiar_tela", "Copiar transcrição (sem selecionar)", show=True),
+        Binding("f4", "toggle_mouse", "Mouse ON/OFF (seleção nativa)", show=True),
         # Ctrl+C e Ctrl+Shift+W JAMAIS fecham sozinhos (terminais entregam os
         # combos como Ctrl+C puro). Sair = Ctrl+C 2× ou Ctrl+Q.
         Binding("ctrl+c", "copy_or_quit", "Copiar seleção / 2× sai", show=False),
@@ -742,6 +743,30 @@ class BombeTuiApp(App):
     _last_escape_ts: float = 0.0
 
     _last_ctrl_c_ts: float = 0.0
+    _mouse_ligado: bool = False
+
+    def _mouse_tui(self, ligar: bool) -> None:
+        """Alterna o capture de mouse da TUI (F4). Padrão: LIVRE — o terminal
+        faz a seleção nativa e o Ctrl+Shift+C do terminal copia (opencode)."""
+        try:
+            with open("/dev/tty", "w") as tty:
+                if ligar:
+                    tty.write("\x1b[?1000h\x1b[?1003h\x1b[?1006h")
+                else:
+                    tty.write("\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l")
+                tty.flush()
+            self._mouse_ligado = ligar
+        except OSError as exc:
+            logger.debug("Mouse da TUI não alternado: %s", exc)
+
+    def action_toggle_mouse(self) -> None:
+        self._mouse_tui(not self._mouse_ligado)
+        estado = (
+            "LIGADO (clique em botões/diálogos)"
+            if self._mouse_ligado
+            else "LIVRE (seleção nativa do terminal)"
+        )
+        self.notify(f"🖱️ Mouse da TUI: {estado}", severity="information")
 
     def action_noop(self) -> None:
         """Combo mudo: Ctrl+Shift+W/Ctrl+Shift+afins nunca fecham o app."""
@@ -851,7 +876,7 @@ class BombeTuiApp(App):
         await chat.mount(
             Static(
                 f"[{TOKENS['warning']}]⏸ Interrupção solicitada (ESC ESC) — agentes encerram na "
-                "próxima fronteira e o checkpoint fica salvo. /wave resume retoma.[/{TOKENS['warning']}]"
+                f"próxima fronteira e o checkpoint fica salvo.[/{TOKENS['warning']}]"
             )
         )
 

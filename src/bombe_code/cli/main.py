@@ -1058,9 +1058,20 @@ def tui(
         base_url = f"http://127.0.0.1:{port}"
         auth = ("bombe", password)
 
+    def _mouse_livre_tui() -> None:
+        """Paridade opencode: mouse LIVRE na TUI — o terminal faz a seleção
+        nativa e o Ctrl+Shift+C do terminal copia (qualquer terminal)."""
+        try:
+            with open("/dev/tty", "w") as tty:
+                tty.write("\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l")
+                tty.flush()
+        except OSError:
+            pass
+
     import atexit
 
     atexit.register(_restaurar_terminal)
+    _mouse_livre_tui()  # já no boot: seleção nativa disponível desde o início
     try:
         try:
             client = BombeClient(base_url, auth=auth)
@@ -1072,6 +1083,7 @@ def tui(
             from ..turing.progress import ABORT_EVENT
 
             ABORT_EVENT.set()  # fechamento graceful: workers salvam e terminam
+            _mouse_livre_tui()
             _restaurar_terminal()
             if server_thread:
                 server_thread.stop()
