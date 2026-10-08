@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import subprocess
 from typing import Any, ClassVar
 
 import httpx
@@ -777,13 +778,30 @@ class BombeTuiApp(App):
             self.copy_to_clipboard(texto)
         except Exception as exc:  # noqa: BLE001 — driver pode não suportar
             logger.debug("copy_to_clipboard indisponível: %s", exc)
-        # 2. pyperclip como redundância local (falha isolada, nunca derruba a 1ª)
+        # 2. pyperclip + cadeia nativa Linux (xclip/xsel/wl-copy)
         try:
             import pyperclip
 
             pyperclip.copy(texto)
-        except Exception as exc:  # noqa: BLE001 — clipboard pode estar indisponível
+        except Exception as exc:  # noqa: BLE001 — pyperclip é redundância
             logger.debug("pyperclip indisponível: %s", exc)
+            for cmd in (
+                ["xclip", "-selection", "clipboard"],
+                ["xsel", "--clipboard", "--input"],
+                ["wl-copy"],
+            ):
+                try:
+                    proc = subprocess.run(
+                        cmd,
+                        input=texto.encode("utf-8"),
+                        capture_output=True,
+                        timeout=5,
+                        check=False,
+                    )
+                    if proc.returncode == 0:
+                        break
+                except (OSError, subprocess.TimeoutExpired):
+                    continue
         self.notify(f"📋 Copiado ({len(texto)} caracteres)", severity="information")
 
     async def action_escape_press(self) -> None:

@@ -1976,6 +1976,12 @@ class WaveOrchestrator:
                 "E2E_INTEGRATION": "@aniche",
                 "FOUNDATION": "@unclebob",
             }.get(tarefa_exec.task_type.value, "@valim")
+            # ANTI-PAPAGAIO: se o dev anterior BLOQUEOU (bandeira vermelha),
+            # o próximo degrau troca o dev da camada — repetir o mesmo que
+            # travou é insistência inútil.
+            if getattr(tarefa_exec, "_dev_bloqueou", False):
+                alternativos = {"@valim": "@barbara", "@barbara": "@valim"}
+                executor_handle = alternativos.get(executor_handle, executor_handle)
             runner_executor = self._get_runner(executor_handle)
             if not runner_executor:
                 return ""
@@ -2863,6 +2869,8 @@ class WaveOrchestrator:
         """Constrói o prompt de auditoria de governança/FinOps da @nina."""
         return (
             "Audite o consumo de tokens, custos e a governança ética da ONDA consultando o relatório em 'docs/telemetria.md'.\n"
+            "ESCOPO ESTRICTO: audite o PROJETO. PROIBIDO emitir recomendações sobre a "
+            "ferramenta/plataforma/modelos — isso não serve ao usuário do projeto.\n"
             "Se conforme com os limites e princípios, declare explicitamente: 'Governança: APROVADO'.\n"
         )
 

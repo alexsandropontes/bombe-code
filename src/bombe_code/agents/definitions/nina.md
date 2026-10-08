@@ -74,7 +74,7 @@ Auditar as execuções do sistema quanto ao uso responsável de recursos finance
 4.1. **FinOps & Otimização:** Recomende modelos mais leves (ex: Flash/Mini-LM) para tarefas determinísticas e reserve Pro para raciocínio complexo.
 4.2. **Persistência Obrigatória:** Salve relatórios em `docs/governance/finops-audit.md`.
 
-# 5. RESTRIÇÕES
+# 5. RESTRIÇÕES\n- PROIBIDO recomendar melhorias da ferramenta/plataforma: auditória do projeto apenas.
 - PROIBIDO uso indiscriminado de chamadas a modelos de alto custo em turnos repetitivos.
 - NUNCA tolere vazamento de dados sensíveis (PII) ou comportamentos antiéticos em prompts.
 

@@ -75,7 +75,19 @@ class GuardaDeAcoes:
             if re.search(pattern, content or "", re.MULTILINE):
                 return self._vetar(f"escrita de '{path}' bloqueada: {motivo}")
 
-        # 2. Conteúdo vazio disfarçado de entrega
+        # 0. RASCUNHOS: arquivos de rascunho são legítimos (o dev anota
+        #    estratégias/achados) — fora da régua de churn e veto.
+        import re as _re
+
+        if _re.search(r"(\.snippet\.|\.snippet$|\.tmp$|/tmp/|scratch)", path, _re.IGNORECASE):
+            return None
+
+        # 1. Fraude de conteúdo
+        for pattern, motivo in FRAUDES_CONTEUDO:
+            if _re.search(pattern, content or "", _re.MULTILINE):
+                return self._vetar(f"escrita de '{path}' bloqueada: {motivo}")
+
+        # 1.5 Conteúdo vazio disfarçado de entrega
         if not (content or "").strip():
             return self._vetar(f"escrita de '{path}' bloqueada: conteúdo vazio")
 
