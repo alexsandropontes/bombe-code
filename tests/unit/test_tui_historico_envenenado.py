@@ -18,9 +18,9 @@ def _part_com_markup_cru() -> dict[str, Any]:
 def test_partwidget_aceita_parte_envenenada_sem_explodir():
     """O widget em si não levanta na construção, mesmo com markup cru."""
     try:
-        w = PartWidget(_part_com_markup_cru())
+        PartWidget(_part_com_markup_cru())
         criado = True
-    except Exception:
+    except Exception:  # noqa: BLE001 — provando que não levanta
         criado = False
     assert criado  # construção offline não explode
 

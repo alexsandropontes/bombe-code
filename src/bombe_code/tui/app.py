@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-import subprocess
 from typing import Any, ClassVar
 
 import httpx
@@ -81,18 +80,9 @@ class BombeTuiApp(App):
         # PARIDADE OPENCODE: Ctrl+C fecha a aplicação; Ctrl+Shift+C é a cópia
         # (na maioria dos terminais o próprio terminal copia — o app não segura
         # a tecla; quando o terminal entrega, o app copia a transcrição).
-        # CÓPIA REMOTA (opencode original): Ctrl+Shift+C copia via OSC52 —
-        # funciona com o app rodando em SSH (o terminal LOCAL escreve na
-        # área de transferência da sua máquina).
-        Binding("ctrl+shift+c", "copiar_tela", "Copiar", show=False),
-        Binding("ctrl+shift+v", "colar_clipboard", "Colar", show=False),
-        Binding("f2", "copiar_tela", "Copiar transcrição (sem selecionar)", show=True),
-        Binding("f4", "toggle_mouse", "Mouse ON/OFF (seleção nativa)", show=True),
         # Ctrl+C e Ctrl+Shift+W JAMAIS fecham sozinhos (terminais entregam os
         # combos como Ctrl+C puro). Sair = Ctrl+C 2× ou Ctrl+Q.
-        Binding("ctrl+c", "copy_or_quit", "Copiar seleção / 2× sai", show=False),
-        Binding("ctrl+shift+c", "copy_text", "Copiar seleção", show=False),
-        Binding("ctrl+shift+w", "noop", show=False),
+        Binding("ctrl+c", "quit", "Sair (opencode)", show=False),
         Binding("escape", "escape_press", "Interromper (2× ESC)", show=False),
         Binding("ctrl+p", "command_palette", "Paleta de Comandos", show=True),
         Binding("ctrl+b", "toggle_sidebar", "Painel Lateral", show=True),
@@ -402,7 +392,11 @@ class BombeTuiApp(App):
             logger.debug("Falha ao atualizar barra de status: %s", exc)
 
     async def on_mount(self) -> None:
-        # Paridade opencode: mouse LIVRE por padrão — seleção nativa sempre ok
+        # PARIDADE OPENCODE (tea.DisableMouse): o driver do Textual liga
+        # ?1000h/?1003h/?1006h no boot — isso BLOQUEIA a seleção nativa do
+        # terminal. Desligamos os modos de mouse logo após o driver montar:
+        # seleção nativa funciona em qualquer terminal e o Ctrl+Shift+C do
+        # TERMINAL copia (acelerador do VTE, nunca chega ao app).
         self._mouse_tui(False)
         if not self.session_id:
             try:
@@ -757,34 +751,15 @@ class BombeTuiApp(App):
 
     _last_escape_ts: float = 0.0
 
-    _last_ctrl_c_ts: float = 0.0
-    _mouse_ligado: bool = False
-
     def _mouse_tui(self, ligar: bool) -> None:
-        """Alterna o capture de mouse da TUI (F4). Padrão: LIVRE — o terminal
-        faz a seleção nativa e o Ctrl+Shift+C do terminal copia (opencode)."""
+        """Desliga os modos de mouse da TUI (paridade tea.DisableMouse).
+        O argumento `ligar` é ignorado: mouse-tracking nunca é religado."""
         try:
             with open("/dev/tty", "w") as tty:
-                if ligar:
-                    tty.write("\x1b[?1000h\x1b[?1003h\x1b[?1006h")
-                else:
-                    tty.write("\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l")
+                tty.write("\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l")
                 tty.flush()
-            self._mouse_ligado = ligar
         except OSError as exc:
             logger.debug("Mouse da TUI não alternado: %s", exc)
-
-    def action_toggle_mouse(self) -> None:
-        self._mouse_tui(not self._mouse_ligado)
-        estado = (
-            "LIGADO (clique em botões/diálogos)"
-            if self._mouse_ligado
-            else "LIVRE (seleção nativa do terminal)"
-        )
-        self.notify(f"🖱️ Mouse da TUI: {estado}", severity="information")
-
-    def action_noop(self) -> None:
-        """Combo mudo: Ctrl+Shift+W/Ctrl+Shift+afins nunca fecham o app."""
 
     def action_copy_or_quit(self) -> None:
         """Ctrl+C (igual opencode): SE houver texto selecionado → copia a
@@ -821,64 +796,6 @@ class BombeTuiApp(App):
             else "⏸ pressione Ctrl+C novamente para sair · selecione texto e Ctrl+C para copiar"
         )
         chat.mount(Static(f"[dim]{aviso}[/dim]"))
-
-    def action_paste_clipboard(self) -> None:
-        """Ctrl+Shift+V: cola o clipboard no campo de entrada (como no opencode)."""
-        try:
-            import pyperclip
-
-            texto = (pyperclip.paste() or "").strip()
-        except Exception as exc:  # noqa: BLE001 — clipboard pode estar indisponível
-            texto = ""
-            logger.debug("Colar indisponível: %s", exc)
-        if not texto:
-            chat = self.query_one("#chat-view", ChatView)
-            chat.mount(Static("[dim]Clipboard vazio.[/dim]"))
-            return
-        try:
-            inp = self.query_one("#prompt-input", PromptInput)
-            inp.insert(texto, inp.location)  # insere no cursor
-            inp.focus()
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("Falha ao colar no input: %s", exc)
-
-    def action_copiar_tela(self) -> None:
-        """Copia a transcrição: OSC52 (funciona sobre SSH) + pyperclip local."""
-        chat = self.query_one("#chat-view", ChatView)
-        texto = "\n\n".join(
-            str(getattr(w, "renderable", None) or getattr(w, "content", "")) for w in chat.children
-        ).strip()
-        # Canal NATIVO do Textual: o driver emite OSC52 corretamente (funciona
-        # sobre SSH) e faz fallback local — mesmo mecanismo do opencode.
-        try:
-            self.copy_to_clipboard(texto)
-        except Exception as exc:  # noqa: BLE001 — driver pode não suportar
-            logger.debug("copy_to_clipboard indisponível: %s", exc)
-        # 2. pyperclip + cadeia nativa Linux (xclip/xsel/wl-copy)
-        try:
-            import pyperclip
-
-            pyperclip.copy(texto)
-        except Exception as exc:  # noqa: BLE001 — pyperclip é redundância
-            logger.debug("pyperclip indisponível: %s", exc)
-            for cmd in (
-                ["xclip", "-selection", "clipboard"],
-                ["xsel", "--clipboard", "--input"],
-                ["wl-copy"],
-            ):
-                try:
-                    proc = subprocess.run(
-                        cmd,
-                        input=texto.encode("utf-8"),
-                        capture_output=True,
-                        timeout=5,
-                        check=False,
-                    )
-                    if proc.returncode == 0:
-                        break
-                except (OSError, subprocess.TimeoutExpired):
-                    continue
-        self.notify(f"📋 Copiado ({len(texto)} caracteres)", severity="information")
 
     async def action_escape_press(self) -> None:
         """ESCAPE DUPLO (janela 1.8s) = interromper. ESC único = dica."""
