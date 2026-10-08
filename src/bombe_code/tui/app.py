@@ -35,6 +35,8 @@ class BombeTuiApp(App):
     TITLE = "Bombe Code"
     SUB_TITLE = "Agentic Coding Environment"
 
+    _last_ctrl_c_ts: float = 0.0  # janela do Ctrl+C (1º copia, 2º sai)
+
     CSS = f"""
     Screen {{
         background: {TOKENS["bg"]};
@@ -758,7 +760,6 @@ class BombeTuiApp(App):
         except OSError as exc:
             logger.debug("Mouse da TUI não alternado: %s", exc)
 
-
     def action_copy_or_quit(self) -> None:
         """1º Ctrl+C: COPIA a transcrição (o Ctrl+Shift+C do terminal chega
         como o mesmo byte). 2º aperto na janela: sai com checkpoint."""
@@ -767,13 +768,52 @@ class BombeTuiApp(App):
         from bombe_code.turing.progress import ABORT_EVENT
 
         agora = _t.monotonic()
-        if agora - self._last_ctrl_c_ts <= 1.8:
+        anterior = getattr(self, "_last_ctrl_c_ts", 0.0)
+        if agora - anterior <= 1.8:
             if self._is_active_turn:
                 ABORT_EVENT.set()  # workers salvam checkpoint e terminam
             self.exit()
             return
         self._last_ctrl_c_ts = agora
         self.action_copiar_tela()
+
+    def action_copiar_tela(self) -> None:
+        """Copia a transcrição inteira: driver nativo (OSC52 em terminais com
+        suporte) + cadeia Linux (xclip/xsel/wl-copy)."""
+        import subprocess
+
+        chat = self.query_one("#chat-view", ChatView)
+        texto = "\n\n".join(
+            str(getattr(w, "renderable", None) or getattr(w, "content", "")) for w in chat.children
+        ).strip()
+        try:
+            self.copy_to_clipboard(texto)
+        except Exception as exc:  # noqa: BLE001 — driver pode não suportar
+            logger.debug("copy_to_clipboard indisponível: %s", exc)
+        try:
+            import pyperclip
+
+            pyperclip.copy(texto)
+        except Exception as exc:  # noqa: BLE001 — pyperclip é redundância
+            logger.debug("pyperclip indisponível: %s", exc)
+        for cmd in (
+            ["xclip", "-selection", "clipboard"],
+            ["xsel", "--clipboard", "--input"],
+            ["wl-copy"],
+        ):
+            try:
+                proc = subprocess.run(
+                    cmd,
+                    input=texto.encode("utf-8"),
+                    capture_output=True,
+                    timeout=5,
+                    check=False,
+                )
+                if proc.returncode == 0:
+                    break
+            except (OSError, subprocess.TimeoutExpired):
+                continue
+        self.notify(f"📋 Copiado ({len(texto)} caracteres)", severity="information")
 
     async def action_escape_press(self) -> None:
         """ESCAPE DUPLO (janela 1.8s) = interromper. ESC único = dica."""
