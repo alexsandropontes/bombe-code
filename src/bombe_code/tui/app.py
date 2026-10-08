@@ -77,12 +77,9 @@ class BombeTuiApp(App):
     BINDINGS: ClassVar[list[Binding]] = [
         Binding("shift+tab", "toggle_vibe_mode", "Alternar VIBE/TDD", show=True),
         Binding("tab", "cycle_stage", "Alternar Etapa (TDD)", show=True),
-        # PARIDADE OPENCODE: Ctrl+C fecha a aplicação; Ctrl+Shift+C é a cópia
-        # (na maioria dos terminais o próprio terminal copia — o app não segura
-        # a tecla; quando o terminal entrega, o app copia a transcrição).
-        # Ctrl+C e Ctrl+Shift+W JAMAIS fecham sozinhos (terminais entregam os
-        # combos como Ctrl+C puro). Sair = Ctrl+C 2× ou Ctrl+Q.
-        Binding("ctrl+c", "quit", "Sair (opencode)", show=False),
+        # 1º Ctrl+C (ou Ctrl+Shift+C — o terminal entrega os dois como o
+        # mesmo byte) = COPIA a transcrição · 2º aperto = sai com checkpoint.
+        Binding("ctrl+c", "copy_or_quit", "Copiar tela / 2× sai", show=False),
         Binding("escape", "escape_press", "Interromper (2× ESC)", show=False),
         Binding("ctrl+p", "command_palette", "Paleta de Comandos", show=True),
         Binding("ctrl+b", "toggle_sidebar", "Painel Lateral", show=True),
@@ -761,6 +758,22 @@ class BombeTuiApp(App):
         except OSError as exc:
             logger.debug("Mouse da TUI não alternado: %s", exc)
 
+
+    def action_copy_or_quit(self) -> None:
+        """1º Ctrl+C: COPIA a transcrição (o Ctrl+Shift+C do terminal chega
+        como o mesmo byte). 2º aperto na janela: sai com checkpoint."""
+        import time as _t
+
+        from bombe_code.turing.progress import ABORT_EVENT
+
+        agora = _t.monotonic()
+        if agora - self._last_ctrl_c_ts <= 1.8:
+            if self._is_active_turn:
+                ABORT_EVENT.set()  # workers salvam checkpoint e terminam
+            self.exit()
+            return
+        self._last_ctrl_c_ts = agora
+        self.action_copiar_tela()
 
     async def action_escape_press(self) -> None:
         """ESCAPE DUPLO (janela 1.8s) = interromper. ESC único = dica."""

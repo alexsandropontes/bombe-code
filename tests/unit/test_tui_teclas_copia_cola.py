@@ -12,18 +12,18 @@ def test_bindings_opencode(tmp_path):
     app = BombeTuiApp(client=client, session_id="ses_teclas", project_dir=str(tmp_path))
 
     acoes = {b.action for b in BombeTuiApp.BINDINGS}
-    assert "quit" in acoes
+    assert "quit" in acoes  # Ctrl+C fecha (paridade opencode)
     # Nenhuma ação inventada sobrevive:
     for proibida in (
         "copiar_tela",
         "colar_clipboard",
         "toggle_mouse",
         "ctrl_c_press",
-        "copy_or_quit",
+        "copy_text",
         "noop",
     ):
         assert proibida not in acoes, f"binding inventado sobreviveu: {proibida}"
-    # Nenhuma binding para teclas que o VTE consome antes do app:
+    # Teclas que o VTE consome antes do app NÃO têm binding (seriam mortas):
     for tecla_proibida in ("ctrl+shift+c", "ctrl+shift+v", "ctrl+shift+w", "f2", "f4"):
         for b in BombeTuiApp.BINDINGS:
             assert tecla_proibida not in (b.key or "").lower(), (
