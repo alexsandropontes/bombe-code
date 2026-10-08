@@ -118,6 +118,7 @@ class Sidebar(VerticalScroll):
     tokens_count = reactive(0)
     context_percent = reactive(0)
     cost = reactive(0.0)
+    arquivos_escritos: list[str] | None = None
 
     def __init__(
         self,
@@ -132,6 +133,7 @@ class Sidebar(VerticalScroll):
         self.session_id = session_id
         self.session_title = session_title
         self.directory = self.project_dir
+        self.arquivos_escritos: list[str] = []
         self.model_name = model
         self._content_widget = Static("", id="sidebar-content")
 
@@ -162,6 +164,12 @@ class Sidebar(VerticalScroll):
             self.directory = os.path.abspath(directory)
         self.refresh_view()
 
+    def registrar_arquivo(self, caminho: str) -> None:
+        """Registra arquivo gravado pela sessão (projetos sem git mostram igual)."""
+        if caminho and caminho not in self.arquivos_escritos:
+            self.arquivos_escritos.append(caminho)
+            self.refresh_view()
+
     def refresh_view(self) -> None:
         """Renderiza a visualização rica do painel lateral."""
         t = Text()
@@ -186,29 +194,38 @@ class Sidebar(VerticalScroll):
         # decisão de produto: não exibir custo por enquanto.
         t.append("─" * 36 + "\n", style=TOKENS["surface_alt"])
 
-        # 3. Modified Files
+        # 3. Modified Files — git (se existir) + arquivos escritos pela sessão
         files = _get_git_modified_files(self.directory)
-        t.append(f"📝 ARQUIVOS MODIFICADOS ({len(files)})\n", style=f"bold {TOKENS['primary']}")
-        if not files:
+        escritos_sessao = [
+            f for f in self.arquivos_escritos if f not in {i["file"] for i in files}
+        ]
+        total_arquivos = len(files) + len(escritos_sessao)
+        t.append(
+            f"📝 ARQUIVOS MODIFICADOS ({total_arquivos})\n", style=f"bold {TOKENS['primary']}"
+        )
+        if not files and not escritos_sessao:
             t.append(" (Nenhum arquivo modificado)\n", style=f"{TOKENS['text_muted']}")
-        else:
-            for item in files[:8]:
-                raw_file = item["file"].rstrip("/")
-                p = Path(raw_file)
-                if len(p.parts) > 1:
-                    display_name = f"{p.parts[-2]}/{p.name}"
-                else:
-                    display_name = p.name
-                t.append(f" • {display_name[:24]:<24} ", style=f"{TOKENS['text']}")
-                if item["additions"]:
-                    t.append(f"+{item['additions']} ", style=f"{TOKENS['success']}")
-                if item["deletions"]:
-                    t.append(f"-{item['deletions']}", style=f"{TOKENS['error']}")
-                t.append("\n")
-            if len(files) > 8:
-                t.append(
-                    f" ... e mais {len(files) - 8} arquivos\n", style=f"{TOKENS['text_muted']}"
-                )
+        for item in files[:8]:
+            raw_file = item["file"].rstrip("/")
+            p = Path(raw_file)
+            if len(p.parts) > 1:
+                display_name = f"{p.parts[-2]}/{p.name}"
+            else:
+                display_name = p.name
+            t.append(f" • {display_name[:24]:<24} ", style=f"{TOKENS['text']}")
+            if item["additions"]:
+                t.append(f"+{item['additions']} ", style=f"{TOKENS['success']}")
+            if item["deletions"]:
+                t.append(f"-{item['deletions']}", style=f"{TOKENS['error']}")
+            t.append("\n")
+        for caminho in escritos_sessao[:6]:
+            pp = Path(caminho)
+            display_name = f"{pp.parts[-2]}/{pp.name}" if len(pp.parts) > 1 else pp.name
+            t.append(f" • {display_name[:30]:<30} ✍️\n", style=f"{TOKENS['warning']}")
+        if total_arquivos > 14:
+            t.append(
+                f" ... e mais {total_arquivos - 14} arquivos\n", style=f"{TOKENS['text_muted']}"
+            )
         t.append("─" * 36 + "\n", style=TOKENS["surface_alt"])
 
         # 4. Integrações

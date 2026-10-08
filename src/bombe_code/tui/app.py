@@ -412,8 +412,14 @@ class BombeTuiApp(App):
                 try:
                     sidebar = self.query_one("#sidebar", Sidebar)
                     sidebar.session_id = self.session_id
+                    tokens_reais = int(session_data.get("tokens", 0) or 0)
+                    custo_real = float(session_data.get("cost", 0) or 0)
                     sidebar.update_metrics(
-                        title=session_data.get("title"), directory=self.project_dir
+                        title=session_data.get("title"),
+                        directory=self.project_dir,
+                        tokens=tokens_reais,
+                        percent=min(100, int(tokens_reais / 128_000 * 100)),
+                        cost=custo_real,
                     )
                 except NoMatches:
                     pass
@@ -675,6 +681,26 @@ class BombeTuiApp(App):
 
         elif etype in ("tool-call", "tool-input"):
             tool_name = event.get("tool", "ferramenta")
+            # Arquivo gravado/editado pela sessão → sidebar (projetos sem git)
+            if any(k in tool_name.lower() for k in ("write", "edit", "apply")):
+                args_ev = event.get("arguments") or {}
+                caminho = ""
+                if isinstance(args_ev, dict):
+                    caminho = str(args_ev.get("path") or args_ev.get("file_path") or "")
+                elif isinstance(args_ev, str):
+                    import json as _json
+
+                    try:
+                        dados = _json.loads(args_ev)
+                        caminho = str(dados.get("path") or dados.get("file_path") or "")
+                    except (ValueError, TypeError):
+                        caminho = ""
+                if caminho:
+                    try:
+                        sidebar = self.query_one("#sidebar", Sidebar)
+                        sidebar.registrar_arquivo(caminho)
+                    except Exception as exc:  # noqa: BLE001
+                        logger.debug("Sidebar indisponível para arquivo: %s", exc)
             if self._processing_bar is not None:
                 self._processing_bar.set_message(f"Executando ferramenta: {tool_name}")
             if self._current_reasoning_widget is not None:
@@ -736,12 +762,24 @@ class BombeTuiApp(App):
 
         try:
             sidebar = self.query_one("#sidebar", Sidebar)
-            if etype in ("text-delta", "reasoning-delta"):
+            if etype == "usage":
+                # USO REAL do provedor (zera a estimativa por deltas)
+                total = int(event.get("input_tokens", 0) or 0) + int(
+                    event.get("output_tokens", 0) or 0
+                )
+                if total:
+                    sidebar.tokens_count = total
+                    sidebar.context_percent = min(100, int(total / 128_000 * 100))
+                    sidebar.refresh_view()
+            elif etype in ("text-delta", "reasoning-delta"):
+                # estimativa leve apenas ENTRE chunks (o evento usage corrige)
                 delta_text = event.get("text", "")
                 if delta_text:
-                    sidebar.tokens_count += max(1, len(delta_text) // 4)
-                    sidebar.cost = round((sidebar.tokens_count / 1_000_000) * 3.0, 4)
-                    sidebar.context_percent = min(100, int((sidebar.tokens_count / 128_000) * 100))
+                    if sidebar.tokens_count == 0:
+                        sidebar.tokens_count += max(1, len(delta_text) // 4)
+                        sidebar.context_percent = min(
+                            100, int((sidebar.tokens_count / 128_000) * 100)
+                        )
                     sidebar.refresh_view()
             elif etype in ("tool-result", "prompt.finished"):
                 sidebar.refresh_view()
