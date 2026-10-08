@@ -88,7 +88,8 @@ class BombeTuiApp(App):
         Binding("f2", "copiar_tela", "Copiar transcrição (sem selecionar)", show=True),
         # Ctrl+C e Ctrl+Shift+W JAMAIS fecham sozinhos (terminais entregam os
         # combos como Ctrl+C puro). Sair = Ctrl+C 2× ou Ctrl+Q.
-        Binding("ctrl+c", "ctrl_c_press", "Sair (2×)", show=False),
+        Binding("ctrl+c", "copy_or_quit", "Copiar seleção / 2× sai", show=False),
+        Binding("ctrl+shift+c", "copy_text", "Copiar seleção", show=False),
         Binding("ctrl+shift+w", "noop", show=False),
         Binding("escape", "escape_press", "Interromper (2× ESC)", show=False),
         Binding("ctrl+p", "command_palette", "Paleta de Comandos", show=True),
@@ -745,12 +746,26 @@ class BombeTuiApp(App):
     def action_noop(self) -> None:
         """Combo mudo: Ctrl+Shift+W/Ctrl+Shift+afins nunca fecham o app."""
 
-    def action_ctrl_c_press(self) -> None:
-        """Ctrl+C SÓ fecha com DUPLO aperto (1º = dica). Saída é graceful:
-        aborta workers com checkpoint salvo — sem zumbis em background."""
+    def action_copy_or_quit(self) -> None:
+        """Ctrl+C (igual opencode): SE houver texto selecionado → copia a
+        seleção; sem seleção → DUPLO aperto sai (graceful, com checkpoint)."""
         import time as _t
 
         from bombe_code.turing.progress import ABORT_EVENT
+
+        selecionado = ""
+        try:
+            selecionado = self.screen.get_selected_text() or ""
+        except Exception:  # noqa: BLE001 — seleção é best-effort
+            selecionado = ""
+
+        if selecionado.strip():
+            self.copy_to_clipboard(selecionado)
+            self.notify(
+                f"📋 Seleção copiada ({len(selecionado)} caracteres)",
+                severity="information",
+            )
+            return
 
         agora = _t.monotonic()
         if agora - self._last_ctrl_c_ts <= 1.8:
@@ -763,7 +778,7 @@ class BombeTuiApp(App):
         aviso = (
             "⏸ pressione Ctrl+C novamente para SAIR (aborta com checkpoint)"
             if self._is_active_turn
-            else "⏸ pressione Ctrl+C novamente para sair · cópia = Ctrl+Shift+C"
+            else "⏸ pressione Ctrl+C novamente para sair · selecione texto e Ctrl+C para copiar"
         )
         chat.mount(Static(f"[dim]{aviso}[/dim]"))
 
