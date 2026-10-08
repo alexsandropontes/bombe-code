@@ -2,7 +2,6 @@
 cru NÃO derrubam o boot da TUI — são isoladas e puladas."""
 
 import asyncio
-from types import SimpleNamespace
 from typing import Any
 
 from bombe_code.tui.commands import _run_orchestrator_with_stream  # noqa: F401 (sanidade do módulo)
@@ -29,7 +28,7 @@ def test_partwidget_aceita_parte_envenenada_sem_explodir():
 def test_boot_da_tui_sobrevive_a_historico_envenenado(tmp_path):
     """O _load_history pulando partes envenenadas: simulado via chamada
     direta da lógica de montagem (sem servidor)."""
-    from unittest.mock import MagicMock, patch
+    from unittest.mock import patch
 
     from bombe_code.tui.app import BombeTuiApp
     from bombe_code.tui.client import BombeClient

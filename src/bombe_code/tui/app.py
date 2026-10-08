@@ -85,6 +85,7 @@ class BombeTuiApp(App):
         # funciona com o app rodando em SSH (o terminal LOCAL escreve na
         # área de transferência da sua máquina).
         Binding("ctrl+shift+c", "copiar_tela", "Copiar", show=False),
+        Binding("ctrl+shift+v", "colar_clipboard", "Colar", show=False),
         Binding("f2", "copiar_tela", "Copiar transcrição (sem selecionar)", show=True),
         Binding("f4", "toggle_mouse", "Mouse ON/OFF (seleção nativa)", show=True),
         # Ctrl+C e Ctrl+Shift+W JAMAIS fecham sozinhos (terminais entregam os
@@ -401,6 +402,8 @@ class BombeTuiApp(App):
             logger.debug("Falha ao atualizar barra de status: %s", exc)
 
     async def on_mount(self) -> None:
+        # Paridade opencode: mouse LIVRE por padrão — seleção nativa sempre ok
+        self._mouse_tui(False)
         if not self.session_id:
             try:
                 session_data = await self.client.create_session(
@@ -818,6 +821,26 @@ class BombeTuiApp(App):
             else "⏸ pressione Ctrl+C novamente para sair · selecione texto e Ctrl+C para copiar"
         )
         chat.mount(Static(f"[dim]{aviso}[/dim]"))
+
+    def action_paste_clipboard(self) -> None:
+        """Ctrl+Shift+V: cola o clipboard no campo de entrada (como no opencode)."""
+        try:
+            import pyperclip
+
+            texto = (pyperclip.paste() or "").strip()
+        except Exception as exc:  # noqa: BLE001 — clipboard pode estar indisponível
+            texto = ""
+            logger.debug("Colar indisponível: %s", exc)
+        if not texto:
+            chat = self.query_one("#chat-view", ChatView)
+            chat.mount(Static("[dim]Clipboard vazio.[/dim]"))
+            return
+        try:
+            inp = self.query_one("#prompt-input", PromptInput)
+            inp.insert(texto, inp.location)  # insere no cursor
+            inp.focus()
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Falha ao colar no input: %s", exc)
 
     def action_copiar_tela(self) -> None:
         """Copia a transcrição: OSC52 (funciona sobre SSH) + pyperclip local."""
