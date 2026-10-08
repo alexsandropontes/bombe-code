@@ -452,6 +452,7 @@ class BombeTuiApp(App):
         chat = self.query_one("#chat-view", ChatView)
         try:
             history = await self.client.get_history(self.session_id)
+            partes_puladas = 0
             for msg in history:
                 role = msg.get("role", "user")
                 prefix = (
@@ -461,7 +462,18 @@ class BombeTuiApp(App):
                 )
                 await chat.mount(Static(prefix))
                 for part in msg.get("parts", []):
-                    await chat.mount(PartWidget(part))
+                    # ISOLAMENTO POR PARTE: uma parte antiga com markup cru
+                    # (eras anteriores à fuga de escape) é PULADA — jamais
+                    # derruba o boot da TUI.
+                    try:
+                        await chat.mount(PartWidget(part))
+                    except Exception as exc:  # noqa: BLE001
+                        partes_puladas += 1
+                        logger.debug("Parte de histórico pulada (markup inválido): %s", exc)
+            if partes_puladas:
+                logger.warning(
+                    "%d parte(s) do histórico puladas por markup inválido", partes_puladas
+                )
             if not history:
                 lines = [
                     f"[{TOKENS['primary']} bold]╔════════════════════════════════════════════════════════════════╗[/{TOKENS['primary']} bold]",
