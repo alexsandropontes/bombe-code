@@ -761,41 +761,6 @@ class BombeTuiApp(App):
         except OSError as exc:
             logger.debug("Mouse da TUI não alternado: %s", exc)
 
-    def action_copy_or_quit(self) -> None:
-        """Ctrl+C (igual opencode): SE houver texto selecionado → copia a
-        seleção; sem seleção → DUPLO aperto sai (graceful, com checkpoint)."""
-        import time as _t
-
-        from bombe_code.turing.progress import ABORT_EVENT
-
-        selecionado = ""
-        try:
-            selecionado = self.screen.get_selected_text() or ""
-        except Exception:  # noqa: BLE001 — seleção é best-effort
-            selecionado = ""
-
-        if selecionado.strip():
-            self.copy_to_clipboard(selecionado)
-            self.notify(
-                f"📋 Seleção copiada ({len(selecionado)} caracteres)",
-                severity="information",
-            )
-            return
-
-        agora = _t.monotonic()
-        if agora - self._last_ctrl_c_ts <= 1.8:
-            if self._is_active_turn:
-                ABORT_EVENT.set()  # workers salvam checkpoint e terminam
-            self.exit()
-            return
-        self._last_ctrl_c_ts = agora
-        chat = self.query_one("#chat-view", ChatView)
-        aviso = (
-            "⏸ pressione Ctrl+C novamente para SAIR (aborta com checkpoint)"
-            if self._is_active_turn
-            else "⏸ pressione Ctrl+C novamente para sair · selecione texto e Ctrl+C para copiar"
-        )
-        chat.mount(Static(f"[dim]{aviso}[/dim]"))
 
     async def action_escape_press(self) -> None:
         """ESCAPE DUPLO (janela 1.8s) = interromper. ESC único = dica."""
