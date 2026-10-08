@@ -348,7 +348,7 @@ def test_orchestrator_fs_tools_block_invalid_path(tmp_path: Path):
     from bombe_code.turing.orchestrator import WaveOrchestrator
 
     orch = WaveOrchestrator(project_dir=str(tmp_path))
-    _read_fn, write_fn, _list_fn = orch._get_project_fs_tools()
+    _read_fn, write_fn, _list_fn, _delete_fn = orch._get_project_fs_tools()
 
     malformed_path = (
         "</parameter></function></tool_call><tool_call><function=write>?<parameter=content>"

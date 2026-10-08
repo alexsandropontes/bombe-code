@@ -29,6 +29,30 @@ from bombe_code.turing.pbb import AtomicTask, AtomicTaskType
 from bombe_code.turing.progress import ABORT_EVENT, BUS
 from bombe_code.turing.prompt_assembler import DeliveryTarget, TuringPromptAssembler
 from bombe_code.turing.review_gate import TuringReviewGate
+
+# ── Autorizações de remoção FORA da raiz (por sessão, in-memory) ──
+# SEMI-AUTO/MANUAL exigem permissão explícita do humano: /permitir apagar <caminho>.
+# Bobagem DENTRO do projeto o git amortece; bobagem FORA não tem conserto —
+# por isso fora da raiz nunca se apaga sem o humano dizer sim.
+_REMOCOES_AUTORIZADAS: set[str] = set()
+
+
+def autorizar_remocao(caminho: str) -> str:
+    """Autoriza (nesta sessão) a remoção de um caminho fora da raiz do projeto."""
+    p = Path(caminho).expanduser().resolve()
+    _REMOCOES_AUTORIZADAS.add(p.as_posix())
+    return p.as_posix()
+
+
+def remocao_autorizada(caminho: str) -> bool:
+    """Verifica se um caminho fora da raiz tem permissão explícita na sessão."""
+    try:
+        p = Path(caminho).expanduser().resolve()
+    except (OSError, RuntimeError):
+        return False
+    return p.as_posix() in _REMOCOES_AUTORIZADAS
+
+
 from bombe_code.turing.rework import VETO_ROUTES, VetoClass, VetoReworkEngine
 from bombe_code.turing.state_machine import (
     AutonomyMode,
@@ -769,7 +793,76 @@ class WaveOrchestrator:
             except Exception as e:  # noqa: BLE001 — tool de FS retorna erro textual à LLM
                 return [f"Erro: {e}"]
 
-        return [read_project_file, write_project_file, list_project_files]
+        def delete_project_file(path: str) -> str:
+            """Apaga UM arquivo do projeto (higiene: resíduos tmp_*, snippets mortos).
+
+            Política de confiança: DENTRO da raiz do projeto apaga tudo em
+            qualquer modo — bobagem interna o git amortece (estado da plataforma
+            .git/.bombe-code permanece intocado). FORA da raiz: em AUTO é negado;
+            em SEMI-AUTO/MANUAL exige permissão explícita do humano.
+            """
+            if guarda is not None and hasattr(guarda, "registrar_acao"):
+                guarda.registrar_acao("delete_project_file", str(path))
+            if not (path or "").strip():
+                return "Erro: caminho vazio."
+            alvo = Path(path).expanduser()
+            try:
+                target = (alvo if alvo.is_absolute() else project_dir / alvo).resolve()
+            except (OSError, RuntimeError):
+                return f"Erro: caminho inválido {path}"
+            if not target.is_relative_to(project_dir.resolve()):
+                modo = getattr(self.state_machine, "autonomy_mode", None)
+                modo_nome = (getattr(modo, "name", "") or str(modo or "AUTO")).upper()
+                if "SEMI" not in modo_nome and "MANUAL" not in modo_nome:
+                    return (
+                        f"⛔ [MODO {modo_nome}] Remoção NEGADA: '{path}' está FORA da raiz "
+                        "do projeto. Em automação total nada fora da raiz é apagado — "
+                        "bobagem fora não tem conserto."
+                    )
+                if not remocao_autorizada(str(target)):
+                    quem = guarda.agente if guarda is not None else "agente"
+                    BUS.publish(
+                        "escalation",
+                        agent="@turing",
+                        text=(
+                            f"🟠 PERMISSÃO EXPLÍCITA — {quem} quer apagar FORA do projeto: "
+                            f"{target}\nAutorize com /permitir apagar {target} (vale nesta sessão)."
+                        ),
+                        escalation={"type": "permission_request", "path": str(target)},
+                    )
+                    return (
+                        f"⛔ PERMISSÃO NECESSÁRIA: '{path}' está fora da raiz do projeto. "
+                        "Pedido registrado ao humano — autorize com /permitir apagar <caminho> "
+                        "e repita a remoção."
+                    )
+            else:
+                # Dentro da raiz: estado da plataforma não tem conserto nem via git
+                partes = target.relative_to(project_dir.resolve()).parts
+                if any(p in (".git", ".bombe-code") for p in partes[:-1]):
+                    return (
+                        f"Erro: '{path}' está sob diretório da plataforma (.git/.bombe-code) "
+                        "— remoção negada."
+                    )
+            if target.is_dir():
+                return f"Erro: '{path}' é um diretório — a remoção é arquivo a arquivo."
+            if not target.exists():
+                return f"Erro: Arquivo {path} não existe."
+            if guarda is not None:
+                veto = guarda.validar_remocao(path)
+                if veto:
+                    return veto
+            try:
+                target.unlink()
+            except Exception as e:  # noqa: BLE001 — tool de FS retorna erro textual à LLM
+                return f"Erro ao remover {path}: {e}"
+            return f"Arquivo {path} removido."
+
+        return [
+            read_project_file,
+            write_project_file,
+            list_project_files,
+            delete_project_file,
+        ]
 
     def _get_runner(self, agent_handle: str) -> AgentRunner | None:
         agent = self.registry.get(agent_handle)
@@ -1818,9 +1911,10 @@ class WaveOrchestrator:
     def _higienizar_residuos(self) -> list[str]:
         """Remove resíduos físicos do projeto (gate G1 de higiene).
 
-        O modelo NÃO tem delete: improvisa "neutralizando" o conteúdo com um
-        comentário, o arquivo continua lá, o gate reprova de novo e a linha
-        entra em loop impossível. A limpeza física é da plataforma.
+        O agente TEM delete_project_file, mas higiene é rotina da plataforma:
+        determinística, a cada ciclo, sem depender do modelo lembrar. Sem isto
+        o modelo improvisa "neutralização" (arquivo continua lá) e gates de
+        higiene reprovam para sempre — loop de rejeição/re-burn.
         """
         raiz = self.project_dir
         removidos: list[str] = []
@@ -1844,7 +1938,7 @@ class WaveOrchestrator:
                 agent="@turing",
                 text=(
                     f"🧹 Higiene de ciclo: {len(removidos)} resíduo(s) físico(s) removido(s) "
-                    "(rascunhos tmp_*/snippet) — o modelo não tem delete; a limpeza é da plataforma."
+                    "(rascunhos tmp_*/snippet) — rotina da plataforma, não tarefa do modelo."
                 ),
                 wave_id=self.state_machine.wave_id,
             )
@@ -1893,10 +1987,10 @@ class WaveOrchestrator:
 
         target_story = story_id or "ST-001"
 
-        # 🧹 HIGIENE DE CICLO: o modelo não tem delete (só read/write/list) —
-        # resíduos físicos (tmp_*, *.tmp, *.snippet*, scratch) são responsabilidade
-        # da PLATAFORMA. Sem isto, gates de higiene (G1) reprovam para sempre e a
-        # linha entra em loop de rejeição/re-burn impossível de convergir.
+        # 🧹 HIGIENE DE CICLO: o agente tem delete_project_file, mas resíduos
+        # (tmp_*, *.tmp, *.snippet*) são DEVER DA PLATAFORMA — rotina determinística
+        # a cada ciclo, sem depender do modelo lembrar de limpar (defesa em
+        # profundidade para gates de higiene tipo G1).
         self._higienizar_residuos()
 
         # Atualiza card no Kanban para IN_PROGRESS

@@ -42,7 +42,16 @@ AVISO_LEITURAS = 5  # relê o mesmo alvo 5x → aviso ao agente
 RED_FLAG_LEITURAS = 8  # 8x → bandeira vermelha (claro excesso)
 MAX_VETOS = 3  # 3 vetos na execução → bandeira vermelha
 MAX_ASSINATURAS_IGUAIS = 3  # loop genérico de ação
+MAX_REMOCOES = 20  # 21ª remoção na mesma execução veta (rampage de higiene)
 _TAMANHO_MAX_CONTEUDO_ARMAZENADO = 400_000  # cap de memória por arquivo
+
+# Remoção proibida em qualquer modo: estado da PLATAFORMA não tem conserto
+# nem via git (.git = histórico; .bombe-code = estado da onda). Dentro da raiz
+# o resto é recuperável pelo versionamento — bobagem dentro o git amortece.
+_REMOCAO_PROIBIDA_RE = re.compile(
+    r"(^|/)(\.git|\.bombe-code)(/|$)",
+    re.IGNORECASE,
+)
 
 
 class RedFlagError(Exception):
@@ -57,6 +66,7 @@ class GuardaDeAcoes:
 
     vetoes: int = 0
     escritas: int = 0
+    remocoes: int = 0
     red_flag: str | None = None
     _escritas_por_arquivo: Counter = field(default_factory=Counter)
     _assinaturas: Counter = field(default_factory=Counter)
@@ -125,6 +135,25 @@ class GuardaDeAcoes:
             self._ultimo_conteudo[chave] = {"conteudo": "", "hash": h_atual}
 
         self.escritas += 1
+        return None
+
+    # ----------------------------------------------------------- remoção
+    def validar_remocao(self, path: str) -> str | None:
+        """Valida UMA remoção antes de apagar. Retorna motivo de veto ou None."""
+        if self.red_flag:
+            return f"execução interrompida por bandeira vermelha: {self.red_flag}"
+        norm = (path or "").replace("\\", "/")
+        if _REMOCAO_PROIBIDA_RE.search(norm):
+            return self._vetar(
+                f"remoção de '{path}' bloqueada: estado da plataforma (.git/.bombe-code) "
+                "não tem conserto nem via git"
+            )
+        self.remocoes += 1
+        if self.remocoes > MAX_REMOCOES:
+            return self._vetar(
+                f"remoção em massa ({self.remocoes} arquivos na mesma execução) — "
+                "higiene excedente é tarefa da plataforma, não rampage do agente"
+            )
         return None
 
     # ----------------------------------------------------------- leitura

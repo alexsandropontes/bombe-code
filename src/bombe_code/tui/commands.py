@@ -390,6 +390,28 @@ async def handle_slash_command(app: BombeTuiApp, raw_text: str) -> bool:
     arg = parts[1].strip() if len(parts) > 1 else ""
     chat = app.query_one("#chat-view")
 
+    # /permitir apagar <caminho> — permissão explícita para remoção FORA da
+    # raiz do projeto (SEMI-AUTO/MANUAL). Vale nesta sessão.
+    if cmd == "permitir":
+        sub = arg.split(maxsplit=1)
+        acao = sub[0].lower() if sub else ""
+        caminho = sub[1].strip() if len(sub) > 1 else ""
+        if acao != "apagar" or not caminho:
+            _mount_status(
+                chat,
+                f"[{TOKENS['warning']}]Uso: /permitir apagar <caminho-absoluto>[/{TOKENS['warning']}]",
+            )
+            return True
+        from ..turing.orchestrator import autorizar_remocao
+
+        autorizado = autorizar_remocao(caminho)
+        _mount_status(
+            chat,
+            f"[{TOKENS['laranja']}]🟠 Autorizado nesta sessão: apagar '{autorizado}' fora da raiz.[/{TOKENS['laranja']}]\n"
+            f"[dim]O agente pode repetir a remoção — nada fora da raiz se apaga sem este comando.[/dim]",
+        )
+        return True
+
     # 1. /connect
     if cmd == "connect":
         from .widgets.dialogs import ConnectDialog
