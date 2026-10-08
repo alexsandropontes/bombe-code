@@ -1788,6 +1788,68 @@ class WaveOrchestrator:
 
         return created
 
+    # Padrões de resíduo físico — os mesmos rascunhos que o Guardião ignora,
+    # mais os nomes inventados que o modelo cria ao "anexar" seções
+    # (X.script.vue, Y._import_snippet). Nada aqui casa com fonte legítima.
+    _RESIDUO_RE = re.compile(
+        r"(^|/)(tmp[^/]*|\.tmp[^/]*)$"  # tmp_*.txt, .tmp_*.py (prefixo)
+        r"|\.tmp$"  # *.tmp (sufixo)
+        r"|\.snippet(\.|$)"  # *.snippet.py
+        r"|_snippet($|\.)"  # main._import_snippet
+        r"|scratch"
+        r"|\.script\.vue$"  # Comp.script.vue (invenção do modelo)
+        r"|\.bak$|\.orig$",
+        re.IGNORECASE,
+    )
+    _DIRS_PROTEGIDOS: frozenset[str] = frozenset(
+        {
+            ".git",
+            ".bombe-code",
+            "node_modules",
+            ".venv",
+            "venv",
+            "__pycache__",
+            ".pytest_cache",
+            "dist",
+            "build",
+        }
+    )
+
+    def _higienizar_residuos(self) -> list[str]:
+        """Remove resíduos físicos do projeto (gate G1 de higiene).
+
+        O modelo NÃO tem delete: improvisa "neutralizando" o conteúdo com um
+        comentário, o arquivo continua lá, o gate reprova de novo e a linha
+        entra em loop impossível. A limpeza física é da plataforma.
+        """
+        raiz = self.project_dir
+        removidos: list[str] = []
+        if not raiz.exists():
+            return removidos
+        for dirpath, dirnames, filenames in os.walk(raiz):
+            # Poda diretórios protegidos (node_modules etc.) — não desce neles.
+            dirnames[:] = [d for d in dirnames if d not in self._DIRS_PROTEGIDOS]
+            for nome in filenames:
+                alvo = Path(dirpath) / nome
+                rel = alvo.relative_to(raiz).as_posix()
+                if self._RESIDUO_RE.search(rel):
+                    try:
+                        alvo.unlink()
+                        removidos.append(rel)
+                    except OSError:
+                        logger.debug("Não conseguiu remover o resíduo %s", rel)
+        if removidos:
+            BUS.publish(
+                "announcement",
+                agent="@turing",
+                text=(
+                    f"🧹 Higiene de ciclo: {len(removidos)} resíduo(s) físico(s) removido(s) "
+                    "(rascunhos tmp_*/snippet) — o modelo não tem delete; a limpeza é da plataforma."
+                ),
+                wave_id=self.state_machine.wave_id,
+            )
+        return removidos
+
     def _run_cycle_inner(
         self,
         story_id: str | None = None,
@@ -1830,6 +1892,12 @@ class WaveOrchestrator:
             }
 
         target_story = story_id or "ST-001"
+
+        # 🧹 HIGIENE DE CICLO: o modelo não tem delete (só read/write/list) —
+        # resíduos físicos (tmp_*, *.tmp, *.snippet*, scratch) são responsabilidade
+        # da PLATAFORMA. Sem isto, gates de higiene (G1) reprovam para sempre e a
+        # linha entra em loop de rejeição/re-burn impossível de convergir.
+        self._higienizar_residuos()
 
         # Atualiza card no Kanban para IN_PROGRESS
         card = self.kanban.get_card(target_story)
@@ -2506,6 +2574,10 @@ class WaveOrchestrator:
                     "interrompido": True,
                     "error": "Execução interrompida pelo usuário (checkpoint salvo — /wave resume retoma).",
                 }
+
+            # 🧹 Higiene por história também: o review nunca reprova por
+            # resíduo que o modelo não consegue apagar.
+            self._higienizar_residuos()
 
             cycle_res = self.run_cycle(story_id=story)
             if not cycle_res.get("success"):
