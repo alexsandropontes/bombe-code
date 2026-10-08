@@ -217,6 +217,16 @@ async def _run_orchestrator_with_stream(
                 "escalation": TOKENS["warning"],
                 "stage_failed": TOKENS["warning"],
             }.get(etype, TOKENS["secondary"])
+            # 🚦 Semáforo de impedimentos — a cor conta a história:
+            # 🔴 vermelho = linha de produção PARADA (motivo claro em destaque)
+            # 🟠 laranja = escalação do humano (falta informação, não ação técnica)
+            # 🟢 verde = impedimento resolvido pelo próprio fluxo da plataforma
+            if ev.text.startswith("🔴"):
+                style = TOKENS["error"]
+            elif ev.text.startswith("🟠"):
+                style = TOKENS["laranja"]
+            elif ev.text.startswith("🟢"):
+                style = TOKENS["success"]
             await chat.mount(
                 Static(f"[{style}]{colorizar_handles(_rich_escape(ev.text))}[/{style}]")
             )
@@ -1353,11 +1363,17 @@ async def handle_slash_command(app: BombeTuiApp, raw_text: str) -> bool:
                     )
             elif res.get("escalation"):
                 esc = res["escalation"]
+                # 🚦 Semáforo: 🔴 linha parada (nem automação resolve) vs
+                # 🟠 escalação do humano (falta informação de negócio).
+                if esc.get("type") == "line_stop":
+                    cor, rotulo = TOKENS["error"], "🔴 LINHA DE PRODUÇÃO PARADA"
+                else:
+                    cor, rotulo = TOKENS["laranja"], "🟠 ESCALAÇÃO AO HUMANO"
                 await chat.mount(
                     Static(
-                        f"[{TOKENS['warning']} bold]❓ DÚVIDA DE NEGÓCIO — {esc.get('story', 'story')} não convergiu.[/{TOKENS['warning']} bold]\n"
+                        f"[{cor} bold]{rotulo} — {esc.get('story', 'story')} não convergiu.[/{cor} bold]\n"
                         f"{esc.get('message', '')}\n"
-                        f"[dim]Responsável técnico sugerido: {esc.get('suggested_owner')}[/dim]"
+                        f"[dim]Responsável sugerido: {esc.get('suggested_owner')}[/dim]"
                     )
                 )
             else:
@@ -1427,11 +1443,11 @@ async def handle_slash_command(app: BombeTuiApp, raw_text: str) -> bool:
                 )
                 await chat.mount(
                     Static(
-                        f"[{TOKENS['warning']} bold]❓ DÚVIDA DE NEGÓCIO — intervenção humana solicitada (último recurso).[/{TOKENS['warning']} bold]\n"
-                        f"[{TOKENS['warning']}]O ciclo autônomo de retrabalho foi esgotado e a decisão excede a autonomia dos agentes.[/{TOKENS['warning']}]\n"
-                        f"[dim]Responsável técnico sugerido: {escalation.get('suggested_owner', '@turing')}[/dim]\n"
+                        f"[{TOKENS['laranja']} bold]🟠 ESCALAÇÃO — impedimento em aberto após esforço autônomo completo.[/{TOKENS['laranja']} bold]\n"
+                        f"[{TOKENS['laranja']}]O ciclo autônomo de correção foi esgotado — status técnico honesto abaixo.[/{TOKENS['laranja']}]\n"
+                        f"[dim]Responsável sugerido: {escalation.get('suggested_owner', '@turing')}[/dim]\n"
                         f"{linhas_bloqueios}\n"
-                        f"[dim]Resolva e reexecute: /wave validate[/dim]"
+                        f"[dim]Dê resume para um novo ciclo de correção focado.[/dim]"
                     )
                 )
             else:

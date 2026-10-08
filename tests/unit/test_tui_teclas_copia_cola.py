@@ -8,8 +8,11 @@ from bombe_code.tui.client import BombeClient
 
 
 def test_bindings_opencode(tmp_path):
-    client = BombeClient("http://127.0.0.1:9999")
-    app = BombeTuiApp(client=client, session_id="ses_teclas", project_dir=str(tmp_path))
+    BombeTuiApp(
+        client=BombeClient("http://127.0.0.1:9999"),
+        session_id="ses_teclas",
+        project_dir=str(tmp_path),
+    )
 
     acoes = {b.action for b in BombeTuiApp.BINDINGS}
     assert "quit" in acoes  # Ctrl+C fecha (paridade opencode)

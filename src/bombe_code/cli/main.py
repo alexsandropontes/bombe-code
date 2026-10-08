@@ -396,17 +396,17 @@ def wave_validate(
         typer.echo("ONDA homologada com sucesso.")
     elif res.get("blocked"):
         escalation = (res.get("rework") or {}).get("escalation") or {}
+        typer.echo("🟠 ESCALAÇÃO — impedimento em aberto após esforço autônomo completo.", err=True)
         typer.echo(
-            "❓ DÚVIDA DE NEGÓCIO — intervenção humana solicitada (último recurso).", err=True
-        )
-        typer.echo(
-            f"Responsável técnico sugerido: {escalation.get('suggested_owner', '@turing')}",
+            f"Responsável sugerido: {escalation.get('suggested_owner', '@turing')}",
             err=True,
         )
         for bloqueio in escalation.get("blockers", []):
             typer.echo(f"  • {bloqueio}", err=True)
         typer.echo(res.get("error") or "", err=True)
-        typer.echo("Resolva e reexecute: bombe-code wave validate", err=True)
+        typer.echo(
+            "Dê resume para um novo ciclo de correção focado: bombe-code wave validate", err=True
+        )
     else:
         typer.echo(f"Validação não aprovada: {res.get('error')}", err=True)
 

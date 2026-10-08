@@ -2,7 +2,6 @@
 - tokens da sessão (persistidos no modelo Session, não estimativa)
 - arquivos escritos pela sessão (projetos sem git também)"""
 
-import asyncio
 from typing import Any
 
 from bombe_code.tui.widgets.sidebar import Sidebar

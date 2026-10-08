@@ -1808,20 +1808,24 @@ class WaveOrchestrator:
                     "error": f"Etapa atual é {self.state_machine.current_state.value}, esperado EXECUTE.",
                 }
 
-        # 🚩 IMPEDIMENTO: com bandeira vermelha em outra história, NADA inicia.
-        bloqueadas = [
+        # 🚩 IMPEDIMENTO: com bandeira vermelha erguida, histórias novas NÃO
+        # iniciam. A PRÓPRIA história flagada pode queimar — ela É o trabalho
+        # de correção. Recusar a flagada travaria a linha para sempre (a
+        # correção da bandeira seria bloqueada pela própria bandeira).
+        bandeiras = [
             c
             for c in self.kanban.list_cards(wave_id=self.state_machine.wave_id)
-            if c.get("is_blocked") and c.get("story_id") != story_id
+            if c.get("is_blocked")
         ]
-        if bloqueadas:
+        ids_bandeira = [c.get("story_id") for c in bandeiras]
+        if bandeiras and story_id not in ids_bandeira:
             return {
                 "success": False,
                 "is_blocked": True,
                 "blocked_by": "@turing",
                 "error": (
-                    f"🚩 IMPEDIMENTO: bandeira vermelha na {bloqueadas[0]['story_id']} — "
-                    "a linha está parada. Resolva o impedimento antes de iniciar outra história."
+                    f"🔴 LINHA PARADA: bandeira vermelha na {ids_bandeira[0]} — "
+                    "histórias novas aguardam a correção do impedimento."
                 ),
             }
 
@@ -2459,9 +2463,10 @@ class WaveOrchestrator:
                         "announcement",
                         agent="@turing",
                         text=(
-                            f"🚩 IMPEDIMENTO: bandeira vermelha na {story_bandeira} — a LINHA "
-                            f"INTEIRA PAROU. {story} aguarda: nada avança sem resolver o "
-                            "impedimento."
+                            f"🔴 LINHA DE PRODUÇÃO PARADA — bandeira vermelha na {story_bandeira}. "
+                            f"{story} aguarda: nada avança sem resolver o "
+                            "impedimento. A correção da história flagada é o único "
+                            "trabalho permitido agora."
                         ),
                         wave_id=self.state_machine.wave_id,
                     )
@@ -2570,6 +2575,14 @@ class WaveOrchestrator:
                         card_pos = self.kanban.get_card(story)
                         if card_pos and card_pos.get("is_blocked"):
                             self.kanban.unblock_card(story)
+                        BUS.publish(
+                            "announcement",
+                            agent="@turing",
+                            text=(
+                                f"🟢 IMPEDIMENTO RESOLVIDO — {story} aprovada no degrau "
+                                f"{degrau}/4 da escada. Bandeira recolhida; a linha volta a correr."
+                            ),
+                        )
                         break
 
                     novo_motivo = (
@@ -2581,23 +2594,59 @@ class WaveOrchestrator:
                     motivo = novo_motivo
 
                 if not retrabalho_ok:
-                    escalacao = {
-                        "type": "business_question",
-                        "story": story,
-                        "reason": motivo,
-                        "review_output": cycle_res.get("review_output", ""),
-                        "message": (
-                            f"❓ DÚVIDA DE NEGÓCIO — {story} não convergiu na escada completa "
-                            "(2× correção dirigida + 2× refinamento de story).\n"
-                            f"Último veto: {motivo}\n\n"
-                            "1. INFORMAR — digite a informação que falta\n"
-                            "2. SIMPLIFICAR O ACEITE — diga o novo critério mínimo\n"
-                            "3. ADIAR — mover a story para a próxima onda\n"
-                            f"Parecer do review: {cycle_res.get('review_output', '')[:2000]}"
-                        ),
-                        "suggested_owner": "@unclebob",
-                    }
-                    BUS.publish("escalation", agent="@turing", text=escalacao["message"])
+                    # 🚦 Semáforo de impedimentos:
+                    # 🔴 VERMELHO — parada TOTAL: escada completa não convergiu E o
+                    #    agente declarou impedimento (nem automação resolve).
+                    # 🟠 LARANJA — escalação do humano: falta INFORMAÇÃO de negócio
+                    #    (decisão INFORMAR/SIMPLIFICAR/ADIAR), não ação técnica.
+                    classe_final = (
+                        VetoReworkEngine(llm_factory=None)
+                        .classify(
+                            motivo,
+                            cycle_res.get("review_output", ""),
+                            target_agent="@turing",
+                        )
+                        .veto_class
+                    )
+                    if classe_final is VetoClass.AGENT_BLOCKED:
+                        escalacao = {
+                            "type": "line_stop",
+                            "story": story,
+                            "reason": motivo,
+                            "review_output": cycle_res.get("review_output", ""),
+                            "message": (
+                                f"🔴 LINHA DE PRODUÇÃO PARADA — {story} não convergiu na "
+                                "escada completa (2× correção dirigida + 2× refinamento de "
+                                "story) e o agente declarou impedimento.\n"
+                                f"Motivo da parada: {motivo}\n\n"
+                                "Nenhuma automação restante resolve este ponto. É preciso "
+                                "intervenção humana para destravar a linha."
+                            ),
+                            "suggested_owner": "@turing",
+                        }
+                    else:
+                        escalacao = {
+                            "type": "human_escalation",
+                            "story": story,
+                            "reason": motivo,
+                            "review_output": cycle_res.get("review_output", ""),
+                            "message": (
+                                f"🟠 ESCALAÇÃO AO HUMANO — {story} não convergiu na escada "
+                                "completa (2× correção dirigida + 2× refinamento de story).\n"
+                                f"Informação em falta: {motivo}\n\n"
+                                "1. INFORMAR — digite a informação que falta\n"
+                                "2. SIMPLIFICAR O ACEITE — diga o novo critério mínimo\n"
+                                "3. ADIAR — mover a story para a próxima onda\n"
+                                f"Parecer do review: {cycle_res.get('review_output', '')[:2000]}"
+                            ),
+                            "suggested_owner": "@unclebob",
+                        }
+                    BUS.publish(
+                        "escalation",
+                        agent="@turing",
+                        text=escalacao["message"],
+                        escalation=escalacao,
+                    )
                     self.kanban.block_card(story, reason=motivo, blocked_by="@turing")
                     return {
                         "success": False,
@@ -2979,7 +3028,7 @@ class WaveOrchestrator:
             f"{name}: {info['reason']}" for name, info in validators.items() if not info["approved"]
         )
         mensagem_parada = (
-            f"🛑 VALIDATE não aprovado após {attempt} rodada(s) de correção autônoma.\n"
+            f"🟠 ESCALAÇÃO — VALIDATE não aprovado após {attempt} rodada(s) de correção autônoma.\n"
             f"Impedimentos técnicos em aberto: {falhas_resumo}\n"
             "São ajustes técnicos já mapeados — nada precisa de você agora. "
             "Dê resume: o Turing refaz o ciclo focado nos impedimentos."

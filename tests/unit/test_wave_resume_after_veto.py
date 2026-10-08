@@ -297,7 +297,8 @@ def test_orcamento_por_turno_escada_completa_cada_resume(project_env):
         if handle == "@edith":
             chamadas["edith"] += 1
             return edith_t1 if chamadas["edith"] == 1 else edith_t2
-        return nina_t1
+        chamadas["@nina"] += 1
+        return nina_t1 if chamadas["@nina"] == 1 else nina_t2
 
     orch._get_runner = get_runner
 

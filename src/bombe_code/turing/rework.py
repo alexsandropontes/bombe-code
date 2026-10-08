@@ -370,7 +370,7 @@ class VetoReworkEngine:
         attempts: int,
         validator_outputs: dict[str, str] | None = None,
     ) -> dict[str, Any]:
-        """DÚVIDA DE NEGÓCIO estruturada — ÚLTIMO recurso após esgotar o ciclo autônomo."""
+        """ESCALAÇÃO AO HUMANO (laranja) — furo de informação após esgotar o ciclo autônomo."""
         suggested_owner = analysis.fix_owner or (
             {
                 VetoClass.APPROVAL_MISSING: analysis.target_agent or "@edith",
@@ -386,9 +386,9 @@ class VetoReworkEngine:
                 blockers.extend(self.extract_blockers(output or ""))
 
         question = (
-            f"❓ DÚVIDA DE NEGÓCIO (intervenção humana — último recurso após {attempts} rodada(s) autônoma(s) de retrabalho).\n"
-            f"Os vetos persistem e exigem decisão de negócio que excede a autonomia dos agentes.\n"
-            f"Classificação: {analysis.veto_class.value} | Responsável técnico sugerido: {suggested_owner}.\n"
+            f"🟠 ESCALAÇÃO AO HUMANO (falta de informação — após {attempts} rodada(s) autônoma(s) de correção).\n"
+            f"Os vetos persistem e exigem informação/decisão que os agentes não têm.\n"
+            f"Classificação: {analysis.veto_class.value} | Responsável sugerido: {suggested_owner}.\n"
             + (
                 "Bloqueios em aberto:\n" + "\n".join(f"- {b}" for b in blockers)
                 if blockers
@@ -397,7 +397,7 @@ class VetoReworkEngine:
         )
 
         return {
-            "type": "business_question",
+            "type": "human_escalation",
             "veto_class": analysis.veto_class.value,
             "classification_source": analysis.source,
             "reason": analysis.reason,

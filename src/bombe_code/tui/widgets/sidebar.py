@@ -196,13 +196,9 @@ class Sidebar(VerticalScroll):
 
         # 3. Modified Files — git (se existir) + arquivos escritos pela sessão
         files = _get_git_modified_files(self.directory)
-        escritos_sessao = [
-            f for f in self.arquivos_escritos if f not in {i["file"] for i in files}
-        ]
+        escritos_sessao = [f for f in self.arquivos_escritos if f not in {i["file"] for i in files}]
         total_arquivos = len(files) + len(escritos_sessao)
-        t.append(
-            f"📝 ARQUIVOS MODIFICADOS ({total_arquivos})\n", style=f"bold {TOKENS['primary']}"
-        )
+        t.append(f"📝 ARQUIVOS MODIFICADOS ({total_arquivos})\n", style=f"bold {TOKENS['primary']}")
         if not files and not escritos_sessao:
             t.append(" (Nenhum arquivo modificado)\n", style=f"{TOKENS['text_muted']}")
         for item in files[:8]:
