@@ -85,6 +85,7 @@ class BombeTuiApp(App):
         # funciona com o app rodando em SSH (o terminal LOCAL escreve na
         # área de transferência da sua máquina).
         Binding("ctrl+shift+c", "copiar_tela", "Copiar", show=False),
+        Binding("f2", "copiar_tela", "Copiar transcrição (sem selecionar)", show=True),
         # Ctrl+C e Ctrl+Shift+W JAMAIS fecham sozinhos (terminais entregam os
         # combos como Ctrl+C puro). Sair = Ctrl+C 2× ou Ctrl+Q.
         Binding("ctrl+c", "ctrl_c_press", "Sair (2×)", show=False),
@@ -476,7 +477,7 @@ class BombeTuiApp(App):
                     "  • [cyan]/wave resume[/cyan]           [dim]- Retoma a ONDA exatamente do checkpoint onde parou[/dim]",
                     "  • [cyan]/wave audit [ONDA-xxx][/cyan] [dim]- Contra-Auditoria Forense do validate (@hoare)[/dim]",
                     "",
-                    "[dim]Shift+Tab: alterna modo (TDD/VIBE) | Tab: alterna etapa | /help: lista de comandos[/dim]",
+                    "[dim]Copiar: selecione com o mouse + Ctrl+Shift+C (terminal) | F2 copia tudo | Shift+Tab: alterna modo (TDD/VIBE) | /help: comandos[/dim]",
                 ]
                 await chat.mount(Static("\n".join(lines)))
             chat.scroll_to_latest()
