@@ -1435,7 +1435,7 @@ class WaveOrchestrator:
             raw_prompt = (
                 f"Defina as decisões técnicas e arquitetura para a demanda da ONDA {self.state_machine.wave_id}.\n"
                 f"Consulte o PRD em 'docs/briefings/PRD.md' e a Jornada em 'docs/architecture/journey.md'.\n"
-                f"Projete a arquitetura com YAGNI Radical e proporcional à demanda (sem infraestrutura desnecessária).\n"
+                f"Projete a arquitetura com YAGNI proporcional à demanda (sem infraestrutura desnecessária).\n"
                 f"É OBRIGATÓRIO incluir as seções: '## Decisões Arquiteturais', '## Stack'."
             )
             ieru_prompt = self._assemble_prompt("@ieru", raw_prompt, context)
@@ -2325,6 +2325,10 @@ class WaveOrchestrator:
                 f"'SOLUÇÃO: <correção específica — arquivo, o que mudar e como>'. "
                 f"Achado sem solução proposta é parecer incompleto.\n"
                 f"Inspecione os arquivos de código implementados pelo Dev ('js/', raiz) e os testes em 'tests/'.\n"
+                "PROTOCOLO DE ENTREGA ALÉM DO ESCOPO: se a entrega inclui item não contratado "
+                "que está CORRETO e integrado, NÃO mande apagar nem re-queimar — valide, "
+                "registre na documentação da story como 'entregue além do contrato' e siga; "
+                "isso evita queima repetida do que já existe.\n"
                 f"Se o código e os testes estiverem aprovados, declare explicitamente: 'Review: APROVADO'. Caso contrário, aponte os problemas.\n"
             )
             bob_prompt = self._assemble_prompt("@unclebob", raw_bob_prompt)
