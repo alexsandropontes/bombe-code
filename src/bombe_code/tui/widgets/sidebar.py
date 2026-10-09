@@ -217,7 +217,7 @@ class Sidebar(VerticalScroll):
         for caminho in escritos_sessao[:6]:
             pp = Path(caminho)
             display_name = f"{pp.parts[-2]}/{pp.name}" if len(pp.parts) > 1 else pp.name
-            t.append(f" • {display_name[:30]:<30} ✍️\n", style=f"{TOKENS['warning']}")
+            t.append(f" ✍️ {display_name[:30]:<30}\n", style=f"{TOKENS['warning']}")
         if total_arquivos > 14:
             t.append(
                 f" ... e mais {total_arquivos - 14} arquivos\n", style=f"{TOKENS['text_muted']}"
