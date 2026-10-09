@@ -1,0 +1,199 @@
+"""Fila de achados — solução atômica (o princípio das tasks, aplicado ao review):
+
+7 achados? O Turing GUARDA os 7, roteia cada um para o agente da especialidade
+(front→@ada, banco→@codd, contratos→@ieru, testes→@aniche, arquitetura→@unclebob,
+backend→@valim) e corrige UM A UM — tarefinha pequena, dado suficiente do Tech
+Lead, zero cegueira. No fim, validação INTEGRAL da story (o review julga o todo).
+
+Anti-invenção: ordem de "corrijam os N achados" SEM a lista = parecer defeituoso
+→ o reviewer re-emite. O dev nunca recebe ordem no escuro.
+"""
+
+from pathlib import Path
+from unittest.mock import MagicMock
+
+import pytest
+
+from bombe_code.agents.runner import AgentExecutionResult
+from bombe_code.storage.project_db import ProjectDatabase
+from bombe_code.turing.orchestrator import WaveOrchestrator
+from bombe_code.turing.state_machine import TuringStage
+
+
+@pytest.fixture
+def project_env(tmp_path: Path):
+    db = ProjectDatabase(str(tmp_path))
+    (tmp_path / "app.py").write_text("def app() -> str:\n    return 'ok'\n", encoding="utf-8")
+    return tmp_path, db
+
+
+def _orch(tmp_path: Path, db: ProjectDatabase) -> WaveOrchestrator:
+    orch = WaveOrchestrator(project_dir=str(tmp_path), db=db)
+    orch.start_wave("ONDA-001", autonomy_mode="AUTO")
+    orch.transition_to(TuringStage.PLAN)
+    orch.transition_to(TuringStage.EXECUTE)
+    orch.kanban.add_card(
+        story_id="ST-001", wave_id="ONDA-001", title="Story 1", agent="@valim", status="IN_PROGRESS"
+    )
+    return orch
+
+
+PARECER_COM_LISTA = (
+    "## Veredito\nREJEITADO — corrijam os 3 achados:\n\n"
+    "**Bloqueios:**\n"
+    "1. ACHADO: coluna origem_id sem foreign key na tabela leituras\n"
+    "SOLUÇÃO: crie a FK com ON DELETE CASCADE na migration 0020\n"
+    "2. ACHADO: botão salvar sem aria-label no MemoryPanel.vue\n"
+    "SOLUÇÃO: adicione aria-label='Salvar memória' ao componente\n"
+    "3. ACHADO: dependência domínio→api em publish/service.py\n"
+    "SOLUÇÃO: inverta a dependência via porta de publicação\n"
+)
+
+
+def _prompts_por_agente(orch: WaveOrchestrator, saidas: dict[str, str] | None = None):
+    capturados: dict[str, list[str]] = {}
+
+    def fake_get_runner(handle):
+        capturados.setdefault(handle, [])
+        runner = MagicMock()
+
+        def run(prompt, *a, **k):
+            capturados[handle].append(prompt)
+            saida = (saidas or {}).get(handle, "ok")
+            return AgentExecutionResult(agent_handle=handle, success=True, output=saida)
+
+        runner.run.side_effect = run
+        return runner
+
+    orch._get_runner = fake_get_runner
+    return capturados
+
+
+def test_fila_roteia_cada_achado_para_o_especialista_e_valida_o_todo(project_env):
+    tmp_path, db = project_env
+    orch = _orch(tmp_path, db)
+    capturados = _prompts_por_agente(orch)
+    chamadas_ciclo: list[str] = []
+
+    def fake_cycle(story_id=None, rework_feedback=None):
+        chamadas_ciclo.append(rework_feedback or "inicial")
+        if "valide a story INTEIRA" in (rework_feedback or ""):
+            return {"success": True, "message": "conjunto aprovado", "arquivos_escritos": ["a.py"]}
+        return {
+            "success": False,
+            "is_blocked": True,
+            "error": "REJEIÇÃO",
+            "review_output": PARECER_COM_LISTA,
+            "arquivos_escritos": [],
+        }
+
+    orch._run_cycle_inner = fake_cycle
+
+    res = orch.run_execute(stories=["ST-001"])
+
+    assert res["success"] is True, res.get("error")
+    # Os 3 achados guardados na fila
+    assert len(orch._fila_achados["ST-001"]) == 3
+    # Roteamento por especialidade (cada achado com seu dono)
+    assert any("ACHADO: coluna origem_id" in p for p in capturados["@codd"])
+    assert any("botão salvar sem aria-label" in p for p in capturados["@ada"])
+    assert any("dependência domínio→api" in p for p in capturados["@unclebob"])
+    # Tarefa atômica: escopo fechado no prompt de cada achado
+    assert all("APENAS ESTE ACHADO" in p for p in capturados["@codd"])
+    # Validação INTEGRAL no fim (o review julga o conjunto, não a fatia)
+    assert "valide a story INTEIRA" in chamadas_ciclo[-1]
+
+
+def test_ordem_de_achados_sem_lista_obriga_reemissao(project_env):
+    tmp_path, db = project_env
+    orch = _orch(tmp_path, db)
+    parecer_sem_lista = "REJEITADO para retrabalho — corrijam os 7 achados e re-submetam."
+    capturados = _prompts_por_agente(
+        orch,
+        saidas={
+            "@unclebob": (
+                "ACHADO: fetch cru em PublishReport.vue\n"
+                "SOLUÇÃO: use o cliente canônico de api\n"
+                "ACHADO: testes que abençoam o desvio em tests/api\n"
+                "SOLUÇÃO: reescreva a asserção do contrato"
+            )
+        },
+    )
+    chamadas_ciclo: list[str] = []
+
+    def fake_cycle(story_id=None, rework_feedback=None):
+        chamadas_ciclo.append(rework_feedback or "inicial")
+        if "valide a story INTEIRA" in (rework_feedback or ""):
+            return {"success": True, "message": "ok", "arquivos_escritos": ["x.py"]}
+        return {
+            "success": False,
+            "is_blocked": True,
+            "error": "REJEIÇÃO",
+            "review_output": parecer_sem_lista,
+            "arquivos_escritos": [],
+        }
+
+    orch._run_cycle_inner = fake_cycle
+
+    res = orch.run_execute(stories=["ST-001"])
+
+    assert res["success"] is True, res.get("error")
+    # O reviewer foi obrigado a RE-EMITIR com a lista (ACHADO/SOLUÇÃO)
+    reemissao = [p for p in capturados["@unclebob"] if "Re-emita" in p or "RE-EMITA" in p]
+    assert reemissao, "parecer sem lista passou sem re-emissão — o dev ia inventar"
+    # A fila nasceu da lista re-emitida
+    assert len(orch._fila_achados["ST-001"]) == 2
+
+
+def test_sem_lista_e_sem_reemissao_o_feedback_proibe_inventar(project_env):
+    tmp_path, db = project_env
+    orch = _orch(tmp_path, db)
+    parecer_sem_lista = "REJEITADO — corrijam os achados."
+    _prompts_por_agente(orch, saidas={"@unclebob": ""})
+    chamadas_ciclo: list[str] = []
+
+    def fake_cycle(story_id=None, rework_feedback=None):
+        chamadas_ciclo.append(rework_feedback or "inicial")
+        if len(chamadas_ciclo) == 2:
+            return {"success": True, "message": "ok", "arquivos_escritos": ["fix.py"]}
+        return {
+            "success": False,
+            "is_blocked": True,
+            "error": "REJEIÇÃO",
+            "review_output": parecer_sem_lista,
+            "arquivos_escritos": [],
+        }
+
+    orch._run_cycle_inner = fake_cycle
+
+    res = orch.run_execute(stories=["ST-001"])
+
+    assert res["success"] is True, res.get("error")
+    feedback_reburn = chamadas_ciclo[1]
+    assert "NÃO invente correções" in feedback_reburn
+    assert "NÃO enumera os achados" in feedback_reburn
+
+
+def test_roteador_de_achados_por_especialidade(project_env):
+    tmp_path, db = project_env
+    orch = _orch(tmp_path, db)
+    casos = [
+        ("ACHADO: coluna sem FK na tabela leituras", "@codd"),
+        ("ACHADO: modal sem foco preso (a11y) no MemoryPanel.vue", "@ada"),
+        ("ACHADO: contrato de status patch duplicado entre contratos", "@ieru"),
+        ("ACHADO: suíte e2e com mock de rede", "@aniche"),
+        ("ACHADO: código morto e duplicação em service.py (DRY)", "@unclebob"),
+        ("ACHADO: endpoint PUT ignora validação de payload", "@valim"),
+    ]
+    for achado, esperado in casos:
+        assert orch._agente_para_achado(achado) == esperado, achado
+
+
+def test_extrator_reconhece_achados_com_solucao():
+    from bombe_code.turing.rework import VetoReworkEngine
+
+    motor = VetoReworkEngine()
+    achados = motor.extract_blockers(PARECER_COM_LISTA)
+    assert len(achados) == 3
+    assert achados[0].startswith("ACHADO: coluna origem_id")
+    assert achados[2].startswith("ACHADO: dependência")

@@ -112,7 +112,9 @@ class VetoReworkEngine:
     ]
 
     _BLOCKER_ITEM_RE = re.compile(r"^\s*(?:\d+\s*[\.\)\-]|[-*•])\s+(.+)$")
-    _BLOCKER_HEADER_RE = re.compile(r"^\**\s*bloqueios?\b[^\n:]*:?\**\s*$", re.IGNORECASE)
+    _BLOCKER_HEADER_RE = re.compile(
+        r"^\**\s*(?:bloqueios?|achados?)\b[^\n:]*:?\**\s*$", re.IGNORECASE
+    )
 
     def __init__(
         self,
@@ -142,7 +144,7 @@ class VetoReworkEngine:
         for raw_line in output.splitlines():
             stripped = raw_line.strip()
             low = stripped.lower().lstrip("*#>- ")
-            if low.startswith("bloqueio:"):
+            if low.startswith(("bloqueio:", "achado:")):
                 blockers.append(stripped.split(":", 1)[1].strip(" -*"))
                 collecting = True
                 continue
@@ -150,6 +152,9 @@ class VetoReworkEngine:
                 collecting = True
                 continue
             if collecting:
+                # "SOLUÇÃO:" é continuação do achado — não fecha a seção
+                if low.startswith(("solução:", "solucao:")):
+                    continue
                 item_match = self._BLOCKER_ITEM_RE.match(stripped)
                 if item_match:
                     item = item_match.group(1).strip()

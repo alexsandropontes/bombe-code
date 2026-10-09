@@ -111,6 +111,9 @@ class WaveOrchestrator:
         from bombe_code.domain.wave.workspace import WaveWorkspace
 
         self.workspace = WaveWorkspace(project_dir=self.project_dir)
+        # Fila de achados por story (Turing gerencia: 7 achados? guarda os 7,
+        # corrige um a um com o agente certo, valida o conjunto no fim).
+        self._fila_achados: dict[str, list[str]] = {}
         self.kanban = kanban or KanbanManager(project_dir=str(self.project_dir), db=self.db)
         self._gate_evaluations: dict[str, Any] = {}
         self.config_mgr = ProjectConfigManager(str(self.project_dir))
@@ -1908,6 +1911,78 @@ class WaveOrchestrator:
         }
     )
 
+    def _agente_para_achado(self, achado: str) -> str:
+        """Roteia UM achado para o agente da especialidade (tarefa atômica).
+
+        Achado pequeno + agente certo + dado suficiente = menos token de
+        entrada, menos tempo de queima, zero cegueira.
+        """
+        a = (achado or "").lower()
+        if any(
+            k in a
+            for k in (
+                "banco",
+                "tabela",
+                "schema",
+                "migração",
+                "migracao",
+                "sql",
+                "coluna",
+                "índice",
+                "indice",
+                "foreign key",
+                "fk ",
+            )
+        ):
+            return "@codd"
+        if any(
+            k in a
+            for k in (
+                "front",
+                " ui",
+                "component",
+                "vue",
+                "react",
+                "tela",
+                "css",
+                "a11y",
+                "acessibilidade",
+                "botão",
+                "botao",
+                "modal",
+            )
+        ):
+            return "@ada"
+        if any(
+            k in a
+            for k in ("contrato", "contract", "openapi", "dto", "serialização", "serializacao")
+        ):
+            return "@ieru"
+        if any(k in a for k in ("teste", "test", "suíte", "suite", "e2e", "mock", "cobertura")):
+            return "@aniche"
+        if any(
+            k in a
+            for k in (
+                "arquitetura",
+                "acoplamento",
+                "camada",
+                "dependência",
+                "dependencia",
+                "clean",
+                "solid",
+                "domínio",
+                "dominio",
+                "dead code",
+                "código morto",
+                "codigo morto",
+                "duplicação",
+                "duplicacao",
+                "dry",
+            )
+        ):
+            return "@unclebob"
+        return "@valim"
+
     def _higienizar_residuos(self) -> list[str]:
         """Remove resíduos físicos do projeto (gate G1 de higiene).
 
@@ -2690,6 +2765,161 @@ class WaveOrchestrator:
                     or cycle_res.get("error")
                     or "reprovado pelo review"
                 )
+                # O card guarda só o TRECHO do veto ("corrijam os 7 achados").
+                # O dev precisa do PARECER INTEGRAL (achado + solução, um a um):
+                # sem isto o re-burn corrige no escuro e a escada repete às cegas.
+                parecer_integral = (cycle_res.get("review_output") or "").strip()
+
+                def _feedback_com_parecer(base: str, parecer: str) -> str:
+                    if not parecer:
+                        return base
+                    return (
+                        f"{base}\n\nPARECER INTEGRAL DO REVIEW — corrija TODOS os "
+                        f"achados enumerados, um a um:\n{parecer[:6000]}"
+                    )
+
+                feedback_integral = _feedback_com_parecer(motivo, parecer_integral)
+                escalacao = None
+                assinaturas_veto = [motivo]
+                retrabalho_ok = False
+                escreveu_alguma_vez = False
+
+                # ── FILA DE ACHADOS (mesmo princípio das tasks: 1 achado = 1
+                # problema = 1 responsável). O Turing GUARDA os achados, roteia
+                # cada um para o agente da especialidade, corrige UM A UM e só
+                # no fim valida a story INTEIRA (o review é sobre o conjunto).
+                motor = VetoReworkEngine(llm_factory=None)
+                achados_enfileirados = motor.extract_blockers(parecer_integral)
+
+                # 🚫 ANTI-INVENÇÃO: "corrijam os N achados" EXIGE a lista. Parecer
+                # que ordena correção sem enumerar é DEFITUOSO — o reviewer
+                # re-emite com ACHADO/SOLUÇÃO um a um. O dev não recebe ordem no
+                # escuro (inventar achado é fraude).
+                if (
+                    re.search(r"\bachados?\b", f"{motivo} {parecer_integral[:2000]}", re.IGNORECASE)
+                    and not achados_enfileirados
+                ):
+                    BUS.publish(
+                        "veto_analysis",
+                        agent="@turing",
+                        text=(
+                            f"🔍 Parecer de {story} ordena corrigir achados mas NÃO enumera a "
+                            "lista — re-emissão obrigatória pelo reviewer."
+                        ),
+                    )
+                    runner_bob_reemit = self._get_runner("@unclebob")
+                    if runner_bob_reemit:
+                        res_reemit = runner_bob_reemit.run(
+                            self._assemble_prompt(
+                                "@unclebob",
+                                f"Seu parecer para {story} ordena 'corrijam os achados' mas NÃO "
+                                "enumera a lista — parecer INCOMPLETO. Re-emita-o com CADA achado "
+                                "no formato obrigatório:\nACHADO: <problema>\nSOLUÇÃO: <correção — "
+                                f"arquivo, o que mudar e como>\n\nParecer original:\n"
+                                f"{parecer_integral[:4000] or motivo}",
+                            )
+                        )
+                        self._record_telemetry(
+                            "EXECUTE", "@unclebob (re-emissão do parecer)", res_reemit
+                        )
+                        novo_parecer = (getattr(res_reemit, "output", "") or "").strip()
+                        if novo_parecer and motor.extract_blockers(novo_parecer):
+                            parecer_integral = novo_parecer
+                            feedback_integral = _feedback_com_parecer(motivo, novo_parecer)
+                            achados_enfileirados = motor.extract_blockers(novo_parecer)
+                            BUS.publish(
+                                "veto_rework",
+                                agent="@unclebob",
+                                text="📋 Parecer re-emito com a lista integral de achados.",
+                            )
+                        else:
+                            feedback_integral += (
+                                "\n\nATENÇÃO: o parecer NÃO enumera os achados. Identifique-os "
+                                "direto no código apontado; se não conseguir identificá-los, "
+                                "declare bloqueio explicitamente — NÃO invente correções."
+                            )
+
+                if len(achados_enfileirados) >= 2:
+                    self._fila_achados[story] = list(achados_enfileirados)
+                    BUS.publish(
+                        "veto_analysis",
+                        agent="@turing",
+                        text=(
+                            f"📋 {story}: {len(achados_enfileirados)} achados ENFILEIRADOS — "
+                            "cada um com seu agente; correção um a um, validação integral no fim."
+                        ),
+                    )
+                    escritas_fila: list[str] = []
+                    for i, achado in enumerate(achados_enfileirados, 1):
+                        agente_achado = self._agente_para_achado(achado)
+                        BUS.publish(
+                            "veto_rework",
+                            agent=agente_achado,
+                            text=(
+                                f"🔧 [ACHADO {i}/{len(achados_enfileirados)}] "
+                                f"{agente_achado}: {achado[:90]}"
+                            ),
+                        )
+                        runner_achado = self._get_runner(agente_achado)
+                        if not runner_achado:
+                            continue
+                        res_ach = runner_achado.run(
+                            self._assemble_prompt(
+                                agente_achado,
+                                f"Story {story} REPROVADA no review. CORRIJA APENAS ESTE ACHADO "
+                                f"({i} de {len(achados_enfileirados)}):\nACHADO: {achado}\n\n"
+                                f"Contexto (parecer integral):\n{parecer_integral[:4000]}\n\n"
+                                "Entrega = arquivos GRAVADOS nesta rodada (write_project_file). "
+                                "Escopo fechado: nada além deste achado.",
+                            )
+                        )
+                        self._record_telemetry(
+                            "EXECUTE",
+                            f"{agente_achado} (achado {i}/{len(achados_enfileirados)})",
+                            res_ach,
+                        )
+                        escritas_fila.extend(getattr(res_ach, "arquivos_escritos", []))
+                    escreveu_alguma_vez = bool(escritas_fila)
+                    BUS.publish(
+                        "veto_rework",
+                        agent="@turing",
+                        text=(
+                            f"✅ Fila processada ({len(achados_enfileirados)} achados, "
+                            f"{len(escritas_fila)} arquivo(s) gravado(s)) — validação INTEGRAL "
+                            "da story..."
+                        ),
+                    )
+                    cycle_res = self._run_cycle_inner(
+                        story,
+                        rework_feedback=(
+                            "Achados da fila corrigidos um a um — valide a story INTEIRA."
+                        ),
+                    )
+                    if cycle_res.get("success"):
+                        retrabalho_ok = True
+                        card_pos = self.kanban.get_card(story)
+                        if card_pos and card_pos.get("is_blocked"):
+                            self.kanban.unblock_card(story)
+                        BUS.publish(
+                            "announcement",
+                            agent="@turing",
+                            text=(
+                                f"🟢 IMPEDIMENTO RESOLVIDO — {story}: fila de "
+                                f"{len(achados_enfileirados)} achados corrigida e story "
+                                "aprovada. Bandeira recolhida; a linha volta a correr."
+                            ),
+                        )
+                    else:
+                        novo_motivo = (
+                            (self.kanban.get_card(story) or {}).get("block_reason")
+                            or cycle_res.get("error")
+                            or motivo
+                        )
+                        motivo = novo_motivo
+                        novo_parecer = (cycle_res.get("review_output") or "").strip()
+                        if novo_parecer:
+                            parecer_integral = novo_parecer
+                        feedback_integral = _feedback_com_parecer(motivo, parecer_integral)
 
                 # ── ESCADA DE CONVERGÊNCIA v2 (tudo autônomo em matéria técnica) ──
                 # Com evidência de escrita (dev executou): trilha clássica —
@@ -2698,10 +2928,8 @@ class WaveOrchestrator:
                 # velada): trilha de execução — 2 plano aprovado pelo Tech Lead
                 # → 3 ordem incisiva → 4 o PRÓPRIO Tech Lead assume e codifica.
                 # Só APÓS a escada completa → escalação (com a causa verdadeira).
-                escalacao = None
-                assinaturas_veto = [motivo]
-                retrabalho_ok = False
-                escreveu_alguma_vez = False
+                # (A fila de achados acima pode já ter resolvido — neste caso a
+                # escada NEM começa.)
 
                 def _sig(t: str) -> str:
                     import re as _re
@@ -2733,6 +2961,8 @@ class WaveOrchestrator:
                         self._extract_and_write_project_files(getattr(res_caroli, "output", ""))
 
                 for degrau in range(1, 5):
+                    if retrabalho_ok:
+                        break  # a fila de achados já convergiu — escada desnecessária
                     # Rota por EVIDÊNCIA: zero gravações = o problema é recusa do
                     # dev, não a story — sobe a agressividade da ordem.
                     if not escreveu_alguma_vez:
@@ -2769,7 +2999,7 @@ class WaveOrchestrator:
                             res_bob = runner_bob.run(
                                 self._assemble_prompt(
                                     "@unclebob",
-                                    f"A story {story} está reprovada com o parecer: {motivo}\n\n"
+                                    f"A story {story} está reprovada com o parecer: {feedback_integral}\n\n"
                                     f"O dev respondeu com um PLANO (sem gravar arquivo):\n{plano}\n\n"
                                     "Valide a coerência do plano contra o parecer. Se o plano resolve "
                                     "os achados, declare exatamente: 'PLANO APROVADO — implemente agora'. "
@@ -2784,7 +3014,7 @@ class WaveOrchestrator:
                             "PLANO APROVADO PELO TECH LEAD — implemente NESTA rodada. "
                             "Entrega = arquivos gravados (write_project_file), não texto.\n\n"
                             f"Plano aprovado: {plano_aprovado[:2000]}\n\n"
-                            f"Parecer de rejeição: {motivo}"
+                            f"Parecer de rejeição: {feedback_integral}"
                         )
                         BUS.publish(
                             "veto_rework",
@@ -2803,7 +3033,7 @@ class WaveOrchestrator:
                             "Grave cada arquivo com write_project_file ANTES de qualquer texto. "
                             "Devolver plano, diagnóstico ou pedido de aprovação É RECUSA de ordem "
                             "explícita e será tratado como bloqueio.\n\n"
-                            f"Parecer de rejeição: {motivo}"
+                            f"Parecer de rejeição: {feedback_integral}"
                         )
                         cycle_res = self._run_cycle_inner(story, rework_feedback=feedback_degrau)
                     elif estrategia == "lead_assume":
@@ -2823,24 +3053,24 @@ class WaveOrchestrator:
                                     f"O dev se recusou a implementar (3 tentativas sem gravar "
                                     f"arquivo). ASSUMA a tarefa e corrija você mesmo, gravando os "
                                     f"arquivos nesta rodada.\nStory: {story}\n"
-                                    f"Parecer de rejeição: {motivo}\n"
+                                    f"Parecer de rejeição: {feedback_integral}\n"
                                     "Entrega = arquivos gravados. Diagnóstico sem gravação não é entrega.",
                                 )
                             )
                             self._record_telemetry(
                                 "EXECUTE", "@unclebob (assumiu a implementação)", res_lead
                             )
-                        cycle_res = self._run_cycle_inner(story, rework_feedback=motivo)
+                        cycle_res = self._run_cycle_inner(story, rework_feedback=feedback_integral)
                     else:  # dirigido (clássico)
                         BUS.publish(
                             "veto_rework",
                             agent="@unclebob",
                             text=(
                                 f"🔥 [DEGRAU {degrau}/4] Re-queimando {story} no ciclo TDD "
-                                "com feedback direcionado."
+                                "com o parecer integral do review."
                             ),
                         )
-                        cycle_res = self._run_cycle_inner(story, rework_feedback=motivo)
+                        cycle_res = self._run_cycle_inner(story, rework_feedback=feedback_integral)
 
                     if cycle_res.get("success"):
                         retrabalho_ok = True
@@ -2867,6 +3097,10 @@ class WaveOrchestrator:
                     )
                     assinaturas_veto.append(_sig(novo_motivo))
                     motivo = novo_motivo
+                    novo_parecer = (cycle_res.get("review_output") or "").strip()
+                    if novo_parecer:
+                        parecer_integral = novo_parecer
+                    feedback_integral = _feedback_com_parecer(motivo, parecer_integral)
 
                 if not retrabalho_ok:
                     if not escreveu_alguma_vez:
