@@ -1911,6 +1911,22 @@ class WaveOrchestrator:
         }
     )
 
+    def _parecer_da_review(self, output: str) -> str:
+        """Parecer INTEGRAL da review: se o reviewer gravou o parecer em
+        arquivo (output é só resumo + caminho 'docs/qa/...md'), lê o ARQUIVO —
+        é lá que vivem os achados enumerados; o resumo truncado não serve."""
+        if not output:
+            return ""
+        m = re.search(r"(docs/[\w./-]+\.(?:md|txt))", output)
+        if m:
+            arquivo = self.project_dir / m.group(1)
+            if arquivo.exists():
+                try:
+                    return arquivo.read_text(encoding="utf-8", errors="replace").strip()
+                except OSError:
+                    logger.debug("Não conseguiu ler o parecer %s", arquivo)
+        return output.strip()
+
     def _agente_para_achado(self, achado: str) -> str:
         """Roteia UM achado para o agente da especialidade (tarefa atômica).
 
@@ -2772,7 +2788,7 @@ class WaveOrchestrator:
                 # O card guarda só o TRECHO do veto ("corrijam os 7 achados").
                 # O dev precisa do PARECER INTEGRAL (achado + solução, um a um):
                 # sem isto o re-burn corrige no escuro e a escada repete às cegas.
-                parecer_integral = (cycle_res.get("review_output") or "").strip()
+                parecer_integral = self._parecer_da_review(cycle_res.get("review_output") or "")
 
                 def _feedback_com_parecer(base: str, parecer: str) -> str:
                     if not parecer:
@@ -2920,7 +2936,7 @@ class WaveOrchestrator:
                             or motivo
                         )
                         motivo = novo_motivo
-                        novo_parecer = (cycle_res.get("review_output") or "").strip()
+                        novo_parecer = self._parecer_da_review(cycle_res.get("review_output") or "")
                         if novo_parecer:
                             parecer_integral = novo_parecer
                         feedback_integral = _feedback_com_parecer(motivo, parecer_integral)
@@ -3101,7 +3117,7 @@ class WaveOrchestrator:
                     )
                     assinaturas_veto.append(_sig(novo_motivo))
                     motivo = novo_motivo
-                    novo_parecer = (cycle_res.get("review_output") or "").strip()
+                    novo_parecer = self._parecer_da_review(cycle_res.get("review_output") or "")
                     if novo_parecer:
                         parecer_integral = novo_parecer
                     feedback_integral = _feedback_com_parecer(motivo, parecer_integral)

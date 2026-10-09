@@ -115,6 +115,17 @@ class VetoReworkEngine:
     _BLOCKER_HEADER_RE = re.compile(
         r"^\**\s*(?:bloqueios?|achados?)\b[^\n:]*:?\**\s*$", re.IGNORECASE
     )
+    # Cabeçalho de seção do parecer real: '## ACHADO 1 (BLOQUEANTE — tema)'
+    # (sem dois-pontos; a descrição vem no próprio título ou nas linhas abaixo)
+    _ACHADO_HEADER_RE = re.compile(
+        r"^\#{1,6}\s+\**\s*(?:achados?|bloqueios?)\s*\d*\s*(?:\(([^)]*)\))?\s*[—\-:]?\s*(.*)$",
+        re.IGNORECASE,
+    )
+    # Inline: 'ACHADO: problema' / '**ACHADO 2 (DRY):** problema'
+    _ACHADO_INLINE_RE = re.compile(
+        r"^\**\s*(?:achados?|bloqueios?)\s*\d*\s*(?:\(([^)]*)\))?\s*:\s*(.+)$",
+        re.IGNORECASE,
+    )
 
     def __init__(
         self,
@@ -136,7 +147,8 @@ class VetoReworkEngine:
     # ------------------------------------------------------------ extração
     def extract_blockers(self, output: str) -> list[str]:
         """Extrai bloqueios/achados de pareceres reais: prefixo 'BLOQUEIO:',
-        'ACHADO:' simples, 'ACHADO 1 (BLOQUEANTE — tema):' com número/parêntese,
+        'ACHADO:' simples, '**ACHADO 2 (DRY):' inline com número/parêntese,
+        cabeçalho de seção '## ACHADO 1 (BLOQUEANTE — tema)' SEM dois-pontos,
         e seções 'Bloqueios/Achados:' com listas numeradas/bullets."""
         if not output:
             return []
@@ -145,14 +157,25 @@ class VetoReworkEngine:
         for raw_line in output.splitlines():
             stripped = raw_line.strip()
             low = stripped.lower().lstrip("*#>- ")
-            # ACHADO 2 (DRY): ... / ACHADO: ... / BLOQUEIO: ...
-            m_rotulo = re.match(
-                r"^\**\s*(?:achados?|bloqueios?)\s*\d*\s*(?:\([^)]*\))?\s*:\s*(.+)$",
-                stripped,
-                re.IGNORECASE,
-            )
+            # Inline: 'ACHADO 2 (DRY): ...' / 'ACHADO: ...' / 'BLOQUEIO: ...'
+            m_rotulo = self._ACHADO_INLINE_RE.match(stripped)
             if m_rotulo:
-                conteudo = m_rotulo.group(1).strip(" -*")
+                parens, resto = m_rotulo.group(1), m_rotulo.group(2)
+                resto_limpo = re.sub(r"\*+", "", resto or "").strip(" -*")
+                if resto_limpo:
+                    # Texto após ':' existe → é um achado de verdade. Sem texto,
+                    # o parêntese é só QUALIFICADOR de seção ("(da fatia atual)")
+                    # → cabeçalho, não achado.
+                    conteudo = f"{parens} {resto_limpo}".strip() if parens else resto_limpo
+                    blockers.append(conteudo)
+                collecting = True
+                continue
+            # Cabeçalho '## ACHADO 1 (BLOQUEANTE — tema)' — sem dois-pontos
+            m_header = self._ACHADO_HEADER_RE.match(stripped)
+            if m_header:
+                parens, resto = m_header.group(1), m_header.group(2)
+                conteudo = f"{parens} {resto}" if parens else resto
+                conteudo = re.sub(r"\*+", "", conteudo).strip(" -*")
                 if conteudo:
                     blockers.append(conteudo)
                 collecting = True

@@ -225,3 +225,51 @@ def test_extrator_reconhece_formato_real_do_tech_lead():
     assert "monolítico" in achados[2]
     # A linha de resumo ("Escopo da correção: ACHADOS 1 e 2...") não vira achado
     assert not any("Escopo" in a for a in achados)
+
+
+def test_extrator_entende_cabecalho_secao_sem_dois_pontos():
+    """Formato REAL dos pareceres por arquivo: '## ACHADO 1 (BLOQUEANTE — tema)'
+    sem dois-pontos, descrição no título. O parser antigo exigia ':' e a fila
+    nunca nascia — loop da ST-001 parte 2."""
+    from bombe_code.turing.rework import VetoReworkEngine
+
+    motor = VetoReworkEngine()
+    parecer = (
+        "## Parecer\n"
+        "**REJEITADO PARA RETRABALHO** — bloqueantes: ACHADOS 1 e 2. Corrigir os 4 achados.\n"
+        "## ACHADO 1 (BLOQUEANTE — dado fabricado / contrato front↔back quebrado)\n"
+        "o handler fabrica payload que o front nunca envia\n"
+        "## ACHADO 2 (BLOQUEANTE — mock fora da estratégia contratada CA-04)\n"
+        "vi.mock do vue-router no lugar do router real\n"
+        "## ACHADO 3 (texto contratual)\n"
+        "wording do CA-02 diverge do PRD\n"
+        "## ACHADO 4 (não-bloqueante — cobertura)\n"
+        "sem teste para o ramo de erro 422\n"
+    )
+    achados = motor.extract_blockers(parecer)
+    assert len(achados) == 4, f"extrator perdeu achados do formato ##: {achados}"
+    assert "BLOQUEANTE — dado fabricado" in achados[0]
+    assert "mock fora da estratégia" in achados[1]
+    assert "cobertura" in achados[3]
+
+
+def test_parecer_integral_vem_do_arquivo_apontado_pelo_review(project_env):
+    """O reviewer grava o parecer em docs/qa/...md e devolve só o resumo + o
+    caminho. A fila precisa do ARQUIVO (achados enumerados), não do resumo."""
+    tmp_path, db = project_env
+    orch = _orch(tmp_path, db)
+    parecer_file = tmp_path / "docs" / "qa" / "ST-001_tech_lead_review.md"
+    parecer_file.parent.mkdir(parents=True, exist_ok=True)
+    parecer_file.write_text(
+        "## ACHADO 1 (BLOQUEANTE — front)\nfetch cru no PublishReport.vue\n"
+        "## ACHADO 2 (BLOQUEANTE — testes)\ntestes que abençoam o desvio\n",
+        encoding="utf-8",
+    )
+    resumo = (
+        "Parecer registrado em `docs/qa/ST-001_tech_lead_review.md`.\n"
+        "**Resumo executivo:** Review: REJEITADO PARA RETRABALHO — 2 bloqueantes."
+    )
+    assert "ACHADO 1" in orch._parecer_da_review(resumo)
+    assert "fetch cru" in orch._parecer_da_review(resumo)
+    # Sem caminho no output → devolve o próprio output
+    assert orch._parecer_da_review("só um resumo") == "só um resumo"

@@ -294,13 +294,18 @@ class Sidebar(VerticalScroll):
         t.append("─" * 36 + "\n", style=TOKENS["surface_alt"])
 
         # 3. Modified Files — git (se existir) + arquivos escritos pela sessão
+        # ÚLTIMOS 10: escritos da sessão primeiro (trabalho vivo), git preenche
+        LIMITE_ARQUIVOS = 10
         files = _get_git_modified_files(self.directory)
         escritos_sessao = [f for f in self.arquivos_escritos if f not in {i["file"] for i in files}]
+        escritos_visiveis = escritos_sessao[-LIMITE_ARQUIVOS:]
+        vagas_git = max(0, LIMITE_ARQUIVOS - len(escritos_visiveis))
+        files_visiveis = files[:vagas_git]
         total_arquivos = len(files) + len(escritos_sessao)
         t.append(f"📝 ARQUIVOS MODIFICADOS ({total_arquivos})\n", style=f"bold {TOKENS['primary']}")
         if not files and not escritos_sessao:
             t.append(" (Nenhum arquivo modificado)\n", style=f"{TOKENS['text_muted']}")
-        for item in files[:8]:
+        for item in files_visiveis:
             raw_file = item["file"].rstrip("/")
             p = Path(raw_file)
             if len(p.parts) > 1:
@@ -313,13 +318,14 @@ class Sidebar(VerticalScroll):
             if item["deletions"]:
                 t.append(f"-{item['deletions']}", style=f"{TOKENS['error']}")
             t.append("\n")
-        for caminho in escritos_sessao[:6]:
+        for caminho in escritos_visiveis:
             pp = Path(caminho)
             display_name = f"{pp.parts[-2]}/{pp.name}" if len(pp.parts) > 1 else pp.name
             t.append(f" ✍️ {display_name[:30]:<30}\n", style=f"{TOKENS['warning']}")
-        if total_arquivos > 14:
+        if total_arquivos > LIMITE_ARQUIVOS:
             t.append(
-                f" ... e mais {total_arquivos - 14} arquivos\n", style=f"{TOKENS['text_muted']}"
+                f" ... e mais {total_arquivos - LIMITE_ARQUIVOS} arquivos\n",
+                style=f"{TOKENS['text_muted']}",
             )
         t.append("─" * 36 + "\n", style=TOKENS["surface_alt"])
 
