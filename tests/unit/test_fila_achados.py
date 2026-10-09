@@ -314,3 +314,54 @@ def test_nada_truncado_parecer_longo_chega_inteiro(project_env):
     feedback = chamadas_ciclo[1]
     assert rechegio in feedback, "o fim do parecer foi truncado — lei violada"
     assert feedback.count("contexto") >= 900, "trecho do meio sumiu no caminho"
+
+
+def test_resumo_canonico_da_story_e_o_que_o_agente_recebe(project_env):
+    """Regra da @caroli: a story tem a seção '## RESUMO PARA EXECUÇÃO'
+    (completo por definição, curto por design). O ciclo envia A SEÇÃO — não
+    o texto integral (token) e não um truncamento (lei)."""
+    tmp_path, db = project_env
+    orch = _orch(tmp_path, db)
+    story = tmp_path / "docs" / "backlog" / "stories" / "ST-001.md"
+    story.parent.mkdir(parents=True, exist_ok=True)
+    story.write_text(
+        "# ST-001 — Relatório\n\n"
+        "## RESUMO PARA EXECUÇÃO\n"
+        "Objetivo: relatório pré-publicação com filtro por autor.\n"
+        "CAs: 1) botão exporta CSV; 2) 422 sem dados.\n"
+        "Armadilha: NÃO usar fetch cru — cliente canônico src/api/client.js.\n"
+        "\n"
+        "## Contexto estendido\n"
+        "prosa longa que NÃO deve ir ao agente " + "palavra " * 300 + "\n",
+        encoding="utf-8",
+    )
+    # força o ciclo a usar a story do arquivo
+    prompt_red: list[str] = []
+
+    original_get_runner = orch._get_runner
+
+    def fake_get_runner(handle):
+        if handle == "@aniche":
+            runner = MagicMock()
+
+            def run(prompt, *a, **k):
+                prompt_red.append(prompt)
+                return AgentExecutionResult(agent_handle=handle, success=True, output="red")
+
+            runner.run.side_effect = run
+            return runner
+        return original_get_runner(handle)
+
+    orch._get_runner = fake_get_runner
+
+    def fake_cycle(story_id=None, rework_feedback=None):
+        return {"success": True, "message": "ok", "arquivos_escritos": ["a.py"]}
+
+    orch._run_cycle_inner = fake_cycle
+
+    # chama o extrator direto (unidade) + valida regra
+    resumo = orch._extrair_resumo_story(story.read_text(encoding="utf-8"))
+    assert "RESUMO" in resumo or "Objetivo" in resumo
+    assert "cliente canônico" in resumo
+    assert "palavra palavra" not in resumo, "o resumo puxou prosa fora da seção"
+    assert len(resumo) < 500, "resumo canônico deve ser curto por design"

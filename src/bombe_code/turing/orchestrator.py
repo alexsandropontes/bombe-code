@@ -1911,6 +1911,30 @@ class WaveOrchestrator:
         }
     )
 
+    @staticmethod
+    def _extrair_resumo_story(story_content: str) -> str:
+        """Extrai a seção '## RESUMO PARA EXECUÇÃO' da story (regra da @caroli:
+        resumo COMPLETO por definição, curto por design — os agentes recebem
+        ELE, não o texto integral; o integral vive no arquivo, citado no
+        prompt). Sem a seção, devolve '' (o chamador usa o texto integral).
+        """
+        if not story_content:
+            return ""
+        linhas = story_content.splitlines()
+        dentro = False
+        coletado: list[str] = []
+        for linha in linhas:
+            baixa = linha.strip().lower().lstrip("#* ")
+            if baixa.startswith(("resumo para execução", "resumo para execucao")):
+                dentro = True
+                continue
+            if dentro and linha.strip().startswith("#"):
+                break  # próxima seção — fim do resumo
+            if dentro:
+                coletado.append(linha)
+        texto = "\n".join(coletado).strip()
+        return texto
+
     def _parecer_da_review(self, output: str) -> str:
         """Parecer INTEGRAL da review: se o reviewer gravou o parecer em
         arquivo (output é só resumo + caminho 'docs/qa/...md'), lê o ARQUIVO —
@@ -2207,9 +2231,18 @@ class WaveOrchestrator:
             if story_file and story_file.exists()
             else ""
         )
-        # STORY INTEIRA, sem truncar (lei: nada truncado para agente). O path
-        # vai junto para o agente reler o arquivo se precisar do original.
-        objetivo_story = story_content.strip() if story_content else ""
+        # STORY: usa o RESUMO CANÔNICO (regra da @caroli — seção '## RESUMO
+        # PARA EXECUÇÃO' na própria story: completo por definição, curto por
+        # design). Sem a seção, cai para o texto integral (nunca truncar).
+        resumo_secao = self._extrair_resumo_story(story_content)
+        if resumo_secao:
+            objetivo_story = (
+                "RESUMO CANÔNICO DA STORY (completo por definição — o texto "
+                f"integral está no arquivo indicado abaixo):\n{resumo_secao}"
+            )
+        else:
+            objetivo_story = story_content.strip() if story_content else ""
+        # O path vai junto para o agente reler o original se precisar.
         story_path_hint = (
             f"\n(STORY INTEGRAL também em: {story_file})"
             if story_file and story_file.exists()
@@ -2979,7 +3012,9 @@ class WaveOrchestrator:
                             f"A story {alvo} foi REPROVADA duas vezes pelo Tech Lead no mesmo ponto.\n"
                             f"Feedback do review: {feedback_atual}\n\n"
                             f"Refine a story (critérios de aceite/BDD) eliminando a ambiguidade apontada — "
-                            f"sem cortar escopo contratado. Salve o arquivo atualizado da story."
+                            f"sem cortar escopo contratado. REGRA RÍGIDA: mantenha/atualize a seção "
+                            f"'## RESUMO PARA EXECUÇÃO' (resumo completo por definição, ~30 linhas) — "
+                            f"é ELA que os agentes de execução recebem. Salve o arquivo atualizado da story."
                         )
                         res_caroli = runner_caroli.run(
                             self._assemble_prompt("@caroli", prompt_refino)
