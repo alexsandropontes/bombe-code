@@ -154,6 +154,9 @@ class VetoReworkEngine:
             return []
         blockers: list[str] = []
         collecting = False
+        # Cabeçalho '## ACHADO N (...)' seguido de detalhes numerados: os
+        # detalhes FUNDEM no achado do cabeçalho (não viram itens soltos).
+        ultimo_foi_header = False
         for raw_line in output.splitlines():
             stripped = raw_line.strip()
             low = stripped.lower().lstrip("*#>- ")
@@ -168,6 +171,7 @@ class VetoReworkEngine:
                     # → cabeçalho, não achado.
                     conteudo = f"{parens} {resto_limpo}".strip() if parens else resto_limpo
                     blockers.append(conteudo)
+                    ultimo_foi_header = False
                 collecting = True
                 continue
             # Cabeçalho '## ACHADO 1 (BLOQUEANTE — tema)' — sem dois-pontos
@@ -178,10 +182,12 @@ class VetoReworkEngine:
                 conteudo = re.sub(r"\*+", "", conteudo).strip(" -*")
                 if conteudo:
                     blockers.append(conteudo)
+                    ultimo_foi_header = True
                 collecting = True
                 continue
             if self._BLOCKER_HEADER_RE.match(low):
                 collecting = True
+                ultimo_foi_header = False
                 continue
             if collecting:
                 # "SOLUÇÃO:" é continuação do achado — não fecha a seção
@@ -191,7 +197,10 @@ class VetoReworkEngine:
                 if item_match:
                     item = item_match.group(1).strip()
                     if item:
-                        blockers.append(item)
+                        if ultimo_foi_header and blockers:
+                            blockers[-1] = f"{blockers[-1]} — {item}"
+                        else:
+                            blockers.append(item)
                     continue
                 if not stripped:
                     collecting = False  # linha em branco fecha a seção
