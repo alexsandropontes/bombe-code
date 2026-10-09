@@ -273,3 +273,44 @@ def test_parecer_integral_vem_do_arquivo_apontado_pelo_review(project_env):
     assert "fetch cru" in orch._parecer_da_review(resumo)
     # Sem caminho no output → devolve o próprio output
     assert orch._parecer_da_review("só um resumo") == "só um resumo"
+
+
+def test_nada_truncado_parecer_longo_chega_inteiro(project_env):
+    """LEI: NUNCA, JAMAIS nada enviado a um agente é truncado. Parecer de
+    8.000 caracteres deve chegar INTEGRAL no feedback do re-burn (o texto
+    antigo era cortado em 6.000/4.000/2.000 — informação truncada = fraude)."""
+    tmp_path, db = project_env
+    orch = _orch(tmp_path, db)
+    _prompts_por_agente(orch)
+    chamadas_ciclo: list[str] = []
+    rechegio = "DETALHE-IMPORTANTE-" + ("x" * 60)
+
+    parecer_longo = (
+        "REJEITADO — corrijam os achados:\n\n"
+        "**Bloqueios:**\n"
+        "1. ACHADO: coluna sem FK em leituras\nSOLUÇÃO: crie a FK\n"
+        f"Contexto estendido: {rechegio} {'contexto ' * 900}\n"
+    )
+    assert len(parecer_longo) > 6000
+
+    def fake_cycle(story_id=None, rework_feedback=None):
+        chamadas_ciclo.append(rework_feedback or "inicial")
+        if len(chamadas_ciclo) == 2:
+            # degrau 1 (dirigido, feedback integral) já resolve
+            return {"success": True, "message": "ok", "arquivos_escritos": ["a.py"]}
+        return {
+            "success": False,
+            "is_blocked": True,
+            "error": "REJEIÇÃO",
+            "review_output": parecer_longo,
+            "arquivos_escritos": [],
+        }
+
+    orch._run_cycle_inner = fake_cycle
+
+    res = orch.run_execute(stories=["ST-001"])
+
+    assert res["success"] is True, res.get("error")
+    feedback = chamadas_ciclo[1]
+    assert rechegio in feedback, "o fim do parecer foi truncado — lei violada"
+    assert feedback.count("contexto") >= 900, "trecho do meio sumiu no caminho"

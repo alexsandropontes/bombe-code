@@ -2207,7 +2207,14 @@ class WaveOrchestrator:
             if story_file and story_file.exists()
             else ""
         )
-        objetivo_story = " ".join(story_content.split())[:400] if story_content else ""
+        # STORY INTEIRA, sem truncar (lei: nada truncado para agente). O path
+        # vai junto para o agente reler o arquivo se precisar do original.
+        objetivo_story = story_content.strip() if story_content else ""
+        story_path_hint = (
+            f"\n(STORY INTEGRAL também em: {story_file})"
+            if story_file and story_file.exists()
+            else ""
+        )
         entregues: list[str] = []
         dev_outputs: list[str] = []
         concluidas_ids: set[str] = set()
@@ -2221,7 +2228,7 @@ class WaveOrchestrator:
             """Uma tarefa = RED (aniche, escopo do trecho) + GREEN (dev da camada)."""
             if runner_aniche:
                 raw_red = (
-                    f"Story: {objetivo_story}\n"
+                    f"Story: {objetivo_story}{story_path_hint}\n"
                     f"TAREFA ATUAL: [{tarefa_exec.task_type.value}] {tarefa_exec.title}\n"
                     f"Problema único desta tarefa: {tarefa_exec.problema_unico or tarefa_exec.description}\n"
                     "Escreva APENAS os testes que falham para ESTE trecho — nada de outras "
@@ -2253,7 +2260,7 @@ class WaveOrchestrator:
                 else "\nPrimeira tarefa da story."
             )
             raw_dev = (
-                f"OBJETIVO DA STORY COMPLETA: {objetivo_story}\n\n"
+                f"OBJETIVO DA STORY COMPLETA: {objetivo_story}{story_path_hint}\n\n"
                 f"TAREFA ATUAL (sua entrega): [{tarefa_exec.task_type.value}] {tarefa_exec.title}\n"
                 f"Problema único: {tarefa_exec.problema_unico or tarefa_exec.description}\n"
                 f"Testes (RED) já escritos pelo @aniche em 'tests/'.\n"
@@ -2795,7 +2802,7 @@ class WaveOrchestrator:
                         return base
                     return (
                         f"{base}\n\nPARECER INTEGRAL DO REVIEW — corrija TODOS os "
-                        f"achados enumerados, um a um:\n{parecer[:6000]}"
+                        f"achados enumerados, um a um (texto completo):\n{parecer}"
                     )
 
                 feedback_integral = _feedback_com_parecer(motivo, parecer_integral)
@@ -2816,7 +2823,7 @@ class WaveOrchestrator:
                 # re-emite com ACHADO/SOLUÇÃO um a um. O dev não recebe ordem no
                 # escuro (inventar achado é fraude).
                 if (
-                    re.search(r"\bachados?\b", f"{motivo} {parecer_integral[:2000]}", re.IGNORECASE)
+                    re.search(r"\bachados?\b", f"{motivo} {parecer_integral}", re.IGNORECASE)
                     and not achados_enfileirados
                 ):
                     BUS.publish(
@@ -2836,7 +2843,7 @@ class WaveOrchestrator:
                                 "enumera a lista — parecer INCOMPLETO. Re-emita-o com CADA achado "
                                 "no formato obrigatório:\nACHADO: <problema>\nSOLUÇÃO: <correção — "
                                 f"arquivo, o que mudar e como>\n\nParecer original:\n"
-                                f"{parecer_integral[:4000] or motivo}",
+                                f"{parecer_integral or motivo}",
                             )
                         )
                         self._record_telemetry(
@@ -2888,7 +2895,7 @@ class WaveOrchestrator:
                                 agente_achado,
                                 f"Story {story} REPROVADA no review. CORRIJA APENAS ESTE ACHADO "
                                 f"({i} de {len(achados_enfileirados)}):\nACHADO: {achado}\n\n"
-                                f"Contexto (parecer integral):\n{parecer_integral[:4000]}\n\n"
+                                f"Contexto (parecer integral, texto completo):\n{parecer_integral}\n\n"
                                 "Entrega = arquivos GRAVADOS nesta rodada (write_project_file). "
                                 "Escopo fechado: nada além deste achado.",
                             )
@@ -3013,7 +3020,7 @@ class WaveOrchestrator:
                             ),
                         )
                         runner_bob = self._get_runner("@unclebob")
-                        plano = (cycle_res.get("dev_output") or motivo)[:3000]
+                        plano = cycle_res.get("dev_output") or motivo
                         plano_aprovado = plano
                         if runner_bob:
                             res_bob = runner_bob.run(
@@ -3033,7 +3040,7 @@ class WaveOrchestrator:
                         feedback_degrau = (
                             "PLANO APROVADO PELO TECH LEAD — implemente NESTA rodada. "
                             "Entrega = arquivos gravados (write_project_file), não texto.\n\n"
-                            f"Plano aprovado: {plano_aprovado[:2000]}\n\n"
+                            f"Plano aprovado (texto completo): {plano_aprovado}\n\n"
                             f"Parecer de rejeição: {feedback_integral}"
                         )
                         BUS.publish(
@@ -3794,18 +3801,18 @@ class WaveOrchestrator:
             return {"success": False, "error": "Agente @hoare indisponível no catálogo."}
 
         fraudes = (
-            "\n".join(f"- {f}" for f in evidencias.fraudes_potenciais[:15])
+            "\n".join(f"- {f}" for f in evidencias.fraudes_potenciais)
             or "- (nenhuma detectada estaticamente)"
         )
         aleacoes = (
-            "\n".join(f"- {a}" for a in evidencias.aleacoes_relatorio_anterior[:20])
+            "\n".join(f"- {a}" for a in evidencias.aleacoes_relatorio_anterior)
             or "- (sem alegações extraíveis)"
         )
-        arvore = "\n".join(evidencias.arquivos_producao[:40]) or "- (vazio)"
+        arvore = "\n".join(evidencias.arquivos_producao) or "- (vazio)"
         mapa = (
             "\n".join(
                 f"- {story}: CAs {', '.join(dados['cas']) or 'nenhum'} | BDD: {'sim' if dados.get('bdd') else 'não'}"
-                for story, dados in list(evidencias.mapa_cas.items())[:15]
+                for story, dados in list(evidencias.mapa_cas.items())
             )
             or "- (nenhuma story com CAs declarados)"
         )
@@ -3816,13 +3823,13 @@ class WaveOrchestrator:
             "=== FONTES DA VERDADE (código) ===\n"
             f"Arquivos de produção:\n{arvore}\n\n"
             f"Resultado da SUÍTE REAL executada agora: {evidencias.suite_resultado}\n"
-            f"{evidencias.suite_detalhes[:1500]}\n\n"
+            f"{evidencias.suite_detalhes}\n\n"
             f"Fraudes potenciais detectadas estaticamente:\n{fraudes}\n\n"
             f"Contrato do escopo (stories × CAs declarados):\n{mapa}\n\n"
             "=== ALEGAÇÕES DO RELATÓRIO DE VALIDAÇÃO ANTERIOR (cross-examine) ===\n"
             f"{aleacoes}\n\n"
-            "=== RELATÓRIO ANTERIOR (trecho) ===\n"
-            f"{report_anterior[:2500]}\n\n"
+            "=== RELATÓRIO ANTERIOR (integral) ===\n"
+            f"{report_anterior}\n\n"
             "MISSÃO: garantir que o que foi PEDIDO é o que foi ENTREGUE. Para cada alegação do "
             "relatório anterior, exija evidência no código. Audite fundo as stories de maior risco. "
             "CA declarado sem implementação/teste correspondente é FURO. Alegação sem evidência é FURO. "

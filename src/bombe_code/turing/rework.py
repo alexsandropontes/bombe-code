@@ -317,8 +317,8 @@ class VetoReworkEngine:
                 "- APPROVAL_MISSING: o parecer não declarou aprovação explícita, mas não há objeção real.\n"
                 "- PRODUCT_GAP: há bloqueios/requisitos de produto não atendidos listados.\n"
                 "- TEST_FAILURE: a suíte de testes ou verificação técnica falhou.\n\n"
-                f"Motivo do veto: {reason[:500]}\n\n"
-                f"Parecer do validador (trecho): {validator_output[:1500]}\n\n"
+                f"Motivo do veto: {reason}\n\n"
+                f"Parecer do validador (integral): {validator_output}\n\n"
                 'Responda exclusivamente: {"veto_class": "<categoria>"}'
             )
             raw = agent.run_sync(prompt)
@@ -349,7 +349,7 @@ class VetoReworkEngine:
             f"Seu parecer anterior foi vetado. Motivo registrado pelo gate: {analysis.reason}\n"
         )
         if original_demand:
-            header += f"Demanda original em auditoria: {original_demand[:300]}\n"
+            header += f"Demanda original em auditoria: {original_demand}\n"
         body = (
             "O veto ocorreu porque o parecer não declarou aprovação explícita (Lei da Restrição / Default-Deny).\n"
             "Reavalie o entregável e emita um parecer novo e conclusivo:\n"
@@ -394,7 +394,7 @@ class VetoReworkEngine:
             f"Artefato esperado sob sua responsabilidade: {artifact}\n\n"
             f"Bloqueios declarados pela auditoria:\n{blocker_lines}\n\n"
             f"Stories afetadas: {stories}\n"
-            + (f"Demanda original: {original_demand[:300]}\n" if original_demand else "")
+            + (f"Demanda original: {original_demand}\n" if original_demand else "")
             + "\nSua missão como AUTOR do artefato:\n"
             "1. Corrija/atualize o artefato de sua responsabilidade para eliminar a causa dos bloqueios.\n"
             "2. Se a causa afetar stories, atualize os ARQUIVOS das stories (critérios de aceite/BDD) para refletir a correção.\n"

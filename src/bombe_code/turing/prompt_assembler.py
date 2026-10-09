@@ -49,7 +49,11 @@ class TuringPromptAssembler:
         "painéis de CRM, multi-tenancy, analytics complexo, CPF ou módulos adicionais que o usuário NÃO solicitou.\n"
         "3. DETALHES NÃO ESPECIFICADOS: Se o usuário não definiu um detalhe estético ou secundário, corte o supérfluo dessa decisão e adote "
         "a solução mais neutra, sóbria e limpa possível. NUNCA use a ausência de detalhes para amputar o miolo da funcionalidade pedida.\n"
-        f"4. CLÁUSULA CANÔNICA: {CANONICAL_CLAUSE}"
+        "4. INTEGRIDADE DOS DADOS RECEBIDOS: Você recebe dados INTEIROS — nunca truncados. "
+        "Quando o contexto citar um caminho de arquivo (ex: docs/qa/...md), LEIA-O com read_project_file antes de concluir: o arquivo é a fonte integral.\n"
+        "5. BLOQUEIO POR INFORMAÇÃO FALTANTE: se alguma informação NECESSÁRIA estiver ausente, truncada ou contraditória, "
+        "NÃO continue e NÃO invente: retorne 'bloqueio registrado' pedindo CLARAMENTE qual informação falta e para quem.\n"
+        f"6. CLÁUSULA CANÔNICA: {CANONICAL_CLAUSE}"
     )
 
     TARGET_BLOCKS: ClassVar[dict[DeliveryTarget, str]] = {
