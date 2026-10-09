@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+from pathlib import Path
 from typing import Any, ClassVar
 
 import httpx
@@ -85,6 +86,10 @@ class BombeTuiApp(App):
         Binding("escape", "escape_press", "Interromper (2× ESC)", show=False),
         Binding("ctrl+p", "command_palette", "Paleta de Comandos", show=True),
         Binding("ctrl+b", "toggle_sidebar", "Painel Lateral", show=True),
+        Binding("pageup", "chat_page_up", "Chat ↑ página", show=False, priority=True),
+        Binding("pagedown", "chat_page_down", "Chat ↓ página", show=False, priority=True),
+        Binding("home", "chat_page_top", "Chat início", show=False),
+        Binding("end", "chat_page_bottom", "Chat fim", show=False),
         Binding("f1", "help", "Ajuda", show=True),
         Binding("ctrl+q", "quit", "Sair", show=True),
     ]
@@ -338,7 +343,7 @@ class BombeTuiApp(App):
                     f"[dim]Retomando governança formal da ONDA na etapa [bold]{self.wave_station}[/bold]. Pressione Tab para alternar etapas.[/dim]"
                 )
             chat.mount(Static(msg))
-            chat.scroll_end(animate=False)
+            chat.seguir()
         except Exception:  # noqa: BLE001, S110
             pass
 
@@ -363,7 +368,7 @@ class BombeTuiApp(App):
                 f"[{TOKENS['text_muted']}]{guide}[/]"
             )
             chat.mount(Static(msg))
-            chat.scroll_end(animate=False)
+            chat.seguir()
         except Exception:  # noqa: BLE001, S110
             pass
 
@@ -391,12 +396,16 @@ class BombeTuiApp(App):
             logger.debug("Falha ao atualizar barra de status: %s", exc)
 
     async def on_mount(self) -> None:
-        # PARIDADE OPENCODE (tea.DisableMouse): o driver do Textual liga
-        # ?1000h/?1003h/?1006h no boot — isso BLOQUEIA a seleção nativa do
-        # terminal. Desligamos os modos de mouse logo após o driver montar:
-        # seleção nativa funciona em qualquer terminal e o Ctrl+Shift+C do
-        # TERMINAL copia (acelerador do VTE, nunca chega ao app).
-        self._mouse_tui(False)
+        # Título do terminal: BC|Nome do projeto (paridade do OC| do opencode).
+        # Enquanto o projeto não tem nome definido, mostra o nome da pasta;
+        # depois de definido (config/PRD), mostra o nome real. Poll leve para
+        # acompanhar a definição do nome no meio da sessão.
+        self._atualizar_titulo()
+        self.set_interval(10.0, self._atualizar_titulo)
+        # Mouse da TUI ATIVO: roda do mouse, scrollbar e cliques rolam o chat.
+        # Seleção nativa de texto = Shift+arrastar (o terminal VTE ignora a
+        # captura do app quando Shift está pressionado). Copiar: Ctrl+Shift+C
+        # (terminal) ou Ctrl+C (transcrição via OSC52).
         if not self.session_id:
             try:
                 session_data = await self.client.create_session(
@@ -659,7 +668,7 @@ class BombeTuiApp(App):
                 await chat.mount(self._current_reasoning_widget)
             else:
                 self._current_reasoning_widget.update_stream(self._current_reasoning_text)
-            chat.scroll_end(animate=False)
+            chat.seguir()
 
         elif etype == "text-delta":
             if self._current_reasoning_widget is not None:
@@ -677,7 +686,7 @@ class BombeTuiApp(App):
                 await chat.mount(self._current_assistant_widget)
             else:
                 self._current_assistant_widget.update_stream(self._current_assistant_text)
-            chat.scroll_end(animate=False)
+            chat.seguir()
 
         elif etype in ("tool-call", "tool-input"):
             tool_name = event.get("tool", "ferramenta")
@@ -719,7 +728,7 @@ class BombeTuiApp(App):
                 }
             )
             await chat.mount(widget)
-            chat.scroll_end(animate=False)
+            chat.seguir()
 
         elif etype == "tool-result":
             if self._processing_bar is not None:
@@ -733,7 +742,7 @@ class BombeTuiApp(App):
                 }
             )
             await chat.mount(widget)
-            chat.scroll_end(animate=False)
+            chat.seguir()
 
         elif etype == "permission.asked":
             perm = event.get("permission", "ação")
@@ -788,15 +797,45 @@ class BombeTuiApp(App):
 
     _last_escape_ts: float = 0.0
 
-    def _mouse_tui(self, ligar: bool) -> None:
-        """Desliga os modos de mouse da TUI (paridade tea.DisableMouse).
-        O argumento `ligar` é ignorado: mouse-tracking nunca é religado."""
+    def _atualizar_titulo(self) -> None:
+        """Título do terminal: BC|Nome do projeto (pasta enquanto sem nome)."""
         try:
-            with open("/dev/tty", "w") as tty:
-                tty.write("\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l")
-                tty.flush()
-        except OSError as exc:
-            logger.debug("Mouse da TUI não alternado: %s", exc)
+            from bombe_code.config.project_config import ProjectConfigManager
+
+            config = ProjectConfigManager(self.project_dir).load()
+            nome = (config.name or "").strip() or Path(self.project_dir).name
+            self.title = f"BC|{nome}"
+            sub_title = getattr(config, "description", None)
+            if sub_title:
+                self.sub_title = str(sub_title)[:80]
+        except Exception as exc:  # noqa: BLE001 — título é cosmético
+            logger.debug("Título do terminal não definido: %s", exc)
+
+    def _chat_view(self) -> ChatView | None:
+        try:
+            return self.query_one("#chat-view", ChatView)
+        except Exception:  # noqa: BLE001 — tela pode não estar montada
+            return None
+
+    def action_chat_page_up(self) -> None:
+        chat = self._chat_view()
+        if chat:
+            chat.pagina("up")
+
+    def action_chat_page_down(self) -> None:
+        chat = self._chat_view()
+        if chat:
+            chat.pagina("down")
+
+    def action_chat_page_top(self) -> None:
+        chat = self._chat_view()
+        if chat:
+            chat.pagina("top")
+
+    def action_chat_page_bottom(self) -> None:
+        chat = self._chat_view()
+        if chat:
+            chat.pagina("bottom")
 
     def action_copy_or_quit(self) -> None:
         """1º Ctrl+C: COPIA a transcrição (o Ctrl+Shift+C do terminal chega

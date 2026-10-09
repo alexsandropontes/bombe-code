@@ -65,6 +65,19 @@ def _get_git_modified_files(repo_dir: str | Path = ".") -> list[dict[str, Any]]:
         return []
 
 
+def _frase_curta(titulo: str) -> str:
+    """Frase curta da story/task para a fila do painel (sem prefixo 'Story N')."""
+    import re as _re
+
+    base = (titulo or "").strip()
+    for sep in (" — ", " – ", ": "):
+        if sep in base:
+            base = base.split(sep, 1)[1].strip()
+            break
+    base = _re.sub(r"^Story\s+\S+\s*", "", base, flags=_re.IGNORECASE)
+    return base[:36]
+
+
 class Sidebar(VerticalScroll):
     """Painel lateral vertical com informações do projeto, métricas e contexto."""
 
@@ -136,11 +149,14 @@ class Sidebar(VerticalScroll):
         self.arquivos_escritos: list[str] = []
         self.model_name = model
         self._content_widget = Static("", id="sidebar-content")
+        self.tarefas: list[dict] = []
+        self.wave_id: str = ""
 
     def compose(self) -> ComposeResult:
         yield self._content_widget
 
     def on_mount(self) -> None:
+        self.set_interval(2.0, self._poll_tarefas)
         self.refresh_view()
 
     def update_metrics(
@@ -170,6 +186,46 @@ class Sidebar(VerticalScroll):
             self.arquivos_escritos.append(caminho)
             self.refresh_view()
 
+    def _poll_tarefas(self) -> None:
+        """Fila viva do kanban: Onda + Story + frase curta; atuais ▶ em cima,
+        próximas · embaixo; TETO de 5 somando atuais + futuras. Quando a atual
+        sai, entra a próxima da fila."""
+        import sqlite3
+
+        db = Path(self.project_dir) / ".bombe-code" / "state.db"
+        if not db.exists():
+            if self.tarefas:
+                self.tarefas = []
+                self.refresh_view()
+            return
+        try:
+            con = sqlite3.connect(f"file:{db}?mode=ro", uri=True, timeout=1.0)
+            try:
+                wave_row = con.execute("SELECT wave_id FROM wave_state LIMIT 1").fetchone()
+                cards = con.execute(
+                    "SELECT story_id, title, status FROM kanban_cards ORDER BY rowid"
+                ).fetchall()
+            finally:
+                con.close()
+        except sqlite3.Error:
+            return
+        self.wave_id = (wave_row[0] if wave_row else "") or ""
+        atuais: list[tuple[str, str]] = []
+        futuras: list[tuple[str, str]] = []
+        for sid, titulo, status in cards:
+            frase = _frase_curta(titulo)
+            if status in ("IN_PROGRESS", "IN_REVIEW"):
+                atuais.append((sid, frase))
+            elif status in ("READY", "TODO", "PENDING", "BACKLOG"):
+                futuras.append((sid, frase))
+        nova = [{"sid": s, "frase": f, "atual": True} for s, f in atuais]
+        nova += [
+            {"sid": s, "frase": f, "atual": False} for s, f in futuras[: max(0, 5 - len(nova))]
+        ]
+        if nova != self.tarefas:
+            self.tarefas = nova
+            self.refresh_view()
+
     def refresh_view(self) -> None:
         """Renderiza a visualização rica do painel lateral."""
         t = Text()
@@ -184,6 +240,19 @@ class Sidebar(VerticalScroll):
             style=f"{TOKENS['text_muted']}",
         )
         t.append("─" * 36 + "\n", style=TOKENS["surface_alt"])
+
+        # 1.5 Tarefas vivas do kanban (atuais ▶ em cima, fila · embaixo, teto 5)
+        if self.tarefas:
+            titulo_onda = f" · {self.wave_id}" if self.wave_id else ""
+            t.append(
+                f"📋 TAREFAS{titulo_onda} ({len(self.tarefas)})\n",
+                style=f"bold {TOKENS['secondary']}",
+            )
+            for tr in self.tarefas:
+                marcador = "▶" if tr["atual"] else "·"
+                estilo = TOKENS["primary"] if tr["atual"] else TOKENS["text_muted"]
+                t.append(f" {marcador} {tr['sid']} {tr['frase']}\n", style=estilo)
+            t.append("─" * 36 + "\n", style=TOKENS["surface_alt"])
 
         # 2. Context & Token Usage
         t.append("🧠 CONTEXTO & TOKENS\n", style=f"bold {TOKENS['secondary']}")

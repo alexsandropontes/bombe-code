@@ -197,3 +197,31 @@ def test_extrator_reconhece_achados_com_solucao():
     assert len(achados) == 3
     assert achados[0].startswith("ACHADO: coluna origem_id")
     assert achados[2].startswith("ACHADO: dependência")
+
+
+def test_extrator_reconhece_formato_real_do_tech_lead():
+    """Formato REAL dos pareceres (make-books): '**ACHADO 1 (BLOQUEANTE —
+    tema):** texto' com número e parêntese antes do dois-pontos. Este teste
+    existe porque o extrator antigo só casava 'ACHADO:' — a fila nunca nascia
+    e a story repetia em loop."""
+    from bombe_code.turing.rework import VetoReworkEngine
+
+    motor = VetoReworkEngine()
+    parecer_real = (
+        "## Parecer\n"
+        "rejeitado para retrabalho — corrijam os achados e re-submetam.\n"
+        "### Achados\n"
+        "**ACHADO 1 (BLOQUEANTE — Clean Architecture):** domínio `publish/service.py` "
+        "importa `REPORT_ITEM_KINDS` de `..api.contracts` (dependência apontando para fora).\n"
+        "**ACHADO 2 (DRY):** `PublishReport.vue` usa `fetch()` cru, ignorando o cliente canônico.\n"
+        "**ACHADO 3 (não-bloqueante):** `api/contracts.py` monolítico (7+ stories).\n"
+        "\n"
+        "Escopo da correção: ACHADOS 1 e 2 (~30 linhas em 3 arquivos).\n"
+    )
+    achados = motor.extract_blockers(parecer_real)
+    assert len(achados) == 3, f"extrator perdeu achados: {achados}"
+    assert "domínio" in achados[0] and "api.contracts" in achados[0]
+    assert "fetch()" in achados[1]
+    assert "monolítico" in achados[2]
+    # A linha de resumo ("Escopo da correção: ACHADOS 1 e 2...") não vira achado
+    assert not any("Escopo" in a for a in achados)

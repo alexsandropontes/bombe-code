@@ -1,7 +1,8 @@
 """PARIDADE OPENCODE nas teclas:
 - Ctrl+C fecha o aplicativo (keybind do binário original)
-- Ctrl+Shift+C/W NUNCA chegam ao app (acelerador do VTE) — nada neles
-- Mouse-tracking DESLIGADO (tea.DisableMouse): seleção nativa sempre ok"""
+- Mouse da TUI ATIVO: roda/scrollbar rolam o chat; seleção nativa de texto
+  via Shift+arrastar (VTE); Ctrl+Shift+C copia a seleção
+- Auto-follow: texto novo só arrasta a tela se o usuário está no fim"""
 
 from bombe_code.tui.app import BombeTuiApp
 from bombe_code.tui.client import BombeClient
@@ -16,6 +17,11 @@ def test_bindings_opencode(tmp_path):
 
     acoes = {b.action for b in BombeTuiApp.BINDINGS}
     assert "quit" in acoes  # Ctrl+C fecha (paridade opencode)
+    # Rolagem do chat pelo teclado (a tela não fica mais presa no fim):
+    assert "chat_page_up" in acoes
+    assert "chat_page_down" in acoes
+    assert "chat_page_top" in acoes
+    assert "chat_page_bottom" in acoes
     # Nenhuma ação inventada sobrevive:
     for proibida in (
         "copiar_tela",

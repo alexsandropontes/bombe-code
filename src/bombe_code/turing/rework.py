@@ -135,8 +135,9 @@ class VetoReworkEngine:
 
     # ------------------------------------------------------------ extração
     def extract_blockers(self, output: str) -> list[str]:
-        """Extrai bloqueios de pareceres reais: prefixo 'BLOQUEIO:', seções
-        'Bloqueios (...):' com listas numeradas/bullets."""
+        """Extrai bloqueios/achados de pareceres reais: prefixo 'BLOQUEIO:',
+        'ACHADO:' simples, 'ACHADO 1 (BLOQUEANTE — tema):' com número/parêntese,
+        e seções 'Bloqueios/Achados:' com listas numeradas/bullets."""
         if not output:
             return []
         blockers: list[str] = []
@@ -144,11 +145,19 @@ class VetoReworkEngine:
         for raw_line in output.splitlines():
             stripped = raw_line.strip()
             low = stripped.lower().lstrip("*#>- ")
-            if low.startswith(("bloqueio:", "achado:")):
-                blockers.append(stripped.split(":", 1)[1].strip(" -*"))
+            # ACHADO 2 (DRY): ... / ACHADO: ... / BLOQUEIO: ...
+            m_rotulo = re.match(
+                r"^\**\s*(?:achados?|bloqueios?)\s*\d*\s*(?:\([^)]*\))?\s*:\s*(.+)$",
+                stripped,
+                re.IGNORECASE,
+            )
+            if m_rotulo:
+                conteudo = m_rotulo.group(1).strip(" -*")
+                if conteudo:
+                    blockers.append(conteudo)
                 collecting = True
                 continue
-            if self._BLOCKER_HEADER_RE.match(stripped):
+            if self._BLOCKER_HEADER_RE.match(low):
                 collecting = True
                 continue
             if collecting:
@@ -162,8 +171,11 @@ class VetoReworkEngine:
                         blockers.append(item)
                     continue
                 if not stripped:
-                    continue  # linha em branco dentro da seção
-                collecting = False  # fim da seção de bloqueios
+                    collecting = False  # linha em branco fecha a seção
+                    continue
+                # Continuação do texto do último achado (parecer real quebra linha)
+                if blockers:
+                    blockers[-1] = f"{blockers[-1]} {stripped}".strip()
         return blockers
 
     def extract_story_ids(self, text: str) -> list[str]:
