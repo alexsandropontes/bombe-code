@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import subprocess
+import time
 from pathlib import Path
 from typing import Any
 
@@ -76,6 +77,18 @@ def _frase_curta(titulo: str) -> str:
             break
     base = _re.sub(r"^Story\s+\S+\s*", "", base, flags=_re.IGNORECASE)
     return base[:36]
+
+
+# Status → (símbolo, estilo rich). Vermelho = bloqueada; laranja = revisão/
+# correção (bugs e débitos); verde = nova em execução; cinza = fila;
+# cinza escuro riscada = encerrada (visível por 60s).
+_MARCADORES = {
+    "blocked": ("🚩", f"bold {TOKENS['error']}"),
+    "review": ("🟠", f"bold {TOKENS['laranja']}"),
+    "run": ("▶", f"bold {TOKENS['success']}"),
+    "fila": ("·", TOKENS["text_muted"]),
+    "done": ("✓", f"{TOKENS['text_dim']} strike"),
+}
 
 
 class Sidebar(VerticalScroll):
@@ -187,9 +200,16 @@ class Sidebar(VerticalScroll):
             self.refresh_view()
 
     def _poll_tarefas(self) -> None:
-        """Fila viva do kanban: Onda + Story + frase curta; atuais ▶ em cima,
-        próximas · embaixo; TETO de 5 somando atuais + futuras. Quando a atual
-        sai, entra a próxima da fila."""
+        """Fila viva do kanban: Onda + Story + frase curta; atuais em cima,
+        próximas embaixo; TETO de 7 somando tudo. Quando a atual sai, entra a
+        próxima da fila.
+
+        Status (símbolo/cor):
+        🚩 vermelho = bloqueada (linha parada) · 🟠 laranja = em revisão/
+        correção (bugs e débitos) · ▶ verde = nova em execução · · cinza =
+        aguardando fila · ✓ cinza escuro RISCADA = encerrada (fica visível
+        60s; se estiver ocupando vaga de fila, expira e a próxima entra).
+        """
         import sqlite3
 
         db = Path(self.project_dir) / ".bombe-code" / "state.db"
@@ -203,25 +223,36 @@ class Sidebar(VerticalScroll):
             try:
                 wave_row = con.execute("SELECT wave_id FROM wave_state LIMIT 1").fetchone()
                 cards = con.execute(
-                    "SELECT story_id, title, status FROM kanban_cards ORDER BY rowid"
+                    "SELECT story_id, title, status, is_blocked, updated_at "
+                    "FROM kanban_cards ORDER BY rowid"
                 ).fetchall()
             finally:
                 con.close()
         except sqlite3.Error:
             return
         self.wave_id = (wave_row[0] if wave_row else "") or ""
-        atuais: list[tuple[str, str]] = []
-        futuras: list[tuple[str, str]] = []
-        for sid, titulo, status in cards:
+        agora = time.time()
+        atuais: list[tuple[str, str, str]] = []
+        encerradas: list[tuple[str, str, str]] = []
+        fila: list[tuple[str, str, str]] = []
+        for sid, titulo, status, is_blocked, updated_at in cards:
             frase = _frase_curta(titulo)
-            if status in ("IN_PROGRESS", "IN_REVIEW"):
-                atuais.append((sid, frase))
+            if is_blocked:
+                atuais.append((sid, frase, "blocked"))
+            elif status == "IN_PROGRESS":
+                atuais.append((sid, frase, "run"))
+            elif status in ("IN_REVIEW", "VALIDATE"):
+                atuais.append((sid, frase, "review"))
+            elif status in ("DONE", "DEV_DONE"):
+                # Encerrada aparece riscada por 60s; depois dá lugar à fila.
+                if agora - float(updated_at or 0) <= 60:
+                    encerradas.append((sid, frase, "done"))
             elif status in ("READY", "TODO", "PENDING", "BACKLOG"):
-                futuras.append((sid, frase))
-        nova = [{"sid": s, "frase": f, "atual": True} for s, f in atuais]
-        nova += [
-            {"sid": s, "frase": f, "atual": False} for s, f in futuras[: max(0, 5 - len(nova))]
-        ]
+                fila.append((sid, frase, "fila"))
+        nova = []
+        for s, f, e in (atuais + encerradas + fila)[:7]:
+            marcador, estilo = _MARCADORES[e]
+            nova.append({"sid": s, "frase": f, "estado": e, "marcador": marcador, "estilo": estilo})
         if nova != self.tarefas:
             self.tarefas = nova
             self.refresh_view()
@@ -241,7 +272,7 @@ class Sidebar(VerticalScroll):
         )
         t.append("─" * 36 + "\n", style=TOKENS["surface_alt"])
 
-        # 1.5 Tarefas vivas do kanban (atuais ▶ em cima, fila · embaixo, teto 5)
+        # 1.5 Tarefas vivas do kanban (status por símbolo/cor; teto 7)
         if self.tarefas:
             titulo_onda = f" · {self.wave_id}" if self.wave_id else ""
             t.append(
@@ -249,9 +280,8 @@ class Sidebar(VerticalScroll):
                 style=f"bold {TOKENS['secondary']}",
             )
             for tr in self.tarefas:
-                marcador = "▶" if tr["atual"] else "·"
-                estilo = TOKENS["primary"] if tr["atual"] else TOKENS["text_muted"]
-                t.append(f" {marcador} {tr['sid']} {tr['frase']}\n", style=estilo)
+                linha = f" {tr['marcador']} {tr['sid']} {tr['frase']}\n"
+                t.append(linha, style=tr["estilo"])
             t.append("─" * 36 + "\n", style=TOKENS["surface_alt"])
 
         # 2. Context & Token Usage
