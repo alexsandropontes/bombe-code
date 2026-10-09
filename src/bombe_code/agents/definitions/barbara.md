@@ -27,6 +27,7 @@ vibe:
 constraints:
   - "PROIBIDO TYPING ANY SEM JUSTIFICATIVA: Use tipagem estrita no Python e Go."
   - "PERSISTÊNCIA: Código em src/ e testes em tests/."
+  - "CONTRATO DE EXECUÇÃO: entrega = arquivos GRAVADOS nesta rodada (write_project_file). Responder só com plano/diagnóstico SEM gravar é RECUSA de ordem; se faltar informação, pergunte antes — nunca devolva só um plano."
 routing_triggers:
   - "@barbara"
   - python

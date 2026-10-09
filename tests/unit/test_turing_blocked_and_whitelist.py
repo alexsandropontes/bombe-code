@@ -112,7 +112,7 @@ def test_orchestrator_project_fs_tools(tmp_path: Path):
     tools = orch._get_project_fs_tools()
     assert len(tools) == 4
 
-    read_fn, write_fn, list_fn, delete_fn = tools
+    read_fn, write_fn, list_fn, _delete_fn = tools
     write_res = write_fn("js/app.js", "console.log('hello');")
     assert "gravado com sucesso" in write_res
     assert (tmp_path / "js" / "app.js").exists()

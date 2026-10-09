@@ -430,6 +430,7 @@ def test_escada_exaurida_vira_escalacao_laranja_com_opcoes_de_pm(project_env):
             "is_blocked": True,
             "error": "Tech Lead: veredito de REJEIÇÃO",
             "review_output": "Parecer completo: o editor continua read-only.",
+            "arquivos_escritos": ["src/fix.py"],
         }
 
     orch._run_cycle_inner = fake_cycle_sempre_veta
@@ -476,6 +477,7 @@ def test_veto_sistemico_declarado_por_agente_produz_linha_parada_vermelha(projec
             "is_blocked": True,
             "error": "agente bloqueado",
             "review_output": "parecer",
+            "arquivos_escritos": ["src/fix.py"],
         }
 
     orch._run_cycle_inner = fake_cycle_sempre_bloqueia
@@ -556,6 +558,7 @@ def test_escada_de_convergencia_refina_story_e_aprova_no_degrau_3(project_env):
                 "is_blocked": True,
                 "error": "Tech Lead: REJEIÇÃO",
                 "review_output": "parecer",
+                "arquivos_escritos": ["src/fix.py"],
             }
         orch.state_machine.transition_to(WaveState.VALIDATE)
         return {"success": True, "message": "aprovado no degrau 3"}
@@ -630,6 +633,7 @@ def test_escada_completa_antes_de_escalar_humano(project_env):
             "is_blocked": True,
             "error": "Tech Lead: REJEIÇÃO",
             "review_output": "p",
+            "arquivos_escritos": ["src/fix.py"],
         }
 
     orch._run_cycle_inner = fake_cycle

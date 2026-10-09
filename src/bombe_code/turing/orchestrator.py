@@ -2122,6 +2122,10 @@ class WaveOrchestrator:
         concluidas_ids: set[str] = set()
         pendentes = list(tarefas)
 
+        # Evidência de execução: arquivos gravados pelos devs NESTE ciclo.
+        # Zero escritas = plano sem código (recusa velada) — detectável.
+        escritas_ciclo: list[str] = []
+
         def _executa_tarefa(tarefa_exec: Any) -> str:
             """Uma tarefa = RED (aniche, escopo do trecho) + GREEN (dev da camada)."""
             if runner_aniche:
@@ -2166,9 +2170,12 @@ class WaveOrchestrator:
                 "REGRA RÍGIDA DE ESCOPO: entregue APENAS o trecho em TAREFA ATUAL. As demais "
                 "tarefas da story NÃO são suas — não as implemente, não as antecipe, não as "
                 "declare como entregues. Observações fora do escopo: registre e siga o trecho.\n"
-                "Implemente o mínimo para ESTES testes passarem (GREEN) e refatore (Clean Code)."
+                "Implemente o mínimo para ESTES testes passarem (GREEN) e refatore (Clean Code). "
+                "Entrega desta rodada = arquivos GRAVADOS (write_project_file) — "
+                "resposta sem gravação não é entrega."
             )
             res_t = runner_executor.run(self._assemble_prompt(executor_handle, raw_dev))
+            escritas_ciclo.extend(getattr(res_t, "arquivos_escritos", []))
             return getattr(res_t, "output", "")
 
         while pendentes:
@@ -2264,6 +2271,7 @@ class WaveOrchestrator:
                     "error": block_reason,
                     "message": f"Story {target_story} bloqueada no Tech Lead: {block_reason}",
                     "review_output": getattr(bob_res, "output", ""),
+                    "arquivos_escritos": escritas_ciclo,
                 }
 
         # 4. FASE RUNNER & VERIFICAÇÃO: @aniche executa e valida a suíte de testes da story
@@ -2346,6 +2354,7 @@ class WaveOrchestrator:
             "aniche_output": getattr(aniche_val_res, "output", "") if aniche_val_res else "",
             "review_output": getattr(bob_res, "output", "") if bob_res else "",
             "review_gate": review_eval,
+            "arquivos_escritos": escritas_ciclo,
             "paused": True,
             "message": (
                 f"Ciclo atômico concluído para {target_story}. Aguardando próximo comando."
@@ -2682,60 +2691,157 @@ class WaveOrchestrator:
                     or "reprovado pelo review"
                 )
 
-                # ── ESCADA DE CONVERGÊNCIA (tudo autônomo em matéria técnica) ──
-                # Degrau 1-2: re-burn dirigido (dev + feedback do review)
-                # Degrau 3-4: @caroli REFINA a story com o feedback (pode ser a
-                #             story mal escrita) e o ciclo TDD roda de novo
-                # Só APÓS a escada completa → escalação ao humano (furo real)
+                # ── ESCADA DE CONVERGÊNCIA v2 (tudo autônomo em matéria técnica) ──
+                # Com evidência de escrita (dev executou): trilha clássica —
+                #   1-2 dirigido → 3-4 @caroli refina a story.
+                # Sem evidência (dev devolveu PLANO sem gravar arquivo = recusa
+                # velada): trilha de execução — 2 plano aprovado pelo Tech Lead
+                # → 3 ordem incisiva → 4 o PRÓPRIO Tech Lead assume e codifica.
+                # Só APÓS a escada completa → escalação (com a causa verdadeira).
                 escalacao = None
                 assinaturas_veto = [motivo]
                 retrabalho_ok = False
+                escreveu_alguma_vez = False
 
                 def _sig(t: str) -> str:
                     import re as _re
 
                     return "|".join(sorted(set(_re.findall(r"[a-zà-ú]{6,}", t.lower())))[:10])
 
-                for degrau, refinar_story in ((1, False), (2, False), (3, True), (4, True)):
-                    if refinar_story:
-                        BUS.publish(
-                            "veto_rework",
-                            agent="@caroli",
-                            text=(
-                                f"📝 [DEGRAU {degrau}/4] Dois ciclos reprovados com o mesmo teor — "
-                                f"a STORY pode estar ambígua. @caroli refinando critérios com o "
-                                f"feedback do review..."
-                            ),
-                        )
-                        runner_caroli = self._get_runner("@caroli")
-                        if runner_caroli:
-                            prompt_refino = (
-                                f"A story {story} foi REPROVADA duas vezes pelo Tech Lead no mesmo ponto.\n"
-                                f"Feedback do review: {motivo}\n\n"
-                                f"Refine a story (critérios de aceite/BDD) eliminando a ambiguidade apontada — "
-                                f"sem cortar escopo contratado. Salve o arquivo atualizado da story."
-                            )
-                            res_caroli = runner_caroli.run(
-                                self._assemble_prompt("@caroli", prompt_refino)
-                            )
-                            self._record_telemetry(
-                                "EXECUTE", "@caroli (refino de story)", res_caroli
-                            )
-                            self._extract_and_write_project_files(getattr(res_caroli, "output", ""))
-
+                def _caroli_refino(degrau: int, alvo: str, feedback_atual: str) -> None:
                     BUS.publish(
                         "veto_rework",
-                        agent="@unclebob",
+                        agent="@caroli",
                         text=(
-                            f"🔥 [DEGRAU {degrau}/4] Re-queimando {story} no ciclo TDD"
-                            + (
-                                " com story refinada."
-                                if refinar_story
-                                else " com feedback direcionado."
-                            )
+                            f"📝 [DEGRAU {degrau}/4] Ciclos reprovados com execução real — "
+                            f"a STORY pode estar ambígua. @caroli refinando critérios com o "
+                            f"feedback do review..."
                         ),
                     )
-                    cycle_res = self._run_cycle_inner(story, rework_feedback=motivo)
+                    runner_caroli = self._get_runner("@caroli")
+                    if runner_caroli:
+                        prompt_refino = (
+                            f"A story {alvo} foi REPROVADA duas vezes pelo Tech Lead no mesmo ponto.\n"
+                            f"Feedback do review: {feedback_atual}\n\n"
+                            f"Refine a story (critérios de aceite/BDD) eliminando a ambiguidade apontada — "
+                            f"sem cortar escopo contratado. Salve o arquivo atualizado da story."
+                        )
+                        res_caroli = runner_caroli.run(
+                            self._assemble_prompt("@caroli", prompt_refino)
+                        )
+                        self._record_telemetry("EXECUTE", "@caroli (refino de story)", res_caroli)
+                        self._extract_and_write_project_files(getattr(res_caroli, "output", ""))
+
+                for degrau in range(1, 5):
+                    # Rota por EVIDÊNCIA: zero gravações = o problema é recusa do
+                    # dev, não a story — sobe a agressividade da ordem.
+                    if not escreveu_alguma_vez:
+                        estrategia = {
+                            1: "dirigido",
+                            2: "plano_aprovado",
+                            3: "incisivo",
+                            4: "lead_assume",
+                        }[degrau]
+                    else:
+                        estrategia = "caroli" if degrau >= 3 else "dirigido"
+
+                    if estrategia == "caroli":
+                        _caroli_refino(degrau, story, motivo)
+                        BUS.publish(
+                            "veto_rework",
+                            agent="@unclebob",
+                            text=f"🔥 [DEGRAU {degrau}/4] Re-queimando {story} com story refinada.",
+                        )
+                        cycle_res = self._run_cycle_inner(story, rework_feedback=motivo)
+                    elif estrategia == "plano_aprovado":
+                        BUS.publish(
+                            "veto_rework",
+                            agent="@unclebob",
+                            text=(
+                                f"📝 [DEGRAU {degrau}/4] O dev devolveu PLANO sem gravar "
+                                f"arquivo — @unclebob valida e aprova o plano..."
+                            ),
+                        )
+                        runner_bob = self._get_runner("@unclebob")
+                        plano = (cycle_res.get("dev_output") or motivo)[:3000]
+                        plano_aprovado = plano
+                        if runner_bob:
+                            res_bob = runner_bob.run(
+                                self._assemble_prompt(
+                                    "@unclebob",
+                                    f"A story {story} está reprovada com o parecer: {motivo}\n\n"
+                                    f"O dev respondeu com um PLANO (sem gravar arquivo):\n{plano}\n\n"
+                                    "Valide a coerência do plano contra o parecer. Se o plano resolve "
+                                    "os achados, declare exatamente: 'PLANO APROVADO — implemente agora'. "
+                                    "Se não resolver, reescreva o plano corrigindo o que falta.",
+                                )
+                            )
+                            self._record_telemetry(
+                                "EXECUTE", "@unclebob (validação de plano)", res_bob
+                            )
+                            plano_aprovado = getattr(res_bob, "output", "") or plano
+                        feedback_degrau = (
+                            "PLANO APROVADO PELO TECH LEAD — implemente NESTA rodada. "
+                            "Entrega = arquivos gravados (write_project_file), não texto.\n\n"
+                            f"Plano aprovado: {plano_aprovado[:2000]}\n\n"
+                            f"Parecer de rejeição: {motivo}"
+                        )
+                        BUS.publish(
+                            "veto_rework",
+                            agent="@unclebob",
+                            text=f"🔥 [DEGRAU {degrau}/4] Re-queimando {story} com plano aprovado.",
+                        )
+                        cycle_res = self._run_cycle_inner(story, rework_feedback=feedback_degrau)
+                    elif estrategia == "incisivo":
+                        BUS.publish(
+                            "veto_rework",
+                            agent="@unclebob",
+                            text=f"📣 [DEGRAU {degrau}/4] Ordem incisiva: {story} DEVE ser implementada nesta rodada.",
+                        )
+                        feedback_degrau = (
+                            "ORDEM DIRETA (sem margem): VOCÊ EXECUTA A CORREÇÃO NESTA RODADA. "
+                            "Grave cada arquivo com write_project_file ANTES de qualquer texto. "
+                            "Devolver plano, diagnóstico ou pedido de aprovação É RECUSA de ordem "
+                            "explícita e será tratado como bloqueio.\n\n"
+                            f"Parecer de rejeição: {motivo}"
+                        )
+                        cycle_res = self._run_cycle_inner(story, rework_feedback=feedback_degrau)
+                    elif estrategia == "lead_assume":
+                        BUS.publish(
+                            "veto_rework",
+                            agent="@unclebob",
+                            text=(
+                                f"🛠 [DEGRAU {degrau}/4] O dev se recusou a executar 3× — "
+                                f"@unclebob ASSUME a implementação e codifica pessoalmente."
+                            ),
+                        )
+                        runner_lead = self._get_runner("@unclebob")
+                        if runner_lead:
+                            res_lead = runner_lead.run(
+                                self._assemble_prompt(
+                                    "@unclebob",
+                                    f"O dev se recusou a implementar (3 tentativas sem gravar "
+                                    f"arquivo). ASSUMA a tarefa e corrija você mesmo, gravando os "
+                                    f"arquivos nesta rodada.\nStory: {story}\n"
+                                    f"Parecer de rejeição: {motivo}\n"
+                                    "Entrega = arquivos gravados. Diagnóstico sem gravação não é entrega.",
+                                )
+                            )
+                            self._record_telemetry(
+                                "EXECUTE", "@unclebob (assumiu a implementação)", res_lead
+                            )
+                        cycle_res = self._run_cycle_inner(story, rework_feedback=motivo)
+                    else:  # dirigido (clássico)
+                        BUS.publish(
+                            "veto_rework",
+                            agent="@unclebob",
+                            text=(
+                                f"🔥 [DEGRAU {degrau}/4] Re-queimando {story} no ciclo TDD "
+                                "com feedback direcionado."
+                            ),
+                        )
+                        cycle_res = self._run_cycle_inner(story, rework_feedback=motivo)
+
                     if cycle_res.get("success"):
                         retrabalho_ok = True
                         card_pos = self.kanban.get_card(story)
@@ -2751,6 +2857,9 @@ class WaveOrchestrator:
                         )
                         break
 
+                    escreveu_alguma_vez = escreveu_alguma_vez or bool(
+                        cycle_res.get("arquivos_escritos")
+                    )
                     novo_motivo = (
                         (self.kanban.get_card(story) or {}).get("block_reason")
                         or cycle_res.get("error")
@@ -2760,53 +2869,94 @@ class WaveOrchestrator:
                     motivo = novo_motivo
 
                 if not retrabalho_ok:
-                    # 🚦 Semáforo de impedimentos:
-                    # 🔴 VERMELHO — parada TOTAL: escada completa não convergiu E o
-                    #    agente declarou impedimento (nem automação resolve).
-                    # 🟠 LARANJA — escalação do humano: falta INFORMAÇÃO de negócio
-                    #    (decisão INFORMAR/SIMPLIFICAR/ADIAR), não ação técnica.
-                    classe_final = (
-                        VetoReworkEngine(llm_factory=None)
-                        .classify(
-                            motivo,
-                            cycle_res.get("review_output", ""),
-                            target_agent="@turing",
-                        )
-                        .veto_class
-                    )
-                    if classe_final is VetoClass.AGENT_BLOCKED:
+                    if not escreveu_alguma_vez:
+                        # Causa verdadeira: NINGUÉM executou — o dev devolveu
+                        # plano/diagnóstico 4× (feedback, plano aprovado pelo
+                        # lead, ordem direta, e o lead assumindo). Não é falta
+                        # de informação de negócio: é recusa de agente.
                         escalacao = {
-                            "type": "line_stop",
+                            "type": "agent_refusal",
                             "story": story,
                             "reason": motivo,
                             "review_output": cycle_res.get("review_output", ""),
                             "message": (
-                                f"🔴 LINHA DE PRODUÇÃO PARADA — {story} não convergiu na "
-                                "escada completa (2× correção dirigida + 2× refinamento de "
-                                "story) e o agente declarou impedimento.\n"
-                                f"Motivo da parada: {motivo}\n\n"
-                                "Nenhuma automação restante resolve este ponto. É preciso "
-                                "intervenção humana para destravar a linha."
+                                f"🟠 ESCALAÇÃO — RECUSA DE AGENTE em {story}: 4 tentativas "
+                                "(feedback dirigido, plano aprovado pelo Tech Lead, ordem direta "
+                                "e o próprio Tech Lead assumindo) e NENHUM arquivo foi gravado.\n"
+                                f"Último parecer: {motivo}\n\n"
+                                "Isto não é falta de informação — é comportamento do agente.\n"
+                                "1. RETENTAR — /wave resume reabre a escada do zero\n"
+                                "2. ASSUMIR — corrija você mesmo e rode /wave execute\n"
+                                "3. ADIAR — mover a story para a próxima onda"
                             ),
                             "suggested_owner": "@turing",
                         }
                     else:
-                        escalacao = {
-                            "type": "human_escalation",
-                            "story": story,
-                            "reason": motivo,
-                            "review_output": cycle_res.get("review_output", ""),
-                            "message": (
-                                f"🟠 ESCALAÇÃO AO HUMANO — {story} não convergiu na escada "
-                                "completa (2× correção dirigida + 2× refinamento de story).\n"
-                                f"Informação em falta: {motivo}\n\n"
-                                "1. INFORMAR — digite a informação que falta\n"
-                                "2. SIMPLIFICAR O ACEITE — diga o novo critério mínimo\n"
-                                "3. ADIAR — mover a story para a próxima onda\n"
-                                f"Parecer do review: {cycle_res.get('review_output', '')[:2000]}"
-                            ),
-                            "suggested_owner": "@unclebob",
+                        # 🚦 Semáforo de impedimentos:
+                        # 🔴 VERMELHO — parada TOTAL: escada completa não convergiu E o
+                        #    agente declarou impedimento (nem automação resolve).
+                        # 🟠 LARANJA — escalação do humano: falta INFORMAÇÃO de negócio
+                        #    (decisão INFORMAR/SIMPLIFICAR/ADIAR), não ação técnica.
+                        classe_final = (
+                            VetoReworkEngine(llm_factory=None)
+                            .classify(
+                                motivo,
+                                cycle_res.get("review_output", ""),
+                                target_agent="@turing",
+                            )
+                            .veto_class
+                        )
+                        if classe_final is VetoClass.AGENT_BLOCKED:
+                            escalacao = {
+                                "type": "line_stop",
+                                "story": story,
+                                "reason": motivo,
+                                "review_output": cycle_res.get("review_output", ""),
+                                "message": (
+                                    f"🔴 LINHA DE PRODUÇÃO PARADA — {story} não convergiu na "
+                                    "escada completa (correção dirigida + refinamento de story "
+                                    "com execução real) e o agente declarou impedimento.\n"
+                                    f"Motivo da parada: {motivo}\n\n"
+                                    "Nenhuma automação restante resolve este ponto. É preciso "
+                                    "intervenção humana para destravar a linha."
+                                ),
+                                "suggested_owner": "@turing",
+                            }
+                        else:
+                            escalacao = {
+                                "type": "human_escalation",
+                                "story": story,
+                                "reason": motivo,
+                                "review_output": cycle_res.get("review_output", ""),
+                                "message": (
+                                    f"🟠 ESCALAÇÃO AO HUMANO — {story} não convergiu na escada "
+                                    "completa (correção dirigida + refinamento de story, com "
+                                    "execução real do dev).\n"
+                                    f"Informação em falta: {motivo}\n\n"
+                                    "1. INFORMAR — digite a informação que falta\n"
+                                    "2. SIMPLIFICAR O ACEITE — diga o novo critério mínimo\n"
+                                    "3. ADIAR — mover a story para a próxima onda\n"
+                                    f"Parecer do review: {cycle_res.get('review_output', '')[:2000]}"
+                                ),
+                                "suggested_owner": "@unclebob",
+                            }
+                        BUS.publish(
+                            "escalation",
+                            agent="@turing",
+                            text=escalacao["message"],
+                            escalation=escalacao,
+                        )
+                        self.kanban.block_card(story, reason=motivo, blocked_by="@turing")
+                        return {
+                            "success": False,
+                            "completed_stories": completed_stories,
+                            "failed_story": story,
+                            "blocked": True,
+                            "escalation": escalacao,
+                            "error": escalacao["message"],
                         }
+
+                    # agent_refusal (sem execução em 4 degraus)
                     BUS.publish(
                         "escalation",
                         agent="@turing",

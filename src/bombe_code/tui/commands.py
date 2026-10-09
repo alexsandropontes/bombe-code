@@ -190,6 +190,20 @@ async def _run_orchestrator_with_stream(
                 for linha in previa.splitlines()[:8]:
                     t.append(f"\n  │ {linha}", style="dim")
                 await chat.mount(_novo_widget(t))
+                # Arquivo gravado por agente da ONDA → sidebar (projetos sem git)
+                caminho_escrito = (ev.text or "").strip()
+                if (
+                    caminho_escrito
+                    and caminho_escrito != "(caminho não informado)"
+                    and app is not None
+                ):
+                    try:
+                        from .widgets.sidebar import Sidebar
+
+                        sidebar = app.query_one("#sidebar", Sidebar)
+                        sidebar.registrar_arquivo(caminho_escrito)
+                    except Exception as exc:  # noqa: BLE001 — sidebar é best-effort
+                        logger.debug("Sidebar indisponível para arquivo: %s", exc)
                 continue
 
             if etype == "tool_result":
@@ -230,6 +244,11 @@ async def _run_orchestrator_with_stream(
             await chat.mount(
                 Static(f"[{style}]{colorizar_handles(_rich_escape(ev.text))}[/{style}]")
             )
+            # Escalações pintadas pelo dreno: o resultado não repinta (anti-duplicação)
+            if etype == "escalation" and app is not None:
+                if not hasattr(app, "_escalacoes_pintadas"):
+                    app._escalacoes_pintadas = set()
+                app._escalacoes_pintadas.add(ev.text)
 
     worker_task = asyncio.create_task(_worker())
     drain_task = asyncio.create_task(_drain())
@@ -1385,8 +1404,11 @@ async def handle_slash_command(app: BombeTuiApp, raw_text: str) -> bool:
                     )
             elif res.get("escalation"):
                 esc = res["escalation"]
+                # Anti-duplicação: se o dreno já pintou esta escalação, não repinta.
+                if esc.get("message") in getattr(app, "_escalacoes_pintadas", set()):
+                    return True
                 # 🚦 Semáforo: 🔴 linha parada (nem automação resolve) vs
-                # 🟠 escalação do humano (falta informação de negócio).
+                # 🟠 escalação do humano (falta informação, não ação técnica).
                 if esc.get("type") == "line_stop":
                     cor, rotulo = TOKENS["error"], "🔴 LINHA DE PRODUÇÃO PARADA"
                 else:

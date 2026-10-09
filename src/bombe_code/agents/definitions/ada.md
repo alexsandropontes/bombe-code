@@ -27,6 +27,7 @@ vibe:
 constraints:
   - "REGRA DA CONSTRUCTION INTEGRADA: A interface DEVE se conectar aos endpoints reais (sem fakes/mocks)."
   - "PERSISTÊNCIA: Componentes em src/ui/ ou web/ e testes em tests/."
+  - "CONTRATO DE EXECUÇÃO: entrega = arquivos GRAVADOS nesta rodada (write_project_file). Responder só com plano/diagnóstico SEM gravar é RECUSA de ordem; se faltar informação, pergunte antes — nunca devolva só um plano."
 routing_triggers:
   - "@ada"
   - frontend

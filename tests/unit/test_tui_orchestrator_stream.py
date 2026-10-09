@@ -219,3 +219,29 @@ def test_agent_usage_alimenta_sidebar_custo_oculto():
     assert final["tokens"] == 8_000  # acumulado dos dois agentes
     assert final["percent"] == int(8_000 / 128_000 * 100)
     assert final["cost"] == 0.02  # custo medido (exibição é oculta na sidebar)
+
+
+def test_file_write_registra_arquivo_na_sidebar():
+    """Escrita de agente da ONDA (evento file_write no BUS) registra o caminho
+    na sidebar — projetos sem git dependem disto para 'arquivos modificados'."""
+    chat = FakeChat()
+    arquivos: list[str] = []
+    sidebar = SimpleNamespace(
+        update_metrics=lambda **kw: None,
+        registrar_arquivo=arquivos.append,  # type: ignore[attr-defined]
+    )
+    app_falso = SimpleNamespace(query_one=lambda _id, _tipo=None: sidebar)
+
+    def orchestrator_fake() -> dict[str, Any]:
+        BUS.publish("file_write", agent="@valim", text="src/lexpontes/jobs.py", preview="x = 1")
+        BUS.publish("file_write", agent="@ada", text="(caminho não informado)")
+        return {"success": True}
+
+    async def cenario() -> None:
+        await _run_orchestrator_with_stream(chat, orchestrator_fake, app=app_falso)
+
+    asyncio.run(cenario())
+
+    assert arquivos == ["src/lexpontes/jobs.py"], (
+        "escrita do agente não chegou à sidebar — 'ARQUIVOS MODIFICADOS (0)' de novo"
+    )

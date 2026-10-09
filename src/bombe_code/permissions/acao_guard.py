@@ -137,6 +137,13 @@ class GuardaDeAcoes:
         self.escritas += 1
         return None
 
+    def arquivos_escritos(self) -> list[str]:
+        """Paths gravados com conteúdo real nesta execução (evidência de trabalho).
+
+        Rascunhos e escritas vetadas NÃO contam — só gravação que aconteceu.
+        """
+        return sorted(self._ultimo_conteudo.keys())
+
     # ----------------------------------------------------------- remoção
     def validar_remocao(self, path: str) -> str | None:
         """Valida UMA remoção antes de apagar. Retorna motivo de veto ou None."""

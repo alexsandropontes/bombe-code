@@ -46,6 +46,15 @@ class AgentExecutionResult(BaseModel):
     total_tokens: int = Field(default=0, description="Total de tokens consumidos")
     cost: float = Field(default=0.0, description="Custo calculado em USD")
     duration_seconds: float = Field(default=0.0, description="Duração da chamada em segundos")
+    arquivos_escritos: list[str] = Field(
+        default_factory=list,
+        description="Arquivos gravados nesta execução (evidência de trabalho, não promessa)",
+    )
+
+    @property
+    def escreveu_algum_arquivo(self) -> bool:
+        """False = o agente respondeu SEM gravar nada (plano sem código)."""
+        return bool(self.arquivos_escritos)
 
 
 class AgentRunner:
@@ -276,6 +285,9 @@ class AgentRunner:
                     total_tokens=total_tokens,
                     cost=cost,
                     duration_seconds=duration_seconds,
+                    arquivos_escritos=(
+                        self.guarda.arquivos_escritos() if self.guarda is not None else []
+                    ),
                 )
 
             except Exception as exc:  # noqa: BLE001
