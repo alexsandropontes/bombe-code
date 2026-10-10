@@ -10,12 +10,17 @@ import json
 import logging
 import os
 import re
+import subprocess
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any, ClassVar
 
 from bombe_code.agents.registry import AgentRegistry
-from bombe_code.agents.runner import AgentExecutionResult, AgentRunner
+from bombe_code.agents.runner import (
+    AgentExecutionResult,
+    AgentRunner,
+    marcar_atividade_tool,
+)
 from bombe_code.config.project_config import ProjectConfigManager
 from bombe_code.llm.pydantic_factory import PydanticAiFactory
 from bombe_code.permissions.stage_guard import (
@@ -860,11 +865,101 @@ class WaveOrchestrator:
                 return f"Erro ao remover {path}: {e}"
             return f"Arquivo {path} removido."
 
+        def executar_comando(comando: str) -> str:
+            """Executa comando de VALIDAÇÃO no projeto (suítes e gates).
+
+            Whitelist estrita: pytest, vitest, playwright, npm/npx/node e
+            scripts/ do projeto. Nada destrutivo, nada de rede-instalação.
+            A saída crua (cauda de 8.000 caracteres) é a evidência obrigatória
+            para veredito de QA — inspeção estática não emite veredito.
+            """
+            if guarda is not None and hasattr(guarda, "registrar_acao"):
+                guarda.registrar_acao("executar_comando", str(comando))
+            cmd = (comando or "").strip()
+            if not cmd:
+                return "Erro: comando vazio."
+            permitidos = (
+                "pytest",
+                "python -m pytest",
+                "npx vitest",
+                "npx playwright",
+                "npm run",
+                "npm test",
+                "node ",
+                "bash scripts/",
+                "sh scripts/",
+                "python -m ",
+            )
+            proibidos = (
+                "rm ",
+                "sudo",
+                "curl",
+                "wget",
+                "pip install",
+                "npm install",
+                "git push",
+                "mkfs",
+                "dd ",
+                "chmod",
+                "chown",
+                "shutdown",
+                "reboot",
+            )
+            low = cmd.lower()
+            if not any(low.startswith(p) for p in permitidos):
+                return (
+                    "Erro: comando fora da whitelist de validação "
+                    "(pytest/vitest/playwright/npm/npx/node/scripts do projeto)."
+                )
+            if any(p in low for p in proibidos):
+                return "Erro: comando contém operação proibida."
+            # Batimento: comando longo (pytest completo) é trabalho legítimo —
+            # alimenta o IDLE do runner para não ser abortado aos 240s.
+            import threading
+
+            parar_batimento = threading.Event()
+
+            def _batimento() -> None:
+                while not parar_batimento.wait(20):
+                    try:
+                        marcar_atividade_tool()
+                        BUS.publish(
+                            "tool_progress",
+                            agent=(guarda.agente if guarda is not None else "@turing"),
+                            text=f"executando: {cmd[:90]}",
+                        )
+                    except Exception:  # noqa: BLE001, S110 — batimento é best-effort
+                        pass
+
+            batimento = threading.Thread(target=_batimento, daemon=True)
+            batimento.start()
+            try:
+                resultado = subprocess.run(
+                    cmd,
+                    shell=True,
+                    cwd=str(project_dir),
+                    capture_output=True,
+                    text=True,
+                    timeout=600,
+                    check=False,
+                )
+                saida = (resultado.stdout or "") + (
+                    f"\n[stderr]\n{resultado.stderr}" if resultado.stderr else ""
+                )
+                return f"exit={resultado.returncode}\n{saida.strip()[-8000:]}"
+            except subprocess.TimeoutExpired:
+                return "Erro: execução excedeu 600s (timeout da plataforma)."
+            except Exception as e:  # noqa: BLE001 — tool retorna erro textual à LLM
+                return f"Erro ao executar: {e}"
+            finally:
+                parar_batimento.set()
+
         return [
             read_project_file,
             write_project_file,
             list_project_files,
             delete_project_file,
+            executar_comando,
         ]
 
     def _get_runner(self, agent_handle: str) -> AgentRunner | None:
@@ -2737,8 +2832,14 @@ class WaveOrchestrator:
         aniche_val_res = None
         if runner_aniche:
             raw_aniche_val_prompt = (
-                f"Execute a suíte de testes da story {target_story} contra os arquivos de código implementados no projeto.\n"
-                f"Inspecione a pasta 'tests/' e 'js/'. Se todos os testes passarem, declare explicitamente: 'Veredito: APROVADO'.\n"
+                f"Execute a suíte de testes da story {target_story} contra o código implementado.\n"
+                "COMO: use a ferramenta `executar_comando` para rodar de verdade "
+                "(ex.: 'pytest -q tests/api tests/unit tests/infra', "
+                "'npx vitest run', 'bash scripts/run_gates.sh') e baseie o "
+                "veredito na SAÍDA REAL dos comandos (exit code + contadores "
+                "passed/failed). Inspeção estática NÃO emite veredito; sem "
+                "execução, declare bloqueio citando a ferramenta que faltou.\n"
+                f"Inspecione a pasta 'tests/'. Se todos os testes passarem, declare explicitamente: 'Veredito: APROVADO'.\n"
             )
             aniche_val_prompt = self._assemble_prompt("@aniche", raw_aniche_val_prompt)
             # Card de QA NASCE NO KANBAN antes do revisor acordar
@@ -3198,6 +3299,59 @@ class WaveOrchestrator:
                     )
 
                 feedback_integral = _feedback_com_parecer(motivo, parecer_integral)
+
+                # 🛠 IMPEDIMENTO AMBIENTAL — detectado na PASSADA 1, NÃO se
+                # re-queima: falta de capacidade da PLATAFORMA (ex.: shell para
+                # executar suítes) não se resolve com mais tentativas do mesmo
+                # agente. Tipa, para a escada e devolve para a plataforma corrigir.
+                marcadores_ambiente = (
+                    "sem shell",
+                    "não disponho",
+                    "nao disponho",
+                    "ferramenta de execução",
+                    "ferramenta de execucao",
+                    "não posso executar",
+                    "nao posso executar",
+                    "não posso rodar",
+                    "nao posso rodar",
+                    "sem ferramenta de exec",
+                    "não disponho de shell",
+                )
+                if any(m in motivo.lower() for m in marcadores_ambiente):
+                    BUS.publish(
+                        "escalation",
+                        agent="@turing",
+                        text=(
+                            f"🛠 IMPEDIMENTO AMBIENTAL detectado na 1ª passada — {story}: "
+                            f"{motivo[:200]}\n"
+                            "Não é tarefa, é CAPACIDADE faltando na plataforma. A escada "
+                            "NÃO queima as outras passadas: corrige-se a plataforma "
+                            "(ferramenta liberada) e o resume re-queima uma única vez."
+                        ),
+                        escalation={
+                            "type": "impedimento_ambiental",
+                            "story": story,
+                            "reason": motivo,
+                        },
+                    )
+                    self.kanban.block_card(
+                        story,
+                        reason=f"IMPEDIMENTO AMBIENTAL: {motivo[:200]}",
+                        blocked_by="@turing",
+                    )
+                    return {
+                        "success": False,
+                        "completed_stories": completed_stories,
+                        "failed_story": story,
+                        "blocked": True,
+                        "escalation": {
+                            "type": "impedimento_ambiental",
+                            "story": story,
+                            "reason": motivo,
+                            "message": motivo,
+                        },
+                        "error": motivo,
+                    }
                 escalacao = None
                 assinaturas_veto = [motivo]
                 retrabalho_ok = False

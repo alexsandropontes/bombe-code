@@ -41,8 +41,8 @@ def _orch(project_dir: Path, db: ProjectDatabase, modo: str = "AUTO") -> WaveOrc
 
 def _tool_delete(orch: WaveOrchestrator, guarda=None):
     tools = orch._get_project_fs_tools(guarda)
-    assert len(tools) == 4, "toolset deve ter read/write/list/delete"
-    return tools[-1]
+    assert len(tools) == 5, "toolset deve ter read/write/list/delete/executar"
+    return tools[3]  # delete_project_file (ordem fixa: read, write, list, delete, executar)
 
 
 def test_delete_dentro_da_raiz_qualquer_modo(project_env):

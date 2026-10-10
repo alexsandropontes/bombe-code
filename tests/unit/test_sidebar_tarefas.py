@@ -271,5 +271,37 @@ def test_task_encerrada_sai_do_quadro_apos_60s(tmp_path: Path):
     sidebar._poll_tarefas()
 
     rotulos = [t["rotulo"] for t in sidebar.tarefas]
-    assert not any("ST-001-T0" in r for r in rotulos), "encerrada antiga virou arquivo morto"
-    assert any("ST-001-T1" in r for r in rotulos)
+    assert not any("ST-001-T0" in r for r in rotulos), "antiga sai: fila esperando vaga"
+    assert any("ST-001-T1" in r for r in rotulos), "fila permanece"
+
+
+def test_encerrada_antiga_permite_quadro_vazio_nao_sumir(tmp_path: Path):
+    """Todas encerradas há horas e NADA na fila? O quadro NÃO esvazia —
+    as riscadas permanecem (regra: saem só para dar lugar)."""
+    proj, db = _db_com_tasks(
+        tmp_path,
+        [
+            {
+                "story": "ST-001",
+                "tid": "ST-001-T3",
+                "agente": "@ada",
+                "ordem": 1,
+                "status": "DEV_DONE",
+            }
+        ],
+    )
+    db.criar_task_kanban("ONDA-004", "ST-001", "ST-001-T2", "Tarefa done", "@ada", 1)
+    db.mover_task_kanban("ONDA-004", "ST-001", "ST-001-T2", "DONE_DEFINITIVO")
+    con = sqlite3.connect(proj / ".bombe-code" / "state.db")
+    con.execute(
+        "UPDATE agent_tasks SET updated_at = ? WHERE task_id = 'ST-001-T2'", (time.time() - 7200,)
+    )
+    con.commit()
+    con.close()
+
+    sidebar = Sidebar(project_dir=str(proj))
+    sidebar._poll_tarefas()
+
+    rotulos = [t["rotulo"] for t in sidebar.tarefas]
+    assert any("ST-001-T2" in r for r in rotulos), "sem fila, done antiga PERMANECE riscada"
+    assert any("ST-001-T3" in r for r in rotulos)

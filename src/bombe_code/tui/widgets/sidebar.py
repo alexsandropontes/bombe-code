@@ -274,13 +274,18 @@ class Sidebar(VerticalScroll):
                 "DEV_DONE": 3,
                 "DONE_DEFINITIVO": 4,
             }
+            # ENCERRADAS saem após 60s SOMENTE se houver trabalho esperando
+            # vaga (saem para DAR LUGAR, nunca para esvaziar o quadro).
+            ha_espera = any(
+                c[3] in ("BLOCKED", "EM_DEV", "AGUARDANDO_DEV", "BACKLOG") for c in cards_task
+            )
             for sid, tid, titulo, kanban_status, block_tipo, atualizado_em in cards_task:
                 frase = _frase_curta(titulo)
                 rotulo = f"{sid} {tid} {frase}".strip()
-                # ENCERRADAS (regra do usuário): riscadas por 60s e SAEM —
-                # o quadro lê como fila de verdade, nunca como arquivo morto.
-                if kanban_status in ("DEV_DONE", "DONE_DEFINITIVO") and (
-                    agora - float(atualizado_em or 0) > 60
+                if (
+                    kanban_status in ("DEV_DONE", "DONE_DEFINITIVO")
+                    and ha_espera
+                    and agora - float(atualizado_em or 0) > 60
                 ):
                     continue
                 if kanban_status == "BLOCKED":

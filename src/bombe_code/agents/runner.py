@@ -22,6 +22,19 @@ from bombe_code.turing.progress import ABORT_EVENT, BUS
 logger = logging.getLogger(__name__)
 
 
+# Atividade de TOOLS de longa duração (ex.: executar_comando rodando pytest):
+# enquanto a ferramenta trabalha de verdade, o IDLE do stream não mata o agente.
+ULTIMA_ATIVIDADE_TOOL: float = 0.0
+
+
+def marcar_atividade_tool() -> None:
+    """Marca atividade de ferramenta (chamado pelo tool em execução longa)."""
+    global ULTIMA_ATIVIDADE_TOOL
+    import time as _t
+
+    ULTIMA_ATIVIDADE_TOOL = _t.monotonic()
+
+
 class AgentExecutionResult(BaseModel):
     """Resultado da execução de um turno de um agente."""
 
@@ -488,7 +501,9 @@ class AgentRunner:
             async with pydantic_agent.run_stream_events(exec_prompt, usage_limits=limits) as events:
                 async for ev in events:
                     agora = _time.monotonic()
-                    if agora - ultimo_evento > idle_s:
+                    # IDLE considera também tools de longa duração: pytest de
+                    # 8 minutos é trabalho legítimo, não provedor morto.
+                    if agora - max(ultimo_evento, ULTIMA_ATIVIDADE_TOOL) > idle_s:
                         raise TimeoutError(
                             f"Provedor sem resposta há {idle_s:.0f}s (nenhum evento de stream) — "
                             f"execução do agente {handle} abortada. (ajuste com BOMBE_AGENT_IDLE_TIMEOUT)"

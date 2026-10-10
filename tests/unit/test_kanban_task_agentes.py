@@ -213,3 +213,22 @@ def test_review_nao_pula_fila_por_blocked_precedencia(project_env):
     assert "T2" in ids and "T3" in ids, "as tasks pendentes são queimadas primeiro"
     # O aviso de precedência explica por que o review não sobe
     assert any("PRECEDÊNCIA" in t and "AGUARDA" in t for t in publicados)
+
+
+def test_tool_executar_comando_whitelist(project_env):
+    """QA executa suítes de VERDADE: tool com whitelist estrita (pytest/
+    vitest/playwright/scripts) — fora dela, negado; destrutivo, negado."""
+    _tmp_path, orch = project_env
+    tools = orch._get_project_fs_tools()
+    executar = tools[-1]
+
+    # fora da whitelist → negado
+    resp = executar("curl https://mal.example")
+    assert "whitelist" in resp.lower()
+    # destrutivo mesmo dentro do prefixo → negado
+    resp2 = executar("pytest ; rm -rf /")
+    assert "proibida" in resp2.lower()
+    # permitido → executa de verdade (pytest --version, rápido)
+    resp3 = executar("python -m pytest --version")
+    assert "exit=0" in resp3
+    assert "pytest" in resp3.lower()
