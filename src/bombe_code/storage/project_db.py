@@ -104,6 +104,83 @@ class ProjectDatabase:
 
             conn.commit()
 
+    # ── KANBAN DE TASK DE AGENTE (fonte ÚNICA de verdade do fluxo) ──
+    # A task de agente nasce NO KANBAN, designada ao agente, ANTES de qualquer
+    # delegação. Sem ordem no kanban, agente nem acorda. Colunas: BACKLOG →
+    # AGUARDANDO DEV → EM DEV → DEV DONE → DONE DEFINITIVO (final, sem volta;
+    # mudança depois = CHANGE = novo card). BLOCKED acontece NA coluna em que
+    # está e fica ali, tipado (HUMAN_SCALE | HUMAN_SCALE_ERROR | INTERNAL_SCALE).
+
+    def _migra_kanban_task(self, conn: Any) -> None:
+        """Migração segura: colunas de kanban na agent_tasks já existente."""
+        for alter in (
+            "ALTER TABLE agent_tasks ADD COLUMN wave_id TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE agent_tasks ADD COLUMN task_id TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE agent_tasks ADD COLUMN ordem INTEGER NOT NULL DEFAULT 0",
+            "ALTER TABLE agent_tasks ADD COLUMN kanban_status TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE agent_tasks ADD COLUMN block_tipo TEXT NOT NULL DEFAULT ''",
+        ):
+            try:
+                conn.execute(alter)
+            except Exception:  # noqa: BLE001, S110 — coluna já existe
+                pass
+
+    def criar_task_kanban(
+        self, wave_id: str, story_id: str, task_id: str, title: str, agent: str, ordem: int
+    ) -> None:
+        """Braço ESCRITOR do Turing: cria o card em BACKLOG, designado, na ordem."""
+        chave = f"{wave_id}:{story_id}:{task_id}"
+        with self._get_connection() as conn:
+            self._migra_kanban_task(conn)
+            conn.execute(
+                """
+                INSERT INTO agent_tasks
+                    (id, story_id, agent_role, title, status, output, created_at, updated_at,
+                     wave_id, task_id, ordem, kanban_status, block_tipo)
+                VALUES (?, ?, ?, ?, 'task_kanban', '', ?, ?, ?, ?, ?, 'BACKLOG', '')
+                ON CONFLICT(id) DO NOTHING
+                """,
+                (chave, story_id, agent, title, time.time(), time.time(), wave_id, task_id, ordem),
+            )
+
+    def mover_task_kanban(
+        self, wave_id: str, story_id: str, task_id: str, kanban_status: str, block_tipo: str = ""
+    ) -> None:
+        """Braço ESCRITOR: move o card (binário no fim do trabalho do agente)."""
+        chave = f"{wave_id}:{story_id}:{task_id}"
+        with self._get_connection() as conn:
+            self._migra_kanban_task(conn)
+            conn.execute(
+                "UPDATE agent_tasks SET kanban_status = ?, block_tipo = ?, updated_at = ? "
+                "WHERE id = ?",
+                (kanban_status, block_tipo, time.time(), chave),
+            )
+
+    def carregar_tasks_kanban(self, wave_id: str, story_id: str) -> list[dict]:
+        """Cards de task da story, na ordem de execução."""
+        with self._get_connection() as conn:
+            self._migra_kanban_task(conn)
+            rows = conn.execute(
+                """
+                SELECT id, story_id, agent_role, title, task_id, ordem, kanban_status, block_tipo
+                FROM agent_tasks
+                WHERE wave_id = ? AND story_id = ? AND task_id != ''
+                ORDER BY ordem
+                """,
+                (wave_id, story_id),
+            ).fetchall()
+        chaves = (
+            "id",
+            "story_id",
+            "agent_role",
+            "title",
+            "task_id",
+            "ordem",
+            "kanban_status",
+            "block_tipo",
+        )
+        return [dict(zip(chaves, r)) for r in rows]
+
     def save_wave_state(
         self,
         wave_id: str,

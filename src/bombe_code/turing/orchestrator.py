@@ -2059,6 +2059,114 @@ class WaveOrchestrator:
             )
         return removidos
 
+    def _review_com_retry(
+        self, runner: Any, prompt: str, rotulo: str, etapa: str = "EXECUTE", tentativas: int = 2
+    ) -> Any:
+        """Auditoria (review/QA) com RE-EXECUÇÃO quando falha por infraestrutura.
+
+        Review que falha (output vazio/erro) NÃO é veredito: re-queimar a story
+        por causa de um erro do AUDITOR manda retrabalho de trabalho já feito
+        (os QAs respondem 'já entregue' e bloqueiam — patologia vista no log
+        19:41-19:49). Falhou? Roda a auditoria DE NOVO, até `tentativas`.
+        """
+        res: Any = None
+        for i in range(tentativas + 1):
+            res = runner.run(prompt=prompt)
+            self._record_telemetry(etapa, rotulo + (f" (tentativa {i + 1})" if i else ""), res)
+            saida = (getattr(res, "output", "") or "").strip()
+            if getattr(res, "success", True) and saida and saida != "None":
+                return res
+            if i < tentativas:
+                BUS.publish(
+                    "veto_rework",
+                    agent=getattr(res, "agent_handle", "@turing") or "@turing",
+                    text=(
+                        f"⚠️ {rotulo} falhou sem parecer (erro de infraestrutura, não "
+                        f"veredito) — re-executando a auditoria ({i + 2}/{tentativas + 1})..."
+                    ),
+                )
+        return res
+
+    # ── BRAÇOS DO TURING — GARÇOM DO KANBAN DE AGENTES ──
+    # Mesmo Turing, turnos diferentes: o ESCRITOR acorda quando um agente
+    # termina (verifica o binário e escreve/move o card — NUNCA delega no
+    # mesmo ato); o DELEGADOR vigia a fila (lê cards AGUARDANDO DEV e delega
+    # ao dono). Kanban de agentes manda em tudo.
+    _MAPA_AGENTE_CAMADA: ClassVar[dict[str, str]] = {
+        "DATABASE": "@codd",
+        "CONTRACT": "@ieru",
+        "BACKEND_TDD": "@valim",
+        "FRONTEND_UI": "@ada",
+        "E2E_INTEGRATION": "@aniche",
+        "FOUNDATION": "@unclebob",
+    }
+
+    def _garcom_preparar_tasks(self, onda_id: str, story_id: str, tarefas: list[Any]) -> None:
+        """Braço ESCRITOR: a task nasce NO KANBAN, designada e ordenada, ANTES
+        de qualquer agente acordar. BACKLOG → AGUARDANDO DEV (pronta para a
+        fila). Cards EM DEV/DEV DONE/DONE DEFINITIVO/BLOCKED não são tocados."""
+        for ordem, t in enumerate(tarefas):
+            agente = self._MAPA_AGENTE_CAMADA.get(t.task_type.value, "@valim")
+            existentes = {c["task_id"]: c for c in self.db.carregar_tasks_kanban(onda_id, story_id)}
+            cartao = existentes.get(t.id)
+            if cartao is None:
+                self.db.criar_task_kanban(onda_id, story_id, t.id, t.title, agente, ordem)
+                self.db.mover_task_kanban(onda_id, story_id, t.id, "AGUARDANDO_DEV")
+            elif cartao["kanban_status"] == "BACKLOG":
+                self.db.mover_task_kanban(onda_id, story_id, t.id, "AGUARDANDO_DEV")
+
+    def _garcom_carregar_fila(
+        self, onda_id: str, story_id: str, tarefas: list[Any]
+    ) -> tuple[list[Any], list[dict]]:
+        """Braço DELEGADOR: a fila vem DO KANBAN — BLOCKED primeiro (Andon:
+        para a linha até resolver), depois EM DEV órfã de crash, depois
+        AGUARDANDO DEV. DEV DONE/DONE DEFINITIVO: IGNORADOS no resume."""
+        cartoes = self.db.carregar_tasks_kanban(onda_id, story_id)
+        bloqueados = [c for c in cartoes if c["kanban_status"] == "BLOCKED"]
+        em_dev = [c for c in cartoes if c["kanban_status"] == "EM_DEV"]
+        aguardando = [c for c in cartoes if c["kanban_status"] == "AGUARDANDO_DEV"]
+        feitas = [c for c in cartoes if c["kanban_status"] in ("DEV_DONE", "DONE_DEFINITIVO")]
+
+        if feitas:
+            BUS.publish(
+                "announcement",
+                agent="@turing",
+                text=(
+                    f"⏭ {story_id}: {len(feitas)} task(s) DEV DONE/DONE DEFINITIVO "
+                    f"[{', '.join(c['task_id'] for c in feitas)}] — ignoro no resume; "
+                    "revalidar é papel do code review final da story."
+                ),
+            )
+        for c in bloqueados:
+            BUS.publish(
+                "announcement",
+                agent="@turing",
+                text=(
+                    f"🚩 ANDON — {story_id} {c['task_id']} BLOCKED "
+                    f"({c['block_tipo'] or 'sem tipo'}) e NA COLUNA EM QUE ESTÁ: "
+                    "nada anda até resolver. Atuo NELA primeiro."
+                ),
+            )
+
+        ordem_fila = {c["task_id"]: i for i, c in enumerate(bloqueados + em_dev + aguardando)}
+        ids_fila = set(ordem_fila)
+        fila_tarefas = sorted(
+            (t for t in tarefas if t.id in ids_fila),
+            key=lambda t: ordem_fila[t.id],
+        )
+        return fila_tarefas, cartoes
+
+    def _garcom_devolver_cards_para_burn(self, onda_id: str, story_id: str, agente: str) -> int:
+        """Code review achou algo do domínio do AGENTE → os cards DEV DONE
+        dele VOLTAM PARA O BURN (AGUARDANDO DEV) — volta normal do fluxo
+        até o review aprovar. Retorna quantos voltaram."""
+        voltaram = 0
+        for c in self.db.carregar_tasks_kanban(onda_id, story_id):
+            if c["agent_role"] == agente and c["kanban_status"] == "DEV_DONE":
+                self.db.mover_task_kanban(onda_id, story_id, c["task_id"], "AGUARDANDO_DEV")
+                voltaram += 1
+        return voltaram
+
     def _run_cycle_inner(
         self,
         story_id: str | None = None,
@@ -2251,14 +2359,31 @@ class WaveOrchestrator:
         entregues: list[str] = []
         dev_outputs: list[str] = []
         concluidas_ids: set[str] = set()
-        pendentes = list(tarefas)
+
+        # ── KANBAN DE AGENTES MANDA EM TUDO ──
+        # Braço ESCRITOR: tasks do breakdown nascem NO KANBAN, designadas, na
+        # ordem — BACKLOG → AGUARDANDO DEV. Sem ordem no kanban, agente nem
+        # acorda. Cards DEV DONE são IGNORADOS (revalidar é papel do code
+        # review final da story); BLOCKED tem prioridade (Andon).
+        onda_id = self.state_machine.wave_id
+        self._garcom_preparar_tasks(onda_id, target_story, tarefas)
+        pendentes, _cartoes = self._garcom_carregar_fila(onda_id, target_story, tarefas)
+        # Ciclo só-de-validação? (nada a queimar — kanban 100% DEV DONE/DONE
+        # DEFINITIVO). O código já está no disco de queimas anteriores; quem
+        # valida é o code review — o consolidado vazio NÃO veta nada.
+        houve_queima = bool(pendentes)
 
         # Evidência de execução: arquivos gravados pelos devs NESTE ciclo.
         # Zero escritas = plano sem código (recusa velada) — detectável.
         escritas_ciclo: list[str] = []
 
         def _executa_tarefa(tarefa_exec: Any) -> str:
-            """Uma tarefa = RED (aniche, escopo do trecho) + GREEN (dev da camada)."""
+            """Uma tarefa = RED (aniche, escopo do trecho) + GREEN (dev da camada).
+
+            Kanban de agentes: card → EM_DEV antes de acordar o agente; no fim,
+            BINÁRIO — sucesso → DEV DONE; não deu certo → BLOCKED (tipado,
+            fica na coluna em que está)."""
+            self.db.mover_task_kanban(onda_id, target_story, tarefa_exec.id, "EM_DEV")
             if runner_aniche:
                 raw_red = (
                     f"Story: {objetivo_story}{story_path_hint}\n"
@@ -2307,6 +2432,17 @@ class WaveOrchestrator:
             )
             res_t = runner_executor.run(self._assemble_prompt(executor_handle, raw_dev))
             escritas_ciclo.extend(getattr(res_t, "arquivos_escritos", []))
+            # BINÁRIO do card de agente: deu certo ou não deu. Sem exceções.
+            if getattr(res_t, "success", False) and not getattr(res_t, "is_blocked", False):
+                self.db.mover_task_kanban(onda_id, target_story, tarefa_exec.id, "DEV_DONE")
+            else:
+                self.db.mover_task_kanban(
+                    onda_id,
+                    target_story,
+                    tarefa_exec.id,
+                    "BLOCKED",
+                    "INTERNAL_SCALE",
+                )
             return getattr(res_t, "output", "")
 
         while pendentes:
@@ -2364,7 +2500,9 @@ class WaveOrchestrator:
             """Consolidado das entregas task-a-task (mesma interface de resultado)."""
 
             output = dev_res_texto
-            success = bool(dev_outputs)
+            # Sem queima neste ciclo = validação pura de trabalho já gravado:
+            # success NÃO depende de outputs novos (o review decide).
+            success = bool(dev_outputs) or not houve_queima
             is_blocked = False
             block_reason = None
 
@@ -2388,8 +2526,28 @@ class WaveOrchestrator:
                 f"Se o código e os testes estiverem aprovados, declare explicitamente: 'Review: APROVADO'. Caso contrário, aponte os problemas.\n"
             )
             bob_prompt = self._assemble_prompt("@unclebob", raw_bob_prompt)
-            bob_res = runner_bob.run(prompt=bob_prompt)
-            self._record_telemetry("EXECUTE", "@unclebob (Tech Lead Review)", bob_res)
+            # Card de code review NASCE NO KANBAN antes do revisor acordar
+            self.db.criar_task_kanban(
+                onda_id,
+                target_story,
+                "REVIEW-TECH",
+                f"Code Review da story {target_story}",
+                "@unclebob",
+                90,
+            )
+            cartao_review = next(
+                (
+                    c
+                    for c in self.db.carregar_tasks_kanban(onda_id, target_story)
+                    if c["task_id"] == "REVIEW-TECH"
+                ),
+                None,
+            )
+            if cartao_review and cartao_review["kanban_status"] == "BACKLOG":
+                self.db.mover_task_kanban(onda_id, target_story, "REVIEW-TECH", "AGUARDANDO_DEV")
+            self.db.mover_task_kanban(onda_id, target_story, "REVIEW-TECH", "EM_DEV")
+            bob_res = self._review_com_retry(runner_bob, bob_prompt, "@unclebob (Tech Lead Review)")
+            self.db.mover_task_kanban(onda_id, target_story, "REVIEW-TECH", "DEV_DONE")
 
             if bob_res and (
                 getattr(bob_res, "is_blocked", False) or not getattr(bob_res, "success", True)
@@ -2417,8 +2575,30 @@ class WaveOrchestrator:
                 f"Inspecione a pasta 'tests/' e 'js/'. Se todos os testes passarem, declare explicitamente: 'Veredito: APROVADO'.\n"
             )
             aniche_val_prompt = self._assemble_prompt("@aniche", raw_aniche_val_prompt)
-            aniche_val_res = runner_aniche.run(prompt=aniche_val_prompt)
-            self._record_telemetry("EXECUTE", "@aniche (QA Run & Verify)", aniche_val_res)
+            # Card de QA NASCE NO KANBAN antes do revisor acordar
+            self.db.criar_task_kanban(
+                onda_id,
+                target_story,
+                "REVIEW-QA",
+                f"QA Run & Verify da story {target_story}",
+                "@aniche",
+                91,
+            )
+            cartao_qa = next(
+                (
+                    c
+                    for c in self.db.carregar_tasks_kanban(onda_id, target_story)
+                    if c["task_id"] == "REVIEW-QA"
+                ),
+                None,
+            )
+            if cartao_qa and cartao_qa["kanban_status"] == "BACKLOG":
+                self.db.mover_task_kanban(onda_id, target_story, "REVIEW-QA", "AGUARDANDO_DEV")
+            self.db.mover_task_kanban(onda_id, target_story, "REVIEW-QA", "EM_DEV")
+            aniche_val_res = self._review_com_retry(
+                runner_aniche, aniche_val_prompt, "@aniche (QA Run & Verify)"
+            )
+            self.db.mover_task_kanban(onda_id, target_story, "REVIEW-QA", "DEV_DONE")
 
         # Avalia veredictos com a LEI DA RESTRIÇÃO (DEFAULT-DENY)
         aniche_approved, aniche_reason = self._check_explicit_approval(aniche_val_res)
@@ -2465,6 +2645,17 @@ class WaveOrchestrator:
         card_ciclo = self.kanban.get_card(target_story)
         if is_cycle_approved and card_ciclo and card_ciclo.get("is_blocked"):
             self.kanban.unblock_card(target_story)
+
+        # ── KANBAN DE AGENTES: destino final do ciclo ──
+        if is_cycle_approved:
+            # Story 100% aprovada → cards viram DONE DEFINITIVO (nunca mais
+            # voltam; mexer depois = CHANGE = novo card formalizado).
+            for t in tarefas:
+                self.db.mover_task_kanban(onda_id, target_story, t.id, "DONE_DEFINITIVO")
+            self.db.mover_task_kanban(onda_id, target_story, "REVIEW-TECH", "DONE_DEFINITIVO")
+            self.db.mover_task_kanban(onda_id, target_story, "REVIEW-QA", "DONE_DEFINITIVO")
+        # Rejeição: os cards DEV_DONE aguardam — a fila de achados devolve
+        # para o BURN apenas os cards do agente afetado (garçom lá em cima).
 
         if not is_cycle_approved:
             fail_reason = []
@@ -2912,12 +3103,24 @@ class WaveOrchestrator:
                     escritas_fila: list[str] = []
                     for i, achado in enumerate(achados_enfileirados, 1):
                         agente_achado = self._agente_para_achado(achado)
+                        # Code review achou algo do domínio do agente → os
+                        # cards DEV DONE dele VOLTAM PARA O BURN (fluxo normal:
+                        # voltar até o review aprovar; DONE DEFINITivo não volta).
+                        voltaram = self._garcom_devolver_cards_para_burn(
+                            self.state_machine.wave_id, story, agente_achado
+                        )
                         BUS.publish(
                             "veto_rework",
                             agent=agente_achado,
                             text=(
                                 f"🔧 [ACHADO {i}/{len(achados_enfileirados)}] "
                                 f"{agente_achado}: {achado[:90]}"
+                                + (
+                                    f" — {voltaram} card(s) de {agente_achado} voltaram "
+                                    "para o BURN."
+                                    if voltaram
+                                    else ""
+                                )
                             ),
                         )
                         runner_achado = self._get_runner(agente_achado)
