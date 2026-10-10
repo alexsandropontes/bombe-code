@@ -179,9 +179,9 @@ class AgentRunner:
                 from pydantic_ai.usage import UsageLimits
 
                 # 30 requests: um ciclo TDD completo (ler contexto + RED + GREEN +
-                # refatorar) consome ~15-25; 15 estourava no meio do burn e
+                # refatorar) consome ~15-45 (QA com execução real de suítes); 30 estourava no meio do burn e
                 # flagava a story com "Estouro de cota" (caso ST-003/ST-001).
-                limite_requests = int(os.environ.get("BOMBE_REQUEST_LIMIT", "30"))
+                limite_requests = int(os.environ.get("BOMBE_REQUEST_LIMIT", "60"))
                 limits = UsageLimits(request_limit=limite_requests)
 
                 # Execução: streaming de eventos (verboso) com fallback síncrono.

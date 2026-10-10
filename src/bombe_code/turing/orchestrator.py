@@ -971,7 +971,7 @@ class WaveOrchestrator:
             parar_batimento = threading.Event()
 
             def _batimento() -> None:
-                while not parar_batimento.wait(20):
+                while not parar_batimento.wait(30):
                     try:
                         marcar_atividade_tool()
                         BUS.publish(
