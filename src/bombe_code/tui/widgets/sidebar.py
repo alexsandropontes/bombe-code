@@ -79,6 +79,29 @@ def _frase_curta(titulo: str) -> str:
     return base[:36]
 
 
+def _simbolo_tarefa(titulo: str) -> tuple[str, str]:
+    """Símbolo/cor por TIPO de task (fora de blocked):
+    🐛 laranja = bug/débito/correção · ⚙️ verde = task normal."""
+    titulo_lower = (titulo or "").lower()
+    eh_bug = any(
+        k in titulo_lower
+        for k in (
+            "bug",
+            "fix",
+            "correção",
+            "correcao",
+            "débito",
+            "debito",
+            "defeito",
+            "hotfix",
+            "achado",
+        )
+    )
+    if eh_bug:
+        return "🐛", TOKENS["laranja"]
+    return "⚙️", TOKENS["success"]
+
+
 # Status → (símbolo, estilo rich). Vermelho = bloqueada; laranja = revisão/
 # correção (bugs e débitos); verde = nova em execução; cinza = fila;
 # cinza escuro riscada = encerrada (visível por 60s).
@@ -258,8 +281,9 @@ class Sidebar(VerticalScroll):
                         }
                     )
                 elif kanban_status == "EM_DEV":
-                    # Blocked sendo re-trabalhado mantém a bandeira; nova em
-                    # execução usa ▶. EM ANDAMENTO = negrito + alterna 🔨.
+                    # Blocked sendo re-trabalhado mantém a bandeira; task normal
+                    # ⚙️ e bug 🐛 usam o símbolo do próprio tipo. EM ANDAMENTO =
+                    # negrito + alterna com 🔨.
                     if block_tipo:
                         em_dev.append(
                             {
@@ -270,11 +294,12 @@ class Sidebar(VerticalScroll):
                             }
                         )
                     else:
+                        simbolo, cor = _simbolo_tarefa(titulo)
                         em_dev.append(
                             {
                                 "rotulo": rotulo,
-                                "simbolo": "▶",
-                                "cor": TOKENS["success"],
+                                "simbolo": simbolo,
+                                "cor": cor,
                                 "em_andamento": True,
                             }
                         )
@@ -297,11 +322,12 @@ class Sidebar(VerticalScroll):
                             "em_andamento": False,
                         }
                     )
-                else:  # AGUARDANDO_DEV / BACKLOG — fila, sem negrito
+                else:  # AGUARDANDO_DEV / BACKLOG — fila: símbolo do tipo, cinza
+                    simbolo_tipo, _cor_tipo = _simbolo_tarefa(titulo)
                     fila_t.append(
                         {
                             "rotulo": rotulo,
-                            "simbolo": "·",
+                            "simbolo": simbolo_tipo,
                             "cor": TOKENS["text_muted"],
                             "em_andamento": False,
                         }

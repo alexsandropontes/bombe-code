@@ -184,3 +184,52 @@ def test_sem_kanban_de_agentes_cai_para_stories(tmp_path: Path):
 
     assert len(sidebar.tarefas) == 1
     assert sidebar.tarefas[0]["rotulo"].startswith("ST-001")
+
+
+def test_bug_tem_simbolo_proprio_e_alternar_martelo(tmp_path: Path):
+    proj, _db = _db_com_tasks(
+        tmp_path,
+        [
+            {
+                "story": "ST-001",
+                "tid": "ST-001-T1",
+                "agente": "@valim",
+                "ordem": 0,
+                "titulo": "Correção do contrato front↔back",
+                "status": "AGUARDANDO_DEV",
+            },
+            {
+                "story": "ST-001",
+                "tid": "ST-001-T2",
+                "agente": "@valim",
+                "ordem": 1,
+                "titulo": "Rota de publicação",
+                "status": "EM_DEV",
+            },
+            {
+                "story": "ST-001",
+                "tid": "ST-001-T3",
+                "agente": "@ada",
+                "ordem": 2,
+                "titulo": "Bug do modal sem foco",
+                "status": "EM_DEV",
+            },
+        ],
+    )
+    sidebar = Sidebar(project_dir=str(proj))
+    sidebar._poll_tarefas()
+
+    por_tid = {}
+    for tr in sidebar.tarefas:
+        tid = tr["rotulo"].split(" ")[1]
+        por_tid[tid] = tr
+
+    # Bug (idle): 🐛 laranja, sem negrito
+    assert por_tid["ST-001-T1"]["simbolo"] == "🐛"
+    assert por_tid["ST-001-T1"]["em_andamento"] is False
+    # Task normal (idle... aqui EM DEV): ⚙️ verde, andamento
+    assert por_tid["ST-001-T2"]["simbolo"] == "⚙️"
+    assert por_tid["ST-001-T2"]["em_andamento"] is True
+    # Bug EM DEV: 🐛 com andamento (alterna com 🔨 no render)
+    assert por_tid["ST-001-T3"]["simbolo"] == "🐛"
+    assert por_tid["ST-001-T3"]["em_andamento"] is True
