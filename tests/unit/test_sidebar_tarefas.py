@@ -241,3 +241,35 @@ def test_bug_tem_simbolo_proprio_e_alternar_martelo(tmp_path: Path):
     # Bug EM DEV: 🐛 com andamento (alterna com 🔨 no render)
     assert por_tid["ST-001-T3"]["simbolo"] == "🐛"
     assert por_tid["ST-001-T3"]["em_andamento"] is True
+
+
+def test_task_encerrada_sai_do_quadro_apos_60s(tmp_path: Path):
+    proj, db = _db_com_tasks(
+        tmp_path,
+        [
+            {
+                "story": "ST-001",
+                "tid": "ST-001-T1",
+                "agente": "@valim",
+                "ordem": 0,
+                "status": "AGUARDANDO_DEV",
+            }
+        ],
+    )
+    # Task concluída há 2 horas — fora da janela de 60s
+    db.criar_task_kanban("ONDA-004", "ST-001", "ST-001-T0", "Tarefa antiga", "@codd", 0)
+    db.mover_task_kanban("ONDA-004", "ST-001", "ST-001-T0", "DEV_DONE")
+    con = sqlite3.connect(proj / ".bombe-code" / "state.db")
+    con.execute(
+        "UPDATE agent_tasks SET updated_at = ? WHERE task_id = 'ST-001-T0'",
+        (time.time() - 7200,),
+    )
+    con.commit()
+    con.close()
+
+    sidebar = Sidebar(project_dir=str(proj))
+    sidebar._poll_tarefas()
+
+    rotulos = [t["rotulo"] for t in sidebar.tarefas]
+    assert not any("ST-001-T0" in r for r in rotulos), "encerrada antiga virou arquivo morto"
+    assert any("ST-001-T1" in r for r in rotulos)

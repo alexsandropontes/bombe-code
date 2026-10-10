@@ -247,7 +247,7 @@ class Sidebar(VerticalScroll):
                 wave_row = con.execute("SELECT wave_id FROM wave_state LIMIT 1").fetchone()
                 # FONTE PRIMÁRIA: kanban de AGENTES (task a task — o que manda).
                 cards_task = con.execute(
-                    "SELECT story_id, task_id, title, kanban_status, block_tipo "
+                    "SELECT story_id, task_id, title, kanban_status, block_tipo, updated_at "
                     "FROM agent_tasks WHERE task_id != '' ORDER BY ordem"
                 ).fetchall()
                 # Fallback: projetos sem kanban de agentes → stories.
@@ -274,9 +274,15 @@ class Sidebar(VerticalScroll):
                 "DEV_DONE": 3,
                 "DONE_DEFINITIVO": 4,
             }
-            for sid, tid, titulo, kanban_status, block_tipo in cards_task:
+            for sid, tid, titulo, kanban_status, block_tipo, atualizado_em in cards_task:
                 frase = _frase_curta(titulo)
                 rotulo = f"{sid} {tid} {frase}".strip()
+                # ENCERRADAS (regra do usuário): riscadas por 60s e SAEM —
+                # o quadro lê como fila de verdade, nunca como arquivo morto.
+                if kanban_status in ("DEV_DONE", "DONE_DEFINITIVO") and (
+                    agora - float(atualizado_em or 0) > 60
+                ):
+                    continue
                 if kanban_status == "BLOCKED":
                     entrada = {
                         "rotulo": rotulo,
@@ -307,14 +313,14 @@ class Sidebar(VerticalScroll):
                     entrada = {
                         "rotulo": rotulo,
                         "simbolo": "✓",
-                        "cor": TOKENS["text_muted"],
+                        "cor": f"{TOKENS['text_muted']} strike",
                         "em_andamento": False,
                     }
                 elif kanban_status == "DONE_DEFINITIVO":
                     entrada = {
                         "rotulo": rotulo,
                         "simbolo": "✓",
-                        "cor": TOKENS["text_dim"],
+                        "cor": f"{TOKENS['text_dim']} strike",
                         "em_andamento": False,
                     }
                 else:  # AGUARDANDO_DEV / BACKLOG — fila: símbolo do tipo, cinza
