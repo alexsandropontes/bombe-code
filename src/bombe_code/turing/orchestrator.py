@@ -2508,6 +2508,53 @@ class WaveOrchestrator:
 
         dev_res = _DevConsolidado()
 
+        # 🚩 REGRA DO KANBAN DE AGENTES: review SÓ com TODAS as tasks da story
+        # em DEV DONE. Alguma task terminou BLOCKED? A linha para AQUI (Andon):
+        # nada de review sobre trabalho incompleto — o escada/fila atua na
+        # task bloqueada primeiro (ela é a primeira da fila no próximo ciclo).
+        cartoes_fim = self.db.carregar_tasks_kanban(onda_id, target_story)
+        cards_task = [c for c in cartoes_fim if not c["task_id"].startswith("REVIEW")]
+        nao_prontas = [
+            c for c in cards_task if c["kanban_status"] not in ("DEV_DONE", "DONE_DEFINITIVO")
+        ]
+        if nao_prontas:
+            detalhes = "; ".join(
+                f"{c['task_id']} ({c['kanban_status']}"
+                + (f": {c['block_tipo']}" if c["block_tipo"] else "")
+                + ")"
+                for c in nao_prontas
+            )
+            BUS.publish(
+                "announcement",
+                agent="@turing",
+                text=(
+                    f"🚩 ANDON — {target_story}: {len(nao_prontas)} task(s) fora de DEV "
+                    f"DONE [{detalhes}]. Code review NÃO roda sobre story incompleta; "
+                    "a linha atua nas tasks bloqueadas primeiro."
+                ),
+            )
+            pior = nao_prontas[0]
+            self.kanban.block_card(
+                target_story,
+                reason=(
+                    f"Task {pior['task_id']} {pior['kanban_status']}"
+                    + (f" ({pior['block_tipo']})" if pior["block_tipo"] else "")
+                    + " — story não vai a review com task não finalizada."
+                ),
+                blocked_by="@turing",
+            )
+            return {
+                "success": False,
+                "is_blocked": True,
+                "blocked_by": "@turing",
+                "error": (
+                    f"🚩 {target_story}: story com task fora de DEV DONE "
+                    f"[{detalhes}] — review suspenso (Andon)."
+                ),
+                "review_output": "",
+                "arquivos_escritos": escritas_ciclo,
+            }
+
         # 3. FASE REVIEW: @unclebob (Tech Lead) revisa Clean Code, SOLID e padrões
         # arquiteturais — DA STORY INTEIRA, só quando TODAS as tarefas fecharem.
         runner_bob = self._get_runner("@unclebob")
