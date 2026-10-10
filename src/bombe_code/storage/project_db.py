@@ -82,6 +82,8 @@ class ProjectDatabase:
                 );
                 """
             )
+            # Migração do kanban de agentes (colunas de card de fluxo)
+            self._migra_kanban_task(conn)
             # Migração segura para tabelas já criadas
             try:
                 conn.execute(

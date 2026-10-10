@@ -222,6 +222,12 @@ class Sidebar(VerticalScroll):
             con = sqlite3.connect(f"file:{db}?mode=ro", uri=True, timeout=1.0)
             try:
                 wave_row = con.execute("SELECT wave_id FROM wave_state LIMIT 1").fetchone()
+                # FONTE PRIMÁRIA: kanban de AGENTES (task a task — o que manda).
+                cards_task = con.execute(
+                    "SELECT story_id, task_id, title, kanban_status, block_tipo "
+                    "FROM agent_tasks WHERE task_id != '' ORDER BY ordem"
+                ).fetchall()
+                # Fallback: projetos sem kanban de agentes → stories.
                 cards = con.execute(
                     "SELECT story_id, title, status, is_blocked, updated_at "
                     "FROM kanban_cards ORDER BY rowid"
@@ -232,27 +238,108 @@ class Sidebar(VerticalScroll):
             return
         self.wave_id = (wave_row[0] if wave_row else "") or ""
         agora = time.time()
-        atuais: list[tuple[str, str, str]] = []
-        encerradas: list[tuple[str, str, str]] = []
-        fila: list[tuple[str, str, str]] = []
-        for sid, titulo, status, is_blocked, updated_at in cards:
-            frase = _frase_curta(titulo)
-            if is_blocked:
-                atuais.append((sid, frase, "blocked"))
-            elif status == "IN_PROGRESS":
-                atuais.append((sid, frase, "run"))
-            elif status in ("IN_REVIEW", "VALIDATE"):
-                atuais.append((sid, frase, "review"))
-            elif status in ("DONE", "DEV_DONE"):
-                # Encerrada aparece riscada por 60s; depois dá lugar à fila.
-                if agora - float(updated_at or 0) <= 60:
-                    encerradas.append((sid, frase, "done"))
-            elif status in ("READY", "TODO", "PENDING", "BACKLOG"):
-                fila.append((sid, frase, "fila"))
-        nova = []
-        for s, f, e in (atuais + encerradas + fila)[:7]:
-            marcador, estilo = _MARCADORES[e]
-            nova.append({"sid": s, "frase": f, "estado": e, "marcador": marcador, "estilo": estilo})
+        nova: list[dict] = []
+        if cards_task:
+            # ── Tarefas de agentes: BLOCKED (Andon) → EM DEV → fila → done ──
+            bloqueadas: list[dict] = []
+            em_dev: list[dict] = []
+            fila_t: list[dict] = []
+            feitas: list[dict] = []
+            for sid, tid, titulo, kanban_status, block_tipo in cards_task:
+                frase = _frase_curta(titulo)
+                rotulo = f"{sid} {tid} {frase}".strip()
+                if kanban_status == "BLOCKED":
+                    bloqueadas.append(
+                        {
+                            "rotulo": rotulo,
+                            "simbolo": "🚩",
+                            "cor": TOKENS["error"],
+                            "em_andamento": False,
+                        }
+                    )
+                elif kanban_status == "EM_DEV":
+                    # Blocked sendo re-trabalhado mantém a bandeira; nova em
+                    # execução usa ▶. EM ANDAMENTO = negrito + alterna 🔨.
+                    if block_tipo:
+                        em_dev.append(
+                            {
+                                "rotulo": rotulo,
+                                "simbolo": "🚩",
+                                "cor": TOKENS["error"],
+                                "em_andamento": True,
+                            }
+                        )
+                    else:
+                        em_dev.append(
+                            {
+                                "rotulo": rotulo,
+                                "simbolo": "▶",
+                                "cor": TOKENS["success"],
+                                "em_andamento": True,
+                            }
+                        )
+                elif kanban_status == "DEV_DONE":
+                    feitas.insert(
+                        0,
+                        {
+                            "rotulo": rotulo,
+                            "simbolo": "✓",
+                            "cor": TOKENS["text_muted"],
+                            "em_andamento": False,
+                        },
+                    )
+                elif kanban_status == "DONE_DEFINITIVO":
+                    feitas.append(
+                        {
+                            "rotulo": rotulo,
+                            "simbolo": "✓",
+                            "cor": TOKENS["text_dim"],
+                            "em_andamento": False,
+                        }
+                    )
+                else:  # AGUARDANDO_DEV / BACKLOG — fila, sem negrito
+                    fila_t.append(
+                        {
+                            "rotulo": rotulo,
+                            "simbolo": "·",
+                            "cor": TOKENS["text_muted"],
+                            "em_andamento": False,
+                        }
+                    )
+                if len(nova) >= 7:
+                    break
+            nova = (bloqueadas + em_dev + fila_t + feitas)[:7]
+            for item in nova:
+                item["estado"] = "task"
+        else:
+            atuais: list[tuple[str, str, str]] = []
+            encerradas: list[tuple[str, str, str]] = []
+            fila: list[tuple[str, str, str]] = []
+            for sid, titulo, status, is_blocked, updated_at in cards:
+                frase = _frase_curta(titulo)
+                if is_blocked:
+                    atuais.append((sid, frase, "blocked"))
+                elif status == "IN_PROGRESS":
+                    atuais.append((sid, frase, "run"))
+                elif status in ("IN_REVIEW", "VALIDATE"):
+                    atuais.append((sid, frase, "review"))
+                elif status in ("DONE", "DEV_DONE"):
+                    # Encerrada aparece riscada por 60s; depois dá lugar à fila.
+                    if agora - float(updated_at or 0) <= 60:
+                        encerradas.append((sid, frase, "done"))
+                elif status in ("READY", "TODO", "PENDING", "BACKLOG"):
+                    fila.append((sid, frase, "fila"))
+            for s, f, e in (atuais + encerradas + fila)[:7]:
+                marcador, estilo = _MARCADORES[e]
+                nova.append(
+                    {
+                        "estado": e,
+                        "rotulo": f"{s} {f}".strip(),
+                        "simbolo": marcador,
+                        "cor": estilo,
+                        "em_andamento": e in ("run", "review"),
+                    }
+                )
         if nova != self.tarefas:
             self.tarefas = nova
             self.refresh_view()
@@ -272,7 +359,7 @@ class Sidebar(VerticalScroll):
         )
         t.append("─" * 36 + "\n", style=TOKENS["surface_alt"])
 
-        # 1.5 Tarefas vivas do kanban (status por símbolo/cor; teto 7)
+        # 1.5 Tarefas vivas do kanban de agentes (teto 7)
         if self.tarefas:
             titulo_onda = f" · {self.wave_id}" if self.wave_id else ""
             t.append(
@@ -280,8 +367,16 @@ class Sidebar(VerticalScroll):
                 style=f"bold {TOKENS['secondary']}",
             )
             for tr in self.tarefas:
-                linha = f" {tr['marcador']} {tr['sid']} {tr['frase']}\n"
-                t.append(linha, style=tr["estilo"])
+                # Regra: EM ANDAMENTO = NEGRITO + símbolo alternando entre o
+                # original da task e 🔨 (em construção). Fila = sem negrito.
+                if tr.get("em_andamento"):
+                    alternando = int(time.time()) % 2 == 0
+                    marcador = tr["simbolo"] if alternando else "🔨"
+                    estilo = f"bold {tr['cor']}"
+                else:
+                    marcador = tr["simbolo"]
+                    estilo = tr["cor"]
+                t.append(f" {marcador} {tr['rotulo']}\n", style=estilo)
             t.append("─" * 36 + "\n", style=TOKENS["surface_alt"])
 
         # 2. Context & Token Usage

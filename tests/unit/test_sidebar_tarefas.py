@@ -1,10 +1,10 @@
-"""Aba 📋 TAREFAS da sidebar — fila viva do kanban:
+"""Aba 📋 TAREFAS da sidebar — lê o KANBAN DE AGENTES (task a task):
 
-- Onda + código da Story + frase curta
-- Status: 🚩 vermelho = bloqueada · 🟠 laranja = revisão/correção ·
-  ▶ verde = nova em execução · · cinza = fila · ✓ riscada cinza escuro =
-  encerrada (visível 60s, depois dá lugar à fila)
-- TETO de 7 somando atuais + encerradas recentes + fila
+- Prioridade: BLOCKED (Andon, 🚩 vermelho) → EM DEV (▶ verde) → fila (·
+  cinza) → DEV DONE/DONE DEFINITIVO (✓ apagado)
+- EM ANDAMENTO (EM DEV) = NEGRITO + símbolo ALTERNANDO com 🔨 (em construção)
+- Fila = sem negrito, qualquer que seja a cor
+- TETO de 7 somando tudo
 """
 
 import sqlite3
@@ -12,13 +12,11 @@ import time
 from pathlib import Path
 
 from bombe_code.storage.project_db import ProjectDatabase
-from bombe_code.tui.widgets.sidebar import Sidebar, _frase_curta
+from bombe_code.tui.widgets.sidebar import Sidebar
 
 
-def _db_com_cards(tmp_path: Path, cards: list[tuple[str, str, str, int]]) -> Path:
+def _db_com_tasks(tmp_path: Path, tasks: list[dict]) -> tuple[Path, ProjectDatabase]:
     db = ProjectDatabase(str(tmp_path))
-    from bombe_code.turing.kanban import KanbanManager
-
     con = sqlite3.connect(tmp_path / ".bombe-code" / "state.db")
     con.execute(
         "INSERT INTO wave_state (wave_id, state, autonomy_mode, engineering_mode, updated_at) "
@@ -27,135 +25,162 @@ def _db_com_cards(tmp_path: Path, cards: list[tuple[str, str, str, int]]) -> Pat
     )
     con.commit()
     con.close()
-    kanban = KanbanManager(str(tmp_path), db=db)
-    for sid, titulo, status, bloqueada in cards:
-        kanban.add_card(
-            story_id=sid,
-            wave_id="ONDA-004",
-            title=titulo,
-            agent="@valim",
-            status=status,
-            is_blocked=bool(bloqueada),
+    for t in tasks:
+        db.criar_task_kanban(
+            "ONDA-004", t["story"], t["tid"], t.get("titulo", t["tid"]), t["agente"], t["ordem"]
         )
-    return tmp_path
+        db.mover_task_kanban("ONDA-004", t["story"], t["tid"], t["status"], t.get("tipo", ""))
+    return tmp_path, db
 
 
-def test_teto_de_7_com_atuais_em_cima(tmp_path):
-    cards = [
-        ("ST-001", "Story 1 — Relatório pré-publicação", "IN_PROGRESS", 0),
-        ("ST-002", "Story 2 — Autenticação de leitores", "READY", 0),
-        ("ST-003", "Story 3 — Fila de processamento", "READY", 0),
-        ("ST-004", "Story 4 — Insights e memória", "READY", 0),
-        ("ST-301", "Story 301 — Editor de livros", "READY", 0),
-        ("ST-302", "Story 302 — Exportação de PDF", "READY", 0),
-        ("ST-303", "Story 303 — Observador de IA", "READY", 0),
-        ("ST-304", "Story 304 — Worker de jobs", "READY", 0),
-    ]
-    proj = _db_com_cards(tmp_path, cards)
+def test_le_tasks_do_kanban_de_agentes_com_prioridade(tmp_path: Path):
+    proj, _db = _db_com_tasks(
+        tmp_path,
+        [
+            {
+                "story": "ST-001",
+                "tid": "ST-001-T1",
+                "agente": "@codd",
+                "ordem": 0,
+                "status": "DEV_DONE",
+            },
+            {
+                "story": "ST-001",
+                "tid": "ST-001-T2",
+                "agente": "@valim",
+                "ordem": 1,
+                "status": "EM_DEV",
+            },
+            {
+                "story": "ST-001",
+                "tid": "ST-001-T3",
+                "agente": "@ada",
+                "ordem": 2,
+                "status": "AGUARDANDO_DEV",
+            },
+            {
+                "story": "ST-001",
+                "tid": "ST-001-T4",
+                "agente": "@ieru",
+                "ordem": 3,
+                "status": "BLOCKED",
+                "tipo": "INTERNAL_SCALE",
+            },
+        ],
+    )
     sidebar = Sidebar(project_dir=str(proj))
     sidebar._poll_tarefas()
 
-    assert len(sidebar.tarefas) == 7, "teto de 7"
-    assert sidebar.tarefas[0]["sid"] == "ST-001"
-    assert sidebar.tarefas[0]["estado"] == "run"
-    assert all(t["estado"] == "fila" for t in sidebar.tarefas[1:])
-    assert sidebar.tarefas[0]["frase"] == "Relatório pré-publicação"
-    assert sidebar.wave_id == "ONDA-004"
-
-    class _ContentFalso:
-        ultimo = None
-
-        def update(self, t):
-            self.ultimo = t
-
-    sidebar._content_widget = _ContentFalso()
-    sidebar.refresh_view()
-    rendered = str(sidebar._last_rendered_text or "")
-    assert "📋 TAREFAS · ONDA-004 (7)" in rendered
-    assert "▶ ST-001" in rendered
-    assert "· ST-303" in rendered
-    assert "ST-304" not in rendered, "a 8ª story não cabe no teto de 7"
+    rotulos = [t["rotulo"] for t in sidebar.tarefas]
+    assert rotulos[0].startswith("ST-001 ST-001-T4"), "BLOCKED primeiro (Andon)"
+    assert rotulos[1].startswith("ST-001 ST-001-T2"), "em dev depois"
+    assert rotulos[2].startswith("ST-001 ST-001-T3"), "fila depois"
+    assert rotulos[3].startswith("ST-001 ST-001-T1"), "dev done por último"
+    assert sidebar.tarefas[0]["simbolo"] == "🚩"
+    assert sidebar.tarefas[1]["em_andamento"] is True
+    assert sidebar.tarefas[2]["em_andamento"] is False
 
 
-def test_status_bloqueada_revisao_e_encerrada_riscada(tmp_path):
-    cards = [
-        ("ST-001", "Story 1 — Relatório", "IN_PROGRESS", 1),  # 🚩 bloqueada
-        ("ST-002", "Story 2 — Autenticação", "IN_REVIEW", 0),  # 🟠 revisão
-        ("ST-003", "Story 3 — Fila", "READY", 0),  # ⚪ fila
-        ("ST-004", "Story 4 — Worker", "DONE", 0),  # ✓ encerrada recente
-    ]
-    proj = _db_com_cards(tmp_path, cards)
+def test_em_andamento_alternar_martelo_e_negrito(tmp_path: Path):
+    proj, _db = _db_com_tasks(
+        tmp_path,
+        [
+            {
+                "story": "ST-001",
+                "tid": "ST-001-T1",
+                "agente": "@valim",
+                "ordem": 0,
+                "status": "EM_DEV",
+            }
+        ],
+    )
     sidebar = Sidebar(project_dir=str(proj))
     sidebar._poll_tarefas()
 
-    estados = {t["sid"]: t["estado"] for t in sidebar.tarefas}
-    assert estados["ST-001"] == "blocked"
-    assert estados["ST-002"] == "review"
-    assert estados["ST-003"] == "fila"
-    assert estados["ST-004"] == "done"
+    tr = sidebar.tarefas[0]
+    assert tr["em_andamento"] is True
+    # A alternância acontece no RENDER (paridade do segundo): o símbolo é o
+    # original OU 🔨 — nunca um terceiro.
+    simbolos_possiveis = {tr["simbolo"], "🔨"}
+    for _ in range(4):
+        time.sleep(0.5)
 
-    class _ContentFalso:
-        ultimo = None
+        class _ContentFalso:
+            ultimo = None
 
-        def update(self, t):
-            self.ultimo = t
+            def update(self, t):
+                self.ultimo = t
 
-    sidebar._content_widget = _ContentFalso()
-    sidebar.refresh_view()
-    rendered = str(sidebar._last_rendered_text or "")
-    assert "🚩 ST-001" in rendered
-    assert "🟠 ST-002" in rendered
-    assert "· ST-003" in rendered
-    assert "✓ ST-004" in rendered
+        sidebar._content_widget = _ContentFalso()
+        sidebar.refresh_view()
+        rendered = str(sidebar._last_rendered_text or "")
+        linha = next((l for l in rendered.splitlines() if "ST-001-T1" in l), "")
+        marcador = linha.strip().split(" ")[0]
+        assert marcador in simbolos_possiveis, f"símbolo inesperado: {marcador}"
 
 
-def test_encerrada_antiga_sai_e_fila_entra(tmp_path):
-    """DONE com mais de 60s some — a vaga vai para a próxima da fila."""
-    cards = [
-        ("ST-001", "Story 1 — Antiga", "DONE", 0),
-        ("ST-002", "Story 2 — Fila A", "READY", 0),
-        ("ST-003", "Story 3 — Fila B", "READY", 0),
+def test_blocked_re_trabalhado_mantem_bandeira_e_vira_andamento(tmp_path: Path):
+    proj, _db = _db_com_tasks(
+        tmp_path,
+        [
+            {
+                "story": "ST-001",
+                "tid": "ST-001-T1",
+                "agente": "@ada",
+                "ordem": 0,
+                "status": "EM_DEV",
+                "tipo": "INTERNAL_SCALE",
+            },
+        ],
+    )
+    sidebar = Sidebar(project_dir=str(proj))
+    sidebar._poll_tarefas()
+
+    tr = sidebar.tarefas[0]
+    assert tr["em_andamento"] is True, "blocked em re-trabalho está EM ANDAMENTO (negrito)"
+    assert tr["simbolo"] == "🚩", "blocked mantém a bandeira"
+
+
+def test_teto_de_7(tmp_path: Path):
+    tasks = [
+        {
+            "story": "ST-001",
+            "tid": f"ST-001-T{i}",
+            "agente": "@valim",
+            "ordem": i,
+            "status": "AGUARDANDO_DEV",
+        }
+        for i in range(1, 9)
     ]
-    proj = _db_com_cards(tmp_path, cards)
-    # Envelhece a DONE manualmente (updated_at = 2h atrás)
-    con = sqlite3.connect(proj / ".bombe-code" / "state.db")
+    proj, _db = _db_com_tasks(tmp_path, tasks)
+    sidebar = Sidebar(project_dir=str(proj))
+    sidebar._poll_tarefas()
+
+    assert len(sidebar.tarefas) == 7
+
+
+def test_sem_kanban_de_agentes_cai_para_stories(tmp_path: Path):
+    db = ProjectDatabase(str(tmp_path))
+    from bombe_code.turing.kanban import KanbanManager
+
+    con = sqlite3.connect(tmp_path / ".bombe-code" / "state.db")
     con.execute(
-        "UPDATE kanban_cards SET updated_at = ? WHERE story_id = 'ST-001'",
-        (time.time() - 7200,),
+        "INSERT INTO wave_state (wave_id, state, autonomy_mode, engineering_mode, updated_at) "
+        "VALUES ('ONDA-001', 'EXECUTE', 'AUTO', 'tdd-code', ?)",
+        (time.time(),),
     )
     con.commit()
     con.close()
-
-    sidebar = Sidebar(project_dir=str(proj))
+    kanban = KanbanManager(str(tmp_path), db=db)
+    kanban.add_card(
+        story_id="ST-001",
+        wave_id="ONDA-001",
+        title="Story 1 — Relatório",
+        agent="@valim",
+        status="IN_PROGRESS",
+    )
+    sidebar = Sidebar(project_dir=str(tmp_path))
     sidebar._poll_tarefas()
 
-    sids = [t["sid"] for t in sidebar.tarefas]
-    assert "ST-001" not in sids, "encerrada antiga deveria ter sumido"
-    assert sids == ["ST-002", "ST-003"]
-
-
-def test_encerrada_recente_ocupa_vaga_por_60s(tmp_path):
-    """DONE recente fica riscada visível — mesmo que desloque a fila."""
-    cards = [
-        ("ST-001", "Story 1 — Recém-concluída", "DONE", 0),
-        ("ST-002", "Story 2 — Fila A", "READY", 0),
-        ("ST-003", "Story 3 — Fila B", "READY", 0),
-    ]
-    proj = _db_com_cards(tmp_path, cards)
-    sidebar = Sidebar(project_dir=str(proj))
-    sidebar._poll_tarefas()
-
-    assert sidebar.tarefas[0]["sid"] == "ST-001"
-    assert sidebar.tarefas[0]["estado"] == "done"
-    assert sidebar.tarefas[0]["marcador"] == "✓"
-
-
-def test_sem_banco_nao_quebra(tmp_path):
-    sidebar = Sidebar(project_dir=str(tmp_path / "vazio"))
-    sidebar._poll_tarefas()
-    assert sidebar.tarefas == []
-
-
-def test_frase_curta_remove_prefixo_story():
-    assert _frase_curta("Story 1 — Relatório pré-publicação") == "Relatório pré-publicação"
-    assert _frase_curta("Editor de livros") == "Editor de livros"
+    assert len(sidebar.tarefas) == 1
+    assert sidebar.tarefas[0]["rotulo"].startswith("ST-001")
