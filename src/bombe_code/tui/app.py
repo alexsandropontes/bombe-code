@@ -5,6 +5,14 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+
+# PARIDADE DE TERMINAL: o protocolo Kitty do Textual faz o terminal PARAR de
+# interceptar Ctrl+Shift+C (copiar seleção) e repassar a tecla ao app — que
+# copiaria a transcrição INTEIRA por cima da seleção do usuário. Desligado:
+# Ctrl+Shift+C volta a ser do TERMINAL (copia só o selecionado) e o mouse
+# continua rolando o chat. Tem que ser setado ANTES do import do Textual.
+os.environ.setdefault("TEXTUAL_DISABLE_KITTY_KEY", "1")
+import os
 from pathlib import Path
 from typing import Any, ClassVar
 

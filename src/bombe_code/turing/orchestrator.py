@@ -3550,6 +3550,23 @@ class WaveOrchestrator:
                 for degrau in range(1, 5):
                     if retrabalho_ok:
                         break  # a fila de achados já convergiu — escada desnecessária
+                    if ABORT_EVENT.is_set():
+                        # ESC ESC do usuário: checkpoint salvo, NADA de escalar
+                        # nem de continuar queimando degraus.
+                        BUS.publish(
+                            "announcement",
+                            agent="@turing",
+                            text=(
+                                f"⏸ {story}: escada interrompida pelo usuário "
+                                "(ESC ESC) — checkpoint salvo; /wave resume retoma."
+                            ),
+                        )
+                        return {
+                            "success": False,
+                            "completed_stories": completed_stories,
+                            "interrompido": True,
+                            "error": "Execução interrompida pelo usuário (checkpoint salvo).",
+                        }
                     # Rota por EVIDÊNCIA: zero gravações = o problema é recusa do
                     # dev, não a story — sobe a agressividade da ordem.
                     if not escreveu_alguma_vez:
@@ -3648,7 +3665,88 @@ class WaveOrchestrator:
                                 "EXECUTE", "@unclebob (assumiu a implementação)", res_lead
                             )
                         cycle_res = self._run_cycle_inner(story, rework_feedback=feedback_integral)
-                    else:  # dirigido (clássico)
+                    elif estrategia == "dirigido" and achados_enfileirados:
+                        # Achados ESTRUTURADOS → delega AO DONO DO ARQUIVO, não
+                        # ao RED cego: o achado é uma correção cirúrgica com
+                        # responsável (frontend→@ada, spec→@aniche, banco→@codd).
+                        BUS.publish(
+                            "veto_rework",
+                            agent="@turing",
+                            text=(
+                                f"🔥 [DEGRAU {degrau}/4] {len(achados_enfileirados)} achado(s) "
+                                f"delegados aos donos de camada para correção cirúrgica."
+                            ),
+                        )
+                        for i, achado in enumerate(achados_enfileirados, 1):
+                            agente_achado = self._agente_para_achado(achado)
+                            BUS.publish(
+                                "veto_rework",
+                                agent=agente_achado,
+                                text=(
+                                    f"🔧 [DEGRAU {degrau} · ACHADO {i}/"
+                                    f"{len(achados_enfileirados)}] {agente_achado}: {achado[:90]}"
+                                ),
+                            )
+                            # PREMISSA KANBAN: achado em correção É um card de
+                            # task de agente — nasce NO KANBAN, designado, antes
+                            # do agente acordar. Nada de trabalho invisível.
+                            id_card_ach = f"ACHADO-{story}-{i}"
+                            onda_ach = self.state_machine.wave_id
+                            self.db.criar_task_kanban(
+                                onda_ach,
+                                story,
+                                id_card_ach,
+                                f"Achado: {achado[:120]}",
+                                agente_achado,
+                                80 + i,
+                                dor=[],
+                                dod=["gravou_arquivo"],
+                            )
+                            self.db.mover_task_kanban(
+                                onda_ach, story, id_card_ach, "AGUARDANDO_DEV"
+                            )
+                            self.db.mover_task_kanban(onda_ach, story, id_card_ach, "EM_DEV")
+                            runner_ach = self._get_runner(agente_achado)
+                            if not runner_ach:
+                                self.db.mover_task_kanban(
+                                    onda_ach, story, id_card_ach, "BLOCKED", "INTERNAL_SCALE"
+                                )
+                                continue
+                            escritas_ach: list[str] = []
+                            res_ach = runner_ach.run(
+                                self._assemble_prompt(
+                                    agente_achado,
+                                    f"Story {story} REPROVADA no code review. CORRIJA APENAS "
+                                    f"ESTE ACHADO ({i} de {len(achados_enfileirados)}):\n"
+                                    f"ACHADO: {achado}\n\n"
+                                    f"Contexto (parecer integral):\n{parecer_integral}\n\n"
+                                    "Entrega = arquivos GRAVADOS nesta rodada "
+                                    "(write_project_file). Escopo fechado: nada além deste achado.",
+                                )
+                            )
+                            self._record_telemetry(
+                                "EXECUTE",
+                                f"{agente_achado} (achado degrau {degrau}, {i}/{len(achados_enfileirados)})",
+                                res_ach,
+                            )
+                            escritas_ach.extend(getattr(res_ach, "arquivos_escritos", []))
+                            if (
+                                getattr(res_ach, "success", False) is True
+                                and getattr(res_ach, "is_blocked", False) is not True
+                                and escritas_ach
+                            ):
+                                self.db.mover_task_kanban(onda_ach, story, id_card_ach, "DEV_DONE")
+                            else:
+                                self.db.mover_task_kanban(
+                                    onda_ach,
+                                    story,
+                                    id_card_ach,
+                                    "BLOCKED",
+                                    "INTERNAL_SCALE",
+                                )
+                        escreveu_alguma_vez = True
+                        cycle_res = self._run_cycle_inner(story, rework_feedback=feedback_integral)
+                    else:  # dirigido (clássico, sem achados estruturados)
                         BUS.publish(
                             "veto_rework",
                             agent="@unclebob",
