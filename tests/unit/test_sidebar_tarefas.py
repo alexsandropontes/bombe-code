@@ -72,13 +72,21 @@ def test_le_tasks_do_kanban_de_agentes_com_prioridade(tmp_path: Path):
     sidebar._poll_tarefas()
 
     rotulos = [t["rotulo"] for t in sidebar.tarefas]
-    assert rotulos[0].startswith("ST-001 ST-001-T4"), "BLOCKED primeiro (Andon)"
-    assert rotulos[1].startswith("ST-001 ST-001-T2"), "em dev depois"
-    assert rotulos[2].startswith("ST-001 ST-001-T3"), "fila depois"
-    assert rotulos[3].startswith("ST-001 ST-001-T1"), "dev done por último"
+    # Andon: a BLOCKED vem primeiro; o RESTO na ORDEM DO KANBAN (fluxo real) —
+    # status é símbolo/cor/negrito, nunca posição na lista.
+    assert [r.split(" ")[1] for r in rotulos] == [
+        "ST-001-T4",
+        "ST-001-T1",
+        "ST-001-T2",
+        "ST-001-T3",
+    ]
+    assert sidebar.tarefas[0]["simbolo"] == "🚩", "T4 bloqueada: bandeira vermelha"
+    assert sidebar.tarefas[0]["em_andamento"] is False, "blocked na fila: sem negrito"
+    assert sidebar.tarefas[2]["em_andamento"] is True, "T2 em dev: negrito"
+    assert sidebar.tarefas[3]["simbolo"] == "⚙️", "T3 na fila: símbolo do tipo, cinza"
+    assert sidebar.tarefas[3]["em_andamento"] is False
     assert sidebar.tarefas[0]["simbolo"] == "🚩"
-    assert sidebar.tarefas[1]["em_andamento"] is True
-    assert sidebar.tarefas[2]["em_andamento"] is False
+    assert sidebar.tarefas[2]["em_andamento"] is True, "T2 em dev: negrito e 🔨"
 
 
 def test_em_andamento_alternar_martelo_e_negrito(tmp_path: Path):

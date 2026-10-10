@@ -2118,13 +2118,29 @@ class WaveOrchestrator:
     def _garcom_carregar_fila(
         self, onda_id: str, story_id: str, tarefas: list[Any]
     ) -> tuple[list[Any], list[dict]]:
-        """Braço DELEGADOR: a fila vem DO KANBAN — BLOCKED primeiro (Andon:
-        para a linha até resolver), depois EM DEV órfã de crash, depois
-        AGUARDANDO DEV. DEV DONE/DONE DEFINITIVO: IGNORADOS no resume."""
+        """Braço DELEGADOR: a fila vem DO KANBAN, mas o que manda é a
+        PRECEDÊNCIA, não o blocked. Regras, nesta ordem:
+
+        1. Cards de REVIEW só existem na fila se TODAS as tasks da story
+           estiverem DEV DONE/DONE DEFINITIVO (a regra que libera o review).
+           Review bloqueado NÃO pula a frente: ele espera as tasks, sempre.
+        2. Entre cards com precedência resolvida: BLOCKED primeiro (Andon),
+           depois EM DEV órfã de crash, depois AGUARDANDO DEV — na ordem.
+        3. DEV DONE/DONE DEFINITIVO: IGNORADOS no resume.
+        """
         cartoes = self.db.carregar_tasks_kanban(onda_id, story_id)
-        bloqueados = [c for c in cartoes if c["kanban_status"] == "BLOCKED"]
-        em_dev = [c for c in cartoes if c["kanban_status"] == "EM_DEV"]
-        aguardando = [c for c in cartoes if c["kanban_status"] == "AGUARDANDO_DEV"]
+        cards_task = [c for c in cartoes if not c["task_id"].startswith("REVIEW")]
+        cards_review = [c for c in cartoes if c["task_id"].startswith("REVIEW")]
+        todas_prontas = bool(cards_task) and all(
+            c["kanban_status"] in ("DEV_DONE", "DONE_DEFINITIVO") for c in cards_task
+        )
+        pendentes_task = [
+            c for c in cards_task if c["kanban_status"] not in ("DEV_DONE", "DONE_DEFINITIVO")
+        ]
+
+        bloqueados = [c for c in cards_task if c["kanban_status"] == "BLOCKED"]
+        em_dev = [c for c in cards_task if c["kanban_status"] == "EM_DEV"]
+        aguardando = [c for c in cards_task if c["kanban_status"] == "AGUARDANDO_DEV"]
         feitas = [c for c in cartoes if c["kanban_status"] in ("DEV_DONE", "DONE_DEFINITIVO")]
 
         if feitas:
@@ -2144,7 +2160,17 @@ class WaveOrchestrator:
                 text=(
                     f"🚩 ANDON — {story_id} {c['task_id']} BLOCKED "
                     f"({c['block_tipo'] or 'sem tipo'}) e NA COLUNA EM QUE ESTÁ: "
-                    "nada anda até resolver. Atuo NELA primeiro."
+                    "atuo NELA primeiro dentro da precedência dela."
+                ),
+            )
+        if cards_review and not todas_prontas:
+            BUS.publish(
+                "announcement",
+                agent="@turing",
+                text=(
+                    f"⏳ PRECEDÊNCIA — review de {story_id} AGUARDA: {len(pendentes_task)} "
+                    "task(s) da story fora de DEV DONE. Blocked do review NÃO pula a "
+                    "frente: a regra que libera o review é a precedência, não o blocked."
                 ),
             )
 

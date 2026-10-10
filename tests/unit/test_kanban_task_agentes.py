@@ -174,3 +174,36 @@ def test_story_aprovada_vira_done_definitivo(project_env):
     assert all(s == "DONE_DEFINITIVO" for s in estados.values())
     # _garcom_devolver_cards_para_burn NÃO mexe em DONE DEFINITIVO
     assert orch._garcom_devolver_cards_para_burn("ONDA-004", "ST-001", "@codd") == 0
+
+
+def test_review_nao_pula_fila_por_blocked_precedencia(project_env):
+    """PRECEDÊNCIA > PRIORIDADE: review bloqueado NÃO é tratado antes das
+    tasks pendentes — a regra que libera o review (todas as tasks DEV DONE)
+    é o que define QUANDO ele pode ser queimado."""
+    _tmp_path, orch = project_env
+    orch._garcom_preparar_tasks("ONDA-004", "ST-001", _tarefas())
+    # T1 pronta; T2 e T3 ainda na fila; review bloqueado tentando furar
+    orch.db.mover_task_kanban("ONDA-004", "ST-001", "T1", "DEV_DONE")
+    orch.db.criar_task_kanban(
+        "ONDA-004", "ST-001", "REVIEW-TECH", "Code Review da story", "@unclebob", 90
+    )
+    orch.db.mover_task_kanban("ONDA-004", "ST-001", "REVIEW-TECH", "BLOCKED", "INTERNAL_SCALE")
+
+    publicados: list[str] = []
+    publicar_original = BUS.publish
+
+    def capturar(etype, **kw):
+        publicados.append(kw.get("text", ""))
+        return publicar_original(etype, **kw)
+
+    BUS.publish = capturar
+    try:
+        fila, _ = orch._garcom_carregar_fila("ONDA-004", "ST-001", _tarefas())
+    finally:
+        BUS.publish = publicar_original
+
+    # A fila é das TASKS: T2 e T3 (blocked T2? não — T2/T3 aguardando; T1 feito)
+    ids = [t.id for t in fila]
+    assert "T2" in ids and "T3" in ids, "as tasks pendentes são queimadas primeiro"
+    # O aviso de precedência explica por que o review não sobe
+    assert any("PRECEDÊNCIA" in t and "AGUARDA" in t for t in publicados)

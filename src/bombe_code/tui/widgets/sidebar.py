@@ -263,80 +263,80 @@ class Sidebar(VerticalScroll):
         agora = time.time()
         nova: list[dict] = []
         if cards_task:
-            # ── Tarefas de agentes: BLOCKED (Andon) → EM DEV → fila → done ──
-            bloqueadas: list[dict] = []
-            em_dev: list[dict] = []
-            fila_t: list[dict] = []
-            feitas: list[dict] = []
+            # ORDEM DE EXECUÇÃO REAL (a ordem do kanban) — o quadro lê como o
+            # fluxo aconteceu: T1..Tn e o review no fim. Status é contado por
+            # símbolo/cor/negrito, nunca pela posição na lista.
+            prioridade_estado = {
+                "BLOCKED": 0,
+                "EM_DEV": 1,
+                "AGUARDANDO_DEV": 2,
+                "BACKLOG": 2,
+                "DEV_DONE": 3,
+                "DONE_DEFINITIVO": 4,
+            }
             for sid, tid, titulo, kanban_status, block_tipo in cards_task:
                 frase = _frase_curta(titulo)
                 rotulo = f"{sid} {tid} {frase}".strip()
                 if kanban_status == "BLOCKED":
-                    bloqueadas.append(
-                        {
-                            "rotulo": rotulo,
-                            "simbolo": "🚩",
-                            "cor": TOKENS["error"],
-                            "em_andamento": False,
-                        }
-                    )
+                    entrada = {
+                        "rotulo": rotulo,
+                        "simbolo": "🚩",
+                        "cor": TOKENS["error"],
+                        "em_andamento": False,
+                    }
                 elif kanban_status == "EM_DEV":
                     # Blocked sendo re-trabalhado mantém a bandeira; task normal
                     # ⚙️ e bug 🐛 usam o símbolo do próprio tipo. EM ANDAMENTO =
                     # negrito + alterna com 🔨.
                     if block_tipo:
-                        em_dev.append(
-                            {
-                                "rotulo": rotulo,
-                                "simbolo": "🚩",
-                                "cor": TOKENS["error"],
-                                "em_andamento": True,
-                            }
-                        )
+                        entrada = {
+                            "rotulo": rotulo,
+                            "simbolo": "🚩",
+                            "cor": TOKENS["error"],
+                            "em_andamento": True,
+                        }
                     else:
                         simbolo, cor = _simbolo_tarefa(titulo)
-                        em_dev.append(
-                            {
-                                "rotulo": rotulo,
-                                "simbolo": simbolo,
-                                "cor": cor,
-                                "em_andamento": True,
-                            }
-                        )
-                elif kanban_status == "DEV_DONE":
-                    feitas.insert(
-                        0,
-                        {
+                        entrada = {
                             "rotulo": rotulo,
-                            "simbolo": "✓",
-                            "cor": TOKENS["text_muted"],
-                            "em_andamento": False,
-                        },
-                    )
-                elif kanban_status == "DONE_DEFINITIVO":
-                    feitas.append(
-                        {
-                            "rotulo": rotulo,
-                            "simbolo": "✓",
-                            "cor": TOKENS["text_dim"],
-                            "em_andamento": False,
+                            "simbolo": simbolo,
+                            "cor": cor,
+                            "em_andamento": True,
                         }
-                    )
+                elif kanban_status == "DEV_DONE":
+                    entrada = {
+                        "rotulo": rotulo,
+                        "simbolo": "✓",
+                        "cor": TOKENS["text_muted"],
+                        "em_andamento": False,
+                    }
+                elif kanban_status == "DONE_DEFINITIVO":
+                    entrada = {
+                        "rotulo": rotulo,
+                        "simbolo": "✓",
+                        "cor": TOKENS["text_dim"],
+                        "em_andamento": False,
+                    }
                 else:  # AGUARDANDO_DEV / BACKLOG — fila: símbolo do tipo, cinza
                     simbolo_tipo, _cor_tipo = _simbolo_tarefa(titulo)
-                    fila_t.append(
-                        {
-                            "rotulo": rotulo,
-                            "simbolo": simbolo_tipo,
-                            "cor": TOKENS["text_muted"],
-                            "em_andamento": False,
-                        }
-                    )
-                if len(nova) >= 7:
-                    break
-            nova = (bloqueadas + em_dev + fila_t + feitas)[:7]
-            for item in nova:
-                item["estado"] = "task"
+                    entrada = {
+                        "rotulo": rotulo,
+                        "simbolo": simbolo_tipo,
+                        "cor": TOKENS["text_muted"],
+                        "em_andamento": False,
+                    }
+                entrada["prioridade"] = prioridade_estado.get(kanban_status, 2)
+                nova.append(entrada)
+            # Andon na frente — MAS só para tasks; card de REVIEW tem
+            # PRECEDÊNCIA: fica na posição dele (fim) mesmo bloqueado, pois
+            # review só é tratável quando a regra que o libera existe.
+            bloqueadas = [
+                e
+                for e in nova
+                if e["prioridade"] == 0 and not e["rotulo"].split(" ")[1].startswith("REVIEW")
+            ]
+            resto = [e for e in nova if e not in bloqueadas]
+            nova = (bloqueadas + resto)[:7]
         else:
             atuais: list[tuple[str, str, str]] = []
             encerradas: list[tuple[str, str, str]] = []
