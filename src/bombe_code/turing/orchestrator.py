@@ -30,7 +30,7 @@ from bombe_code.permissions.stage_guard import (
 from bombe_code.storage.project_db import ProjectDatabase
 from bombe_code.turing.gates import SealGate, TemplateGate
 from bombe_code.turing.kanban import KanbanCardStatus, KanbanManager
-from bombe_code.turing.pbb import AtomicTask, AtomicTaskType
+from bombe_code.turing.pbb import AtomicTask, AtomicTaskType, PBBDecomposer
 from bombe_code.turing.progress import ABORT_EVENT, BUS
 from bombe_code.turing.prompt_assembler import DeliveryTarget, TuringPromptAssembler
 from bombe_code.turing.review_gate import TuringReviewGate
@@ -868,8 +868,10 @@ class WaveOrchestrator:
         def executar_comando(comando: str) -> str:
             """Executa comando de VALIDAÇÃO no projeto (suítes e gates).
 
-            Whitelist estrita: pytest, vitest, playwright, npm/npx/node e
-            scripts/ do projeto. Nada destrutivo, nada de rede-instalação.
+            Gate estruturado (grade enterprise): aceita launchers reais de
+            ambiente (uv/poetry run, .venv/bin, python -m, npx/npm/node) +
+            programas de validação e helpers de leitura, em QUALQUER segmento
+            de pipe. Lista negra sempre vence (destrutivos, rede, install).
             A saída crua (cauda de 8.000 caracteres) é a evidência obrigatória
             para veredito de QA — inspeção estática não emite veredito.
             """
@@ -878,41 +880,90 @@ class WaveOrchestrator:
             cmd = (comando or "").strip()
             if not cmd:
                 return "Erro: comando vazio."
-            permitidos = (
-                "pytest",
-                "python -m pytest",
-                "npx vitest",
-                "npx playwright",
-                "npm run",
-                "npm test",
-                "node ",
-                "bash scripts/",
-                "sh scripts/",
-                "python -m ",
-            )
+
             proibidos = (
                 "rm ",
                 "sudo",
-                "curl",
-                "wget",
+                "curl ",
+                "wget ",
                 "pip install",
                 "npm install",
                 "git push",
+                "git reset",
                 "mkfs",
                 "dd ",
-                "chmod",
-                "chown",
+                "chmod ",
+                "chown ",
                 "shutdown",
                 "reboot",
+                "eval ",
+                "nc ",
+                "ssh ",
+                "tee ",
             )
-            low = cmd.lower()
-            if not any(low.startswith(p) for p in permitidos):
-                return (
-                    "Erro: comando fora da whitelist de validação "
-                    "(pytest/vitest/playwright/npm/npx/node/scripts do projeto)."
-                )
-            if any(p in low for p in proibidos):
-                return "Erro: comando contém operação proibida."
+            programas_validacao = {
+                "pytest",
+                "python",
+                "python3",
+                "npx",
+                "npm",
+                "node",
+                "vitest",
+                "playwright",
+                "jest",
+                "ruff",
+                "mypy",
+                "uv",
+                "poetry",
+                "bash",
+                "sh",
+                "pdm",
+                "hatch",
+            }
+            programas_leitura = {"tail", "head", "grep", "wc", "sort", "uniq", "cat", "true"}
+            try:
+                import shlex as _shlex
+            except Exception:  # noqa: BLE001 — indisponível é improvável; nega
+                return "Erro: ambiente sem shlex."
+
+            def _programa(segmento: str) -> str:
+                try:
+                    tokens = _shlex.split(segmento)
+                except ValueError:
+                    tokens = segmento.split()
+                if not tokens:
+                    return ""
+                primeiro = Path(tokens[0]).name.lower()
+                if (
+                    primeiro in ("uv", "poetry", "pdm", "hatch")
+                    and len(tokens) >= 3
+                    and tokens[1] == "run"
+                ):
+                    primeiro = Path(tokens[2]).name.lower()
+                return primeiro
+
+            for segmento in cmd.split("|"):
+                low_seg = f" {segmento.lower()} "
+                if any(p in low_seg for p in proibidos):
+                    return f"Erro: comando contém operação proibida ({segmento.strip()[:60]})."
+                corpo = re.split(r">|<", segmento.strip())[0].strip()
+                if not corpo:
+                    continue
+                programa = _programa(corpo)
+                if programa not in programas_validacao | programas_leitura:
+                    return (
+                        f"Erro: programa '{programa or segmento.strip()[:40]}' fora da "
+                        "lista de validação (pytest/vitest/playwright/npm/npx/node/"
+                        "uv/poetry run/scripts + filtros de leitura tail/head/grep/wc)."
+                    )
+                if programa in ("bash", "sh"):
+                    alvo = (
+                        (corpo.split(maxsplit=1) or ["", ""])[1]
+                        if len(corpo.split(maxsplit=1)) > 1
+                        else ""
+                    )
+                    if "scripts/" not in alvo and not alvo.endswith(".sh"):
+                        return "Erro: bash/sh só executa scripts/ do projeto."
             # Batimento: comando longo (pytest completo) é trabalho legítimo —
             # alimenta o IDLE do runner para não ser abortado aos 240s.
             import threading
@@ -2196,6 +2247,50 @@ class WaveOrchestrator:
         "FOUNDATION": "@unclebob",
     }
 
+    def _executar_com_card(
+        self,
+        onda_id: str,
+        story_id: str,
+        task_id: str,
+        titulo: str,
+        agente: str,
+        ordem: int,
+        run_fn: Callable[[], Any],
+        dor: list[str] | None = None,
+        dod: list[str] | None = None,
+    ) -> Any:
+        """PREMISSA INEGOCIÁVEL: NENHUM agente atua sem card.
+
+        Nasce BACKLOG → AGUARDANDO DEV (DOR preenchida) → EM_DEV (agente
+        acorda) → DEV DONE ou BLOCKED (binário). Uso: planos, refinos,
+        validações, assume-do-lead — qualquer atuação fora do loop de tasks.
+        """
+        self.db.criar_task_kanban(
+            onda_id, story_id, task_id, titulo, agente, ordem, dor=dor, dod=dod
+        )
+        cartao = next(
+            (
+                c
+                for c in self.db.carregar_tasks_kanban(onda_id, story_id)
+                if c["task_id"] == task_id
+            ),
+            None,
+        )
+        if cartao and cartao["kanban_status"] == "BACKLOG":
+            self.db.mover_task_kanban(onda_id, story_id, task_id, "AGUARDANDO_DEV")
+        self.db.mover_task_kanban(onda_id, story_id, task_id, "EM_DEV")
+        res = run_fn()
+        escreveu = bool(getattr(res, "arquivos_escritos", None) or [])
+        if (
+            getattr(res, "success", False) is True
+            and getattr(res, "is_blocked", False) is not True
+            and (escreveu or not getattr(res, "output", ""))
+        ):
+            self.db.mover_task_kanban(onda_id, story_id, task_id, "DEV_DONE")
+        else:
+            self.db.mover_task_kanban(onda_id, story_id, task_id, "BLOCKED", "INTERNAL_SCALE")
+        return res
+
     def _garcom_preparar_tasks(self, onda_id: str, story_id: str, tarefas: list[Any]) -> None:
         """Braço ESCRITOR: a task nasce NO KANBAN, designada e ordenada, ANTES
         de qualquer agente acordar — com REGRAS DE DOR (entrada, incluindo a
@@ -2447,9 +2542,33 @@ class WaveOrchestrator:
             self.workspace.wave_qa_dir(self.state_machine.wave_id) / f"{target_story}_test_plan.md"
         )
 
+        story_title = target_story
+        tarefas = PBBDecomposer.decompose_story(
+            story_id=target_story,
+            story_title=story_title,
+            requires_db=True,
+            requires_frontend=True,
+        )
+
+        # ── KANBAN DE AGENTES MANDA EM TUDO ──
+        # Braço ESCRITOR: tasks do breakdown nascem NO KANBAN, designadas, na
+        # ordem — BACKLOG → AGUARDANDO DEV. Sem ordem no kanban, agente nem
+        # acorda. Cards DEV DONE são IGNORADOS (revalidar é papel do code
+        # review final da story); BLOCKED tem prioridade (Andon).
+        onda_id = self.state_machine.wave_id
+        self._garcom_preparar_tasks(onda_id, target_story, tarefas)
+        pendentes, cartoes = self._garcom_carregar_fila(onda_id, target_story, tarefas)
+        # Ciclo só-de-validação? (nada a queimar — kanban 100% DEV DONE/DONE
+        # DEFINITIVO). O código já está no disco de queimas anteriores; quem
+        # valida é o code review — o consolidado vazio NÃO veta nada.
+        houve_queima = bool(pendentes)
+
         runner_aniche = self._get_runner("@aniche")
         test_plan_res = None
-        if runner_aniche:
+        if runner_aniche and houve_queima:
+            # Kanban de agentes: o PLANO DE TESTES só roda quando HÁ queima
+            # (cards a executar). Ciclo só-de-validação (tudo DEV DONE) não
+            # re-elabora plano — trabalho invisível e redundante.
             raw_aniche_prompt = (
                 f"Elabore o Plano de Testes e escreva a suíte de testes automatizados para a story {target_story}.\n"
                 f"Consulte os requisitos e os cenários BDD no arquivo '{story_rel}'.\n"
@@ -2491,7 +2610,6 @@ class WaveOrchestrator:
         # contrato do arquiteto é a barreira); review é da STORY inteira.
         from concurrent.futures import ThreadPoolExecutor
 
-        story_title = target_story
         story_content = (
             story_file.read_text(encoding="utf-8", errors="replace")
             if story_file and story_file.exists()
@@ -2511,14 +2629,6 @@ class WaveOrchestrator:
         except Exception as exc:  # noqa: BLE001 — título é cosmético
             logger.debug("Sem título extraível da story: %s", exc)
 
-        from bombe_code.turing.pbb import PBBDecomposer
-
-        tarefas = PBBDecomposer.decompose_story(
-            story_id=target_story,
-            story_title=story_title,
-            requires_db=True,
-            requires_frontend=True,
-        )
         BUS.publish(
             "announcement",
             agent="@turing",
@@ -2553,19 +2663,6 @@ class WaveOrchestrator:
         entregues: list[str] = []
         dev_outputs: list[str] = []
         concluidas_ids: set[str] = set()
-
-        # ── KANBAN DE AGENTES MANDA EM TUDO ──
-        # Braço ESCRITOR: tasks do breakdown nascem NO KANBAN, designadas, na
-        # ordem — BACKLOG → AGUARDANDO DEV. Sem ordem no kanban, agente nem
-        # acorda. Cards DEV DONE são IGNORADOS (revalidar é papel do code
-        # review final da story); BLOCKED tem prioridade (Andon).
-        onda_id = self.state_machine.wave_id
-        self._garcom_preparar_tasks(onda_id, target_story, tarefas)
-        pendentes, cartoes = self._garcom_carregar_fila(onda_id, target_story, tarefas)
-        # Ciclo só-de-validação? (nada a queimar — kanban 100% DEV DONE/DONE
-        # DEFINITIVO). O código já está no disco de queimas anteriores; quem
-        # valida é o code review — o consolidado vazio NÃO veta nada.
-        houve_queima = bool(pendentes)
 
         # Evidência de execução: arquivos gravados pelos devs NESTE ciclo.
         # Zero escritas = plano sem código (recusa velada) — detectável.
@@ -2785,30 +2882,20 @@ class WaveOrchestrator:
                 f"Se o código e os testes estiverem aprovados, declare explicitamente: 'Review: APROVADO'. Caso contrário, aponte os problemas.\n"
             )
             bob_prompt = self._assemble_prompt("@unclebob", raw_bob_prompt)
-            # Card de code review NASCE NO KANBAN antes do revisor acordar
-            self.db.criar_task_kanban(
+            # Processo oficial do card: nasce → AGUARDANDO → EM_DEV → binário
+            bob_res = self._executar_com_card(
                 onda_id,
                 target_story,
                 "REVIEW-TECH",
                 f"Code Review da story {target_story}",
                 "@unclebob",
                 90,
+                lambda: self._review_com_retry(
+                    runner_bob, bob_prompt, "@unclebob (Tech Lead Review)"
+                ),
                 dor=["all_burn_done"],
                 dod=["parecer_integral_gravado"],
             )
-            cartao_review = next(
-                (
-                    c
-                    for c in self.db.carregar_tasks_kanban(onda_id, target_story)
-                    if c["task_id"] == "REVIEW-TECH"
-                ),
-                None,
-            )
-            if cartao_review and cartao_review["kanban_status"] == "BACKLOG":
-                self.db.mover_task_kanban(onda_id, target_story, "REVIEW-TECH", "AGUARDANDO_DEV")
-            self.db.mover_task_kanban(onda_id, target_story, "REVIEW-TECH", "EM_DEV")
-            bob_res = self._review_com_retry(runner_bob, bob_prompt, "@unclebob (Tech Lead Review)")
-            self.db.mover_task_kanban(onda_id, target_story, "REVIEW-TECH", "DEV_DONE")
 
             if bob_res and (
                 getattr(bob_res, "is_blocked", False) or not getattr(bob_res, "success", True)
@@ -2842,32 +2929,20 @@ class WaveOrchestrator:
                 f"Inspecione a pasta 'tests/'. Se todos os testes passarem, declare explicitamente: 'Veredito: APROVADO'.\n"
             )
             aniche_val_prompt = self._assemble_prompt("@aniche", raw_aniche_val_prompt)
-            # Card de QA NASCE NO KANBAN antes do revisor acordar
-            self.db.criar_task_kanban(
+            # Processo oficial do card: nasce → AGUARDANDO → EM_DEV → binário
+            aniche_val_res = self._executar_com_card(
                 onda_id,
                 target_story,
                 "REVIEW-QA",
                 f"QA Run & Verify da story {target_story}",
                 "@aniche",
                 91,
+                lambda: self._review_com_retry(
+                    runner_aniche, aniche_val_prompt, "@aniche (QA Run & Verify)"
+                ),
                 dor=["all_burn_done"],
                 dod=["veredito_explicito_da_suite"],
             )
-            cartao_qa = next(
-                (
-                    c
-                    for c in self.db.carregar_tasks_kanban(onda_id, target_story)
-                    if c["task_id"] == "REVIEW-QA"
-                ),
-                None,
-            )
-            if cartao_qa and cartao_qa["kanban_status"] == "BACKLOG":
-                self.db.mover_task_kanban(onda_id, target_story, "REVIEW-QA", "AGUARDANDO_DEV")
-            self.db.mover_task_kanban(onda_id, target_story, "REVIEW-QA", "EM_DEV")
-            aniche_val_res = self._review_com_retry(
-                runner_aniche, aniche_val_prompt, "@aniche (QA Run & Verify)"
-            )
-            self.db.mover_task_kanban(onda_id, target_story, "REVIEW-QA", "DEV_DONE")
 
         # Avalia veredictos com a LEI DA RESTRIÇÃO (DEFAULT-DENY)
         aniche_approved, aniche_reason = self._check_explicit_approval(aniche_val_res)
@@ -3445,18 +3520,37 @@ class WaveOrchestrator:
                                 )
                             ),
                         )
-                        runner_achado = self._get_runner(agente_achado)
-                        if not runner_achado:
-                            continue
-                        res_ach = runner_achado.run(
-                            self._assemble_prompt(
-                                agente_achado,
-                                f"Story {story} REPROVADA no review. CORRIJA APENAS ESTE ACHADO "
-                                f"({i} de {len(achados_enfileirados)}):\nACHADO: {achado}\n\n"
-                                f"Contexto (parecer integral, texto completo):\n{parecer_integral}\n\n"
-                                "Entrega = arquivos GRAVADOS nesta rodada (write_project_file). "
-                                "Escopo fechado: nada além deste achado.",
-                            )
+                        # PREMISSA KANBAN: achado É card (processo oficial único).
+                        id_card_ach = f"ACHADO-{story}-{i}"
+                        res_ach = self._executar_com_card(
+                            self.state_machine.wave_id,
+                            story,
+                            id_card_ach,
+                            f"Achado: {achado[:120]}",
+                            agente_achado,
+                            80 + i,
+                            lambda runner_achado=self._get_runner(agente_achado), ach=achado: (
+                                runner_achado.run(
+                                    self._assemble_prompt(
+                                        agente_achado,
+                                        f"Story {story} REPROVADA no review. CORRIJA APENAS ESTE "
+                                        f"ACHADO ({i} de {len(achados_enfileirados)}):\n"
+                                        f"ACHADO: {achado}\n\n"
+                                        f"Contexto (parecer integral, texto completo):\n{parecer_integral}\n\n"
+                                        "Entrega = arquivos GRAVADOS nesta rodada "
+                                        "(write_project_file). Escopo fechado: nada além deste achado.",
+                                    )
+                                )
+                                if runner_achado
+                                else AgentExecutionResult(
+                                    agent_handle=agente_achado,
+                                    success=False,
+                                    is_blocked=True,
+                                    block_reason="runner indisponível",
+                                )
+                            ),
+                            dor=[],
+                            dod=["gravou_arquivo"],
                         )
                         self._record_telemetry(
                             "EXECUTE",
@@ -3689,61 +3783,44 @@ class WaveOrchestrator:
                             )
                             # PREMISSA KANBAN: achado em correção É um card de
                             # task de agente — nasce NO KANBAN, designado, antes
-                            # do agente acordar. Nada de trabalho invisível.
+                            # do agente acordar (processo oficial único).
                             id_card_ach = f"ACHADO-{story}-{i}"
-                            onda_ach = self.state_machine.wave_id
-                            self.db.criar_task_kanban(
-                                onda_ach,
+                            escritas_ach: list[str] = []
+                            res_ach = self._executar_com_card(
+                                self.state_machine.wave_id,
                                 story,
                                 id_card_ach,
                                 f"Achado: {achado[:120]}",
                                 agente_achado,
                                 80 + i,
+                                lambda runner_ach=self._get_runner(agente_achado), ach=achado: (
+                                    runner_ach.run(
+                                        self._assemble_prompt(
+                                            agente_achado,
+                                            f"Story {story} REPROVADA no code review. CORRIJA APENAS "
+                                            f"ESTE ACHADO:\nACHADO: {ach}\n\n"
+                                            f"Contexto (parecer integral):\n{parecer_integral}\n\n"
+                                            "Entrega = arquivos GRAVADOS nesta rodada "
+                                            "(write_project_file). Escopo fechado: nada além deste achado.",
+                                        )
+                                    )
+                                    if runner_ach
+                                    else AgentExecutionResult(
+                                        agent_handle=agente_achado,
+                                        success=False,
+                                        is_blocked=True,
+                                        block_reason="runner indisponível",
+                                    )
+                                ),
                                 dor=[],
                                 dod=["gravou_arquivo"],
                             )
-                            self.db.mover_task_kanban(
-                                onda_ach, story, id_card_ach, "AGUARDANDO_DEV"
-                            )
-                            self.db.mover_task_kanban(onda_ach, story, id_card_ach, "EM_DEV")
-                            runner_ach = self._get_runner(agente_achado)
-                            if not runner_ach:
-                                self.db.mover_task_kanban(
-                                    onda_ach, story, id_card_ach, "BLOCKED", "INTERNAL_SCALE"
-                                )
-                                continue
-                            escritas_ach: list[str] = []
-                            res_ach = runner_ach.run(
-                                self._assemble_prompt(
-                                    agente_achado,
-                                    f"Story {story} REPROVADA no code review. CORRIJA APENAS "
-                                    f"ESTE ACHADO ({i} de {len(achados_enfileirados)}):\n"
-                                    f"ACHADO: {achado}\n\n"
-                                    f"Contexto (parecer integral):\n{parecer_integral}\n\n"
-                                    "Entrega = arquivos GRAVADOS nesta rodada "
-                                    "(write_project_file). Escopo fechado: nada além deste achado.",
-                                )
-                            )
                             self._record_telemetry(
                                 "EXECUTE",
-                                f"{agente_achado} (achado degrau {degrau}, {i}/{len(achados_enfileirados)})",
+                                f"{agente_achado} (achado {i}/{len(achados_enfileirados)})",
                                 res_ach,
                             )
                             escritas_ach.extend(getattr(res_ach, "arquivos_escritos", []))
-                            if (
-                                getattr(res_ach, "success", False) is True
-                                and getattr(res_ach, "is_blocked", False) is not True
-                                and escritas_ach
-                            ):
-                                self.db.mover_task_kanban(onda_ach, story, id_card_ach, "DEV_DONE")
-                            else:
-                                self.db.mover_task_kanban(
-                                    onda_ach,
-                                    story,
-                                    id_card_ach,
-                                    "BLOCKED",
-                                    "INTERNAL_SCALE",
-                                )
                         escreveu_alguma_vez = True
                         cycle_res = self._run_cycle_inner(story, rework_feedback=feedback_integral)
                     else:  # dirigido (clássico, sem achados estruturados)

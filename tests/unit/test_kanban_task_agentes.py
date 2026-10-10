@@ -224,7 +224,7 @@ def test_tool_executar_comando_whitelist(project_env):
 
     # fora da whitelist → negado
     resp = executar("curl https://mal.example")
-    assert "whitelist" in resp.lower()
+    assert "proibida" in resp.lower() or "whitelist" in resp.lower()
     # destrutivo mesmo dentro do prefixo → negado
     resp2 = executar("pytest ; rm -rf /")
     assert "proibida" in resp2.lower()
@@ -232,3 +232,34 @@ def test_tool_executar_comando_whitelist(project_env):
     resp3 = executar("python -m pytest --version")
     assert "exit=0" in resp3
     assert "pytest" in resp3.lower()
+
+
+def test_executar_comando_grade_enterprise(project_env):
+    """Gate estruturado: launchers reais de ambiente (uv run, .venv/bin),
+    helpers de leitura em pipes — e negação de fora-da-lista/destrutivo."""
+    tmp_path, orch = project_env
+    tools = orch._get_project_fs_tools()
+    executar = tools[-1]
+
+    # launchers reais: uv run pytest ✓ (executa — falha por não haver pytest no
+    # system python, mas a FLAG é execução, não whitelist)
+    resp = executar("uv run pytest --version")
+    assert "whitelist" not in resp.lower() and "fora da lista" not in resp.lower()
+    # .venv/bin/pytest ✓ (basename pytest)
+    resp = executar(".venv/bin/pytest --version")
+    assert "fora da lista" not in resp.lower()
+    # pipe com helper de leitura ✓
+    resp = executar("uv run pytest --version | tail -5")
+    assert "fora da lista" not in resp.lower()
+    # cat = helper de leitura ✓ (executa; arquivo inexistente no fixture)
+    resp = executar("cat pyproject.toml")
+    assert resp.startswith("exit=")
+    # git = programa fora da lista ✗
+    resp = executar("git status")
+    assert "fora da lista" in resp.lower()
+    # bash fora de scripts/ ✗
+    resp = executar("bash -c 'rm -rf /'")
+    assert "só executa scripts/" in resp.lower() or "proibida" in resp.lower()
+    # destrutivo em qualquer segmento ✗
+    resp = executar("uv run pytest | tee /etc/passwd")
+    assert "proibida" in resp.lower() or "fora da lista" in resp.lower()
