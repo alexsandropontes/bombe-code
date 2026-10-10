@@ -2915,9 +2915,13 @@ class WaveOrchestrator:
                     "arquivos_escritos": escritas_ciclo,
                 }
 
-        # 4. FASE RUNNER & VERIFICAÇÃO: @aniche executa e valida a suíte de testes da story
+        # 4. FASE RUNNER & VERIFICAÇÃO — REGRA DO FLUXO (inegociável):
+        # Tech Lead APROVOU → desce para o QA (execução da suíte).
+        # Tech Lead REPROVOU → NÃO desce para QA: volta para CORREÇÃO
+        # (achados → donos de camada). QA só existe após aprovação técnica.
+        bob_approved_primeiro, _reason = self._check_explicit_approval(bob_res)
         aniche_val_res = None
-        if runner_aniche:
+        if runner_aniche and bob_approved_primeiro:
             raw_aniche_val_prompt = (
                 f"Execute a suíte de testes da story {target_story} contra o código implementado.\n"
                 "COMO: use a ferramenta `executar_comando` para rodar de verdade "
@@ -3003,10 +3007,10 @@ class WaveOrchestrator:
 
         if not is_cycle_approved:
             fail_reason = []
-            if not aniche_approved:
-                fail_reason.append(f"QA: {aniche_reason}")
             if not bob_approved:
                 fail_reason.append(f"Tech Lead: {bob_reason}")
+            elif not aniche_approved:
+                fail_reason.append(f"QA: {aniche_reason}")
             block_msg = " | ".join(fail_reason) or "Ciclo reprovado pelo Gate de Review"
             self.kanban.block_card(
                 target_story,
