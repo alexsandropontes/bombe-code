@@ -185,7 +185,13 @@ def test_review_nao_pula_fila_por_blocked_precedencia(project_env):
     # T1 pronta; T2 e T3 ainda na fila; review bloqueado tentando furar
     orch.db.mover_task_kanban("ONDA-004", "ST-001", "T1", "DEV_DONE")
     orch.db.criar_task_kanban(
-        "ONDA-004", "ST-001", "REVIEW-TECH", "Code Review da story", "@unclebob", 90
+        "ONDA-004",
+        "ST-001",
+        "REVIEW-TECH",
+        "Code Review da story",
+        "@unclebob",
+        90,
+        dor=["all_burn_done"],
     )
     orch.db.mover_task_kanban("ONDA-004", "ST-001", "REVIEW-TECH", "BLOCKED", "INTERNAL_SCALE")
 

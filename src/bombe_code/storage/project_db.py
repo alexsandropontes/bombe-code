@@ -121,6 +121,8 @@ class ProjectDatabase:
             "ALTER TABLE agent_tasks ADD COLUMN ordem INTEGER NOT NULL DEFAULT 0",
             "ALTER TABLE agent_tasks ADD COLUMN kanban_status TEXT NOT NULL DEFAULT ''",
             "ALTER TABLE agent_tasks ADD COLUMN block_tipo TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE agent_tasks ADD COLUMN dor_json TEXT NOT NULL DEFAULT '[]'",
+            "ALTER TABLE agent_tasks ADD COLUMN dod_json TEXT NOT NULL DEFAULT '[]'",
         ):
             try:
                 conn.execute(alter)
@@ -128,21 +130,44 @@ class ProjectDatabase:
                 pass
 
     def criar_task_kanban(
-        self, wave_id: str, story_id: str, task_id: str, title: str, agent: str, ordem: int
+        self,
+        wave_id: str,
+        story_id: str,
+        task_id: str,
+        title: str,
+        agent: str,
+        ordem: int,
+        dor: list[str] | None = None,
+        dod: list[str] | None = None,
     ) -> None:
-        """Braço ESCRITOR do Turing: cria o card em BACKLOG, designado, na ordem."""
+        """Braço ESCRITOR do Turing: cria o card em BACKLOG, designado, na ordem,
+        com suas REGRAS DE DOR (entrada) e DOD (saída) — nada está ali por acaso."""
         chave = f"{wave_id}:{story_id}:{task_id}"
+        dor_json = json.dumps(dor or [], ensure_ascii=False)
+        dod_json = json.dumps(dod or [], ensure_ascii=False)
         with self._get_connection() as conn:
             self._migra_kanban_task(conn)
             conn.execute(
                 """
                 INSERT INTO agent_tasks
                     (id, story_id, agent_role, title, status, output, created_at, updated_at,
-                     wave_id, task_id, ordem, kanban_status, block_tipo)
-                VALUES (?, ?, ?, ?, 'task_kanban', '', ?, ?, ?, ?, ?, 'BACKLOG', '')
+                     wave_id, task_id, ordem, kanban_status, block_tipo, dor_json, dod_json)
+                VALUES (?, ?, ?, ?, 'task_kanban', '', ?, ?, ?, ?, ?, 'BACKLOG', '', ?, ?)
                 ON CONFLICT(id) DO NOTHING
                 """,
-                (chave, story_id, agent, title, time.time(), time.time(), wave_id, task_id, ordem),
+                (
+                    chave,
+                    story_id,
+                    agent,
+                    title,
+                    time.time(),
+                    time.time(),
+                    wave_id,
+                    task_id,
+                    ordem,
+                    dor_json,
+                    dod_json,
+                ),
             )
 
     def mover_task_kanban(
@@ -164,7 +189,8 @@ class ProjectDatabase:
             self._migra_kanban_task(conn)
             rows = conn.execute(
                 """
-                SELECT id, story_id, agent_role, title, task_id, ordem, kanban_status, block_tipo
+                SELECT id, story_id, agent_role, title, task_id, ordem, kanban_status, block_tipo,
+                       dor_json, dod_json
                 FROM agent_tasks
                 WHERE wave_id = ? AND story_id = ? AND task_id != ''
                 ORDER BY ordem
@@ -180,8 +206,20 @@ class ProjectDatabase:
             "ordem",
             "kanban_status",
             "block_tipo",
+            "dor",
+            "dod",
         )
-        return [dict(zip(chaves, r)) for r in rows]
+        cartoes: list[dict] = []
+        for r in rows:
+            d = dict(zip(chaves, r))
+            try:
+                d["dor"] = json.loads(d.get("dor") or "[]")
+                d["dod"] = json.loads(d.get("dod") or "[]")
+            except (ValueError, TypeError):
+                d["dor"] = []
+                d["dod"] = []
+            cartoes.append(d)
+        return cartoes
 
     def save_wave_state(
         self,

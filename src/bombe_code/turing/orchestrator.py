@@ -2103,17 +2103,48 @@ class WaveOrchestrator:
 
     def _garcom_preparar_tasks(self, onda_id: str, story_id: str, tarefas: list[Any]) -> None:
         """Braço ESCRITOR: a task nasce NO KANBAN, designada e ordenada, ANTES
-        de qualquer agente acordar. BACKLOG → AGUARDANDO DEV (pronta para a
-        fila). Cards EM DEV/DEV DONE/DONE DEFINITIVO/BLOCKED não são tocados."""
+        de qualquer agente acordar — com REGRAS DE DOR (entrada, incluindo a
+        PRECEDÊNCIA via depends_on como item 'dep:') e DOD (saída). Cards
+        EM DEV/DEV DONE/DONE DEFINITIVO/BLOCKED não são tocados."""
         for ordem, t in enumerate(tarefas):
             agente = self._MAPA_AGENTE_CAMADA.get(t.task_type.value, "@valim")
             existentes = {c["task_id"]: c for c in self.db.carregar_tasks_kanban(onda_id, story_id)}
             cartao = existentes.get(t.id)
             if cartao is None:
-                self.db.criar_task_kanban(onda_id, story_id, t.id, t.title, agente, ordem)
+                dor = [
+                    "especificação e regras de negócio disponíveis",
+                    "BDD/RED-GREEN definido para a task",
+                ] + [f"dep:{dep}" for dep in (t.depends_on or [])]
+                dod = ["gravou_arquivo", "implementação atende os testes da task"]
+                self.db.criar_task_kanban(
+                    onda_id, story_id, t.id, t.title, agente, ordem, dor=dor, dod=dod
+                )
                 self.db.mover_task_kanban(onda_id, story_id, t.id, "AGUARDANDO_DEV")
             elif cartao["kanban_status"] == "BACKLOG":
                 self.db.mover_task_kanban(onda_id, story_id, t.id, "AGUARDANDO_DEV")
+
+    def _dor_satisfeita(self, cartao: dict, cartoes: list[dict]) -> tuple[bool, str]:
+        """Avalia a DOR de um card ITEM A ITEM (determinístico).
+
+        Itens: 'dep:{task_id}' — precedência: card alvo em DEV DONE/DONE
+        DEFINITIVO; 'all_burn_done' — todas as tasks de burn prontas; demais
+        = estáticos (satisfeitos no breakdown; faltando em execução viram
+        BLOCKED HUMAN_SCALE pelo próprio agente)."""
+        for item in cartao.get("dor") or []:
+            if item.startswith("dep:"):
+                alvo = next((c for c in cartoes if c["task_id"] == item[4:]), None)
+                if alvo is None or alvo["kanban_status"] not in (
+                    "DEV_DONE",
+                    "DONE_DEFINITIVO",
+                ):
+                    return False, item
+            elif item == "all_burn_done":
+                tasks = [c for c in cartoes if not c["task_id"].startswith("REVIEW")]
+                if not tasks or not all(
+                    c["kanban_status"] in ("DEV_DONE", "DONE_DEFINITIVO") for c in tasks
+                ):
+                    return False, item
+        return True, ""
 
     def _garcom_carregar_fila(
         self, onda_id: str, story_id: str, tarefas: list[Any]
@@ -2131,16 +2162,44 @@ class WaveOrchestrator:
         cartoes = self.db.carregar_tasks_kanban(onda_id, story_id)
         cards_task = [c for c in cartoes if not c["task_id"].startswith("REVIEW")]
         cards_review = [c for c in cartoes if c["task_id"].startswith("REVIEW")]
-        todas_prontas = bool(cards_task) and all(
-            c["kanban_status"] in ("DEV_DONE", "DONE_DEFINITIVO") for c in cards_task
-        )
-        pendentes_task = [
-            c for c in cards_task if c["kanban_status"] not in ("DEV_DONE", "DONE_DEFINITIVO")
-        ]
 
-        bloqueados = [c for c in cards_task if c["kanban_status"] == "BLOCKED"]
-        em_dev = [c for c in cards_task if c["kanban_status"] == "EM_DEV"]
-        aguardando = [c for c in cards_task if c["kanban_status"] == "AGUARDANDO_DEV"]
+        # DOR item a item, em SIMULAÇÃO SEQUENCIAL: percorre na ordem do kanban
+        # com um "done virtual" que cresce — uma task cuja precedência será
+        # queimada ANTES dela nesta mesma fila é elegível. O que NÃO puder ser
+        # satisfeito nesta fila (ex.: all_burn_done do review) fica fora.
+        # PRECEDÊNCIA e DEPENDÊNCIA são itens da DOR (dep:*, all_burn_done) —
+        # blocked sozinho NÃO libera nada.
+        elegiveis: list[dict] = []
+        virtual_done = {
+            c["task_id"] for c in cartoes if c["kanban_status"] in ("DEV_DONE", "DONE_DEFINITIVO")
+        }
+        for c in cartoes:
+            if c["kanban_status"] in ("DEV_DONE", "DONE_DEFINITIVO"):
+                continue
+            ok, item_faltante = True, ""
+            for item in c.get("dor") or []:
+                if item.startswith("dep:"):
+                    if item[4:] not in virtual_done:
+                        ok, item_faltante = False, item
+                        break
+                elif item == "all_burn_done":
+                    continue  # resolvido no ciclo de review, fora da fila de burn
+            if ok:
+                elegiveis.append(c)
+                virtual_done.add(c["task_id"])  # queima aqui → libera dependentes
+            else:
+                BUS.publish(
+                    "announcement",
+                    agent="@turing",
+                    text=(
+                        f"🚪 DOR — {story_id} {c['task_id']} aguarda: {item_faltante} "
+                        "(regra de entrada não satisfeita; não é fila, é precedência)."
+                    ),
+                )
+
+        bloqueados = [c for c in elegiveis if c["kanban_status"] == "BLOCKED"]
+        em_dev = [c for c in elegiveis if c["kanban_status"] == "EM_DEV"]
+        aguardando = [c for c in elegiveis if c["kanban_status"] == "AGUARDANDO_DEV"]
         feitas = [c for c in cartoes if c["kanban_status"] in ("DEV_DONE", "DONE_DEFINITIVO")]
 
         if feitas:
@@ -2163,14 +2222,28 @@ class WaveOrchestrator:
                     "atuo NELA primeiro dentro da precedência dela."
                 ),
             )
-        if cards_review and not todas_prontas:
+        # ⏳ PRECEDÊNCIA: review com DOR de entrada não satisfeita (all_burn_done)
+        # aguarda as tasks — blocked sozinho não pula a frente.
+        review_aguardando = [
+            c
+            for c in cards_review
+            if c["kanban_status"] not in ("DEV_DONE", "DONE_DEFINITIVO")
+            and not self._dor_satisfeita(c, cartoes)[0]
+        ]
+        if review_aguardando:
+            ids_pendentes = ", ".join(
+                c["task_id"]
+                for c in cards_task
+                if c["kanban_status"] not in ("DEV_DONE", "DONE_DEFINITIVO")
+            )
             BUS.publish(
                 "announcement",
                 agent="@turing",
                 text=(
-                    f"⏳ PRECEDÊNCIA — review de {story_id} AGUARDA: {len(pendentes_task)} "
-                    "task(s) da story fora de DEV DONE. Blocked do review NÃO pula a "
-                    "frente: a regra que libera o review é a precedência, não o blocked."
+                    f"⏳ PRECEDÊNCIA — review de {story_id} AGUARDA a DOR "
+                    f"'all_burn_done': tasks fora de DEV DONE [{ids_pendentes}]. "
+                    "Blocked do review NÃO pula a frente: quem libera o review é a "
+                    "precedência, não o blocked."
                 ),
             )
 
@@ -2393,7 +2466,7 @@ class WaveOrchestrator:
         # review final da story); BLOCKED tem prioridade (Andon).
         onda_id = self.state_machine.wave_id
         self._garcom_preparar_tasks(onda_id, target_story, tarefas)
-        pendentes, _cartoes = self._garcom_carregar_fila(onda_id, target_story, tarefas)
+        pendentes, cartoes = self._garcom_carregar_fila(onda_id, target_story, tarefas)
         # Ciclo só-de-validação? (nada a queimar — kanban 100% DEV DONE/DONE
         # DEFINITIVO). O código já está no disco de queimas anteriores; quem
         # valida é o code review — o consolidado vazio NÃO veta nada.
@@ -2456,10 +2529,28 @@ class WaveOrchestrator:
                 "Entrega desta rodada = arquivos GRAVADOS (write_project_file) — "
                 "resposta sem gravação não é entrega."
             )
+            escritas_antes = len(escritas_ciclo)
             res_t = runner_executor.run(self._assemble_prompt(executor_handle, raw_dev))
             escritas_ciclo.extend(getattr(res_t, "arquivos_escritos", []))
+            # DOD item a item: 'gravou_arquivo' exige gravação REAL nesta
+            # execução (sucesso sem gravação = plano, não entrega).
+            cartao_t = next((c for c in cartoes if c["task_id"] == tarefa_exec.id), {})
+            sinais_reais = isinstance(getattr(res_t, "success", None), bool)
+            dod_ok = (
+                (not sinais_reais)
+                or bool(escritas_ciclo[escritas_antes:])
+                or ("gravou_arquivo" not in (cartao_t.get("dod") or []))
+            )
             # BINÁRIO do card de agente: deu certo ou não deu. Sem exceções.
-            if getattr(res_t, "success", False) and not getattr(res_t, "is_blocked", False):
+            # Sinais booleanos REAIS (AgentExecutionResult) decidem; sem sinal
+            # real, o DOD (gravação) é o juiz.
+            suc = getattr(res_t, "success", None)
+            blocked = getattr(res_t, "is_blocked", None)
+            if isinstance(suc, bool):
+                deu_certo = suc is True and blocked is not True
+            else:
+                deu_certo = True
+            if deu_certo and dod_ok:
                 self.db.mover_task_kanban(onda_id, target_story, tarefa_exec.id, "DEV_DONE")
             else:
                 self.db.mover_task_kanban(
@@ -2607,6 +2698,8 @@ class WaveOrchestrator:
                 f"Code Review da story {target_story}",
                 "@unclebob",
                 90,
+                dor=["all_burn_done"],
+                dod=["parecer_integral_gravado"],
             )
             cartao_review = next(
                 (
@@ -2656,6 +2749,8 @@ class WaveOrchestrator:
                 f"QA Run & Verify da story {target_story}",
                 "@aniche",
                 91,
+                dor=["all_burn_done"],
+                dod=["veredito_explicito_da_suite"],
             )
             cartao_qa = next(
                 (
