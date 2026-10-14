@@ -73,6 +73,9 @@ class GuardaDeAcoes:
     _leituras: Counter = field(default_factory=Counter)
     # path → {"conteudo": str, "hash": str} (último estado conhecido)
     _ultimo_conteudo: dict[str, dict[str, str]] = field(default_factory=dict)
+    # Comandos auditados EXECUTADOS pela ferramenta com exit 0
+    # (evidência platform-side — alimenta o DOD da card de INSTALACAO)
+    _comandos_executados: list[str] = field(default_factory=list)
 
     # ----------------------------------------------------------- escrita
     def validar_escrita(self, path: str, content: str) -> str | None:
@@ -80,10 +83,29 @@ class GuardaDeAcoes:
         if self.red_flag:
             return f"execução interrompida por bandeira vermelha: {self.red_flag}"
 
-        # 1. Fraude de conteúdo (sempre primeiro)
-        for pattern, motivo in FRAUDES_CONTEUDO:
-            if re.search(pattern, content or "", re.MULTILINE):
-                return self._vetar(f"escrita de '{path}' bloqueada: {motivo}")
+        # 0.5 Barreira Estrita de Especialidade (Enterprise Grade)
+        # Cada agente SÓ PODE ATUAR NA SUA ALÇADA. Sem exceções de governança.
+        p_lower = path.lower()
+        if self.agente in ("@valim", "@barbara", "@james", "@scott", "@ryan"):
+            if p_lower.endswith((".vue", ".jsx", ".tsx", ".css", ".scss", ".sass", ".html")) or "/frontend/" in p_lower or "/components/" in p_lower:
+                return self._vetar(
+                    f"escrita de '{path}' bloqueada: agente backend ({self.agente}) "
+                    "não tem autorização para alterar componentes de frontend/UI. "
+                    "Delegue ao agente especialista (@ada)."
+                )
+        elif self.agente in ("@ada", "@norman"):
+            if (p_lower.endswith((".py", ".sql")) and not p_lower.startswith("tests/frontend/")) or "/migrations/" in p_lower:
+                return self._vetar(
+                    f"escrita de '{path}' bloqueada: agente frontend ({self.agente}) "
+                    "não tem autorização para alterar backend/banco de dados. "
+                    "Delegue ao agente especialista (@valim / @codd)."
+                )
+        elif self.agente == "@codd":
+            if p_lower.endswith((".vue", ".jsx", ".tsx", ".css", ".html")):
+                return self._vetar(
+                    f"escrita de '{path}' bloqueada: arquiteto de banco ({self.agente}) "
+                    "não tem autorização para alterar frontend."
+                )
 
         # 0. RASCUNHOS: arquivos de rascunho são legítimos (o dev anota
         #    estratégias/achados) — fora da régua de churn e veto.
@@ -136,6 +158,22 @@ class GuardaDeAcoes:
 
         self.escritas += 1
         return None
+
+    # ------------------------------------------------ evidência de execução
+    def registrar_comando_executado(self, comando: str, exit_code: int) -> None:
+        """Evidência PLATFORM-SIDE: comando AUDITADO pelo gate e EXECUTADO
+        pela ferramenta com exit code 0. A LLM não registra nada aqui — quem
+        atesta a execução é a plataforma (prosa não é evidência). Para a card
+        de INSTALACAO o que vale é a VALIDAÇÃO: o teste de import/require
+        rodando verde — não o `npm install` em si (cobre: instalou agora,
+        já estava instalado e reinstalou depois de instalar errado)."""
+        if exit_code == 0 and (comando or "").strip():
+            self._comandos_executados.append(comando.strip())
+
+    def comandos_executados(self) -> list[str]:
+        """Comandos auditados EXECUTADOS com sucesso nesta execução (registro
+        real da ferramenta, não narrativa do agente)."""
+        return list(self._comandos_executados)
 
     def arquivos_escritos(self) -> list[str]:
         """Paths gravados com conteúdo real nesta execução (evidência de trabalho).

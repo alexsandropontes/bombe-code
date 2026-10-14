@@ -1060,7 +1060,9 @@ def tui(
 
     def _mouse_livre_tui() -> None:
         """Paridade opencode: mouse LIVRE na TUI — o terminal faz a seleção
-        nativa e o Ctrl+Shift+C do terminal copia (qualquer terminal)."""
+        nativa e o Ctrl+Shift+C do terminal copia a seleção (Kitty off). Dentro
+        de tmux o atalho não intercepta; o app trata o Ctrl+C que chega com
+        dica + F2//copy para o transcrição completa."""
         try:
             with open("/dev/tty", "w") as tty:
                 tty.write("\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l")

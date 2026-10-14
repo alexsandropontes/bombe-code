@@ -1,6 +1,7 @@
 """TESTE NA TUI VIVA (app real):
-1º Ctrl+C → COPIA a transcrição e o app CONTINUA aberto.
-2º Ctrl+C seguido → sai graceful."""
+1º Ctrl+C → só AVISA (não despeja a transcrição) e o app CONTINUA aberto.
+2º Ctrl+C seguido → sai graceful.
+Copiar a transcrição é F2 (tecla que existe de verdade)."""
 
 import pyperclip
 import pytest
@@ -10,7 +11,7 @@ from bombe_code.tui.client import BombeClient
 
 
 @pytest.mark.anyio
-async def test_primeiro_ctrl_c_copia_e_app_continua_vivo(tmp_path, monkeypatch):
+async def test_primeiro_ctrl_c_nao_copia_e_app_continua_vivo(tmp_path, monkeypatch):
     client = BombeClient("http://127.0.0.1:9999")
     app = BombeTuiApp(client=client, session_id="ses_ctrl", project_dir=str(tmp_path))
     copiado: dict[str, str] = {}
@@ -21,7 +22,7 @@ async def test_primeiro_ctrl_c_copia_e_app_continua_vivo(tmp_path, monkeypatch):
         await pilot.press("ctrl+c")
         await pilot.pause(0.3)
         assert app.is_running, "app fechou no 1º Ctrl+C!"
-        assert copiado, "1º Ctrl+C não copiou"
+        assert not copiado, "1º Ctrl+C NÃO deve despejar a transcrição (só avisa)"
 
     # app seguiu vivo após o contexto (fechamento explícito fora dele)
 

@@ -661,7 +661,7 @@ def test_escada_completa_antes_de_escalar_humano(project_env):
     assert res["escalation"]["type"] == "human_escalation"
 
 
-def test_andon_impedimento_para_a_linha_nenhuma_story_avanca(project_env):
+def test_impedimento_para_a_linha_nenhuma_story_avanca(project_env):
     """REGRA ABSOLUTA: bandeira vermelha = IMPEDIMENTO para a linha inteira.
     Com a ST-003 flagada, a ST-004 NÃO pode ser executada — a linha só
     trabalha a história flagada até resolver."""

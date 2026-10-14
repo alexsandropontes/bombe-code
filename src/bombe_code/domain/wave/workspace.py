@@ -82,37 +82,26 @@ class WaveWorkspace:
         self.wave_qa_dir(wave_id).mkdir(parents=True, exist_ok=True)
 
     # =========================================================================
-    # 3. Resolução Resiliente e Retrocompatível
-    # =========================================================================
+    # 3. Resolução CANÔNICA (determinística): ONDA é o lar da story; backlog é
+    # o berço de nascimento; SEM varredura "qualquer onda" — duas stories com
+    # o mesmo id em ondas diferentes = duas verdades, e verdade é UMA.
     def find_story_file(self, story_id: str, wave_id: str | None = None) -> Path | None:
-        """Localiza o arquivo de uma story com busca em cascata (Wave -> Backlog -> Fallback)."""
+        """Resolve o arquivo CANÔNICO de uma story: 1) dir da ONDA informada;
+        2) dir do backlog (berço). Sem varredura ambígua em outras ondas."""
         sid = story_id.strip().upper()
 
-        # 1. Procura na onda específica se informada
+        # 1. Onda informada — o lar canônico quando a story pertence a ela
         if wave_id:
             sdir = self.wave_stories_dir(wave_id)
             if sdir.exists():
-                for p in sdir.glob(f"{sid}*.md"):
+                for p in sorted(sdir.glob(f"{sid}*.md")):
                     if not p.name.endswith("_test_plan.md"):
                         return p
 
-        # 2. Procura em qualquer onda existente
-        if self.waves_root.exists():
-            for p in self.waves_root.glob(f"*/stories/{sid}*.md"):
-                if not p.name.endswith("_test_plan.md"):
-                    return p
-
-        # 3. Procura no padrão legado docs/backlog/stories/
+        # 2. Berço: docs/backlog/stories/ (nascimento antes da onda)
         backlog_dir = self.docs_dir / "backlog" / "stories"
         if backlog_dir.exists():
-            for p in backlog_dir.glob(f"{sid}*.md"):
-                if not p.name.endswith("_test_plan.md"):
-                    return p
-
-        # 4. Procura no fallback docs/stories/
-        legacy_dir = self.docs_dir / "stories"
-        if legacy_dir.exists():
-            for p in legacy_dir.glob(f"{sid}*.md"):
+            for p in sorted(backlog_dir.glob(f"{sid}*.md")):
                 if not p.name.endswith("_test_plan.md"):
                     return p
 

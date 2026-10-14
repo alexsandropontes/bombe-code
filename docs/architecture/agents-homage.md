@@ -24,10 +24,10 @@ Os nomes foram escolhidos por sua relação histórica ou profissional com as á
 
 ## 1. Composição do Elenco por País de Origem
 
-O Bombe Code homenageia 23 grandes mentes da história da computação, valorizando a vanguarda pioneira do Brasil e marcos fundamentais do Reino Unido, Estados Unidos e Canadá:
-- **Brasil:** 12 pioneiros
+O Bombe Code homenageia 25 grandes mentes da história da computação (1 Maestro Universal + 24 Especialistas), valorizando a vanguarda pioneira do Brasil e marcos fundamentais do Reino Unido, Estados Unidos e Canadá:
+- **Brasil:** 13 pioneiros
 - **Estados Unidos:** 6 pioneiros
-- **Reino Unido:** 3 pioneiros
+- **Reino Unido:** 5 pioneiros (incluindo o Maestro Alan Turing e Tony Hoare)
 - **Canadá:** 1 pioneiro
 - **Maestro Universal:** Alan Turing (Reino Unido)
 
@@ -57,9 +57,11 @@ O Bombe Code homenageia 23 grandes mentes da história da computação, valoriza
 | **@unclebob** | **Robert C. Martin** | Estados Unidos | Autor dos clássicos *Clean Code* e *Clean Architecture*, criador dos princípios SOLID e signatário do Manifesto Ágil, autoridade em artesanato e disciplina de software. | Tech Lead & Architectural Reviewer |
 | **@diego** | **Diego Aranha** | Brasil | Pesquisador de segurança e criptografia aplicada (Aarhus University), líder de auditorias públicas independentes que identificaram vulnerabilidades críticas em sistemas e urnas eletrônicas. | AppSec & Offensive Security Auditor |
 | **@aniche** | **Maurício Aniche** | Brasil | Cientista da computação brasileiro, autor do livro *Effective Software Testing: A Developer's Guide*, líder técnico na Adyen e ex-professor na TU Delft. | Test Architect & QA de Automação |
-| **@demi** | **Demi Getschko** | Brasil | Pioneiro da Internet no Brasil, liderou a primeira conexão TCP/IP brasileira em 1989, diretor-presidente do NIC.br e primeiro brasileiro no prestigiado Internet Hall of Fame. | SRE, Infraestrutura & Redes |
+| **@demi** | **Demi Getschko** | Brasil | Pioneiro da Internet no Brasil, liderou a primeira conexão TCP/IP brasileira em 1989, diretor-presidente do NIC.br e primeiro brasileiro no prestigiado Internet Hall of Fame. | SRE, Redes & Infraestrutura |
+| **@guto** | **Guto Carvalho** | Brasil | Referência brasileira em infraestrutura e DevOps, pioneiro na automação de infraestrutura em produção, líder comunitário e especialista em confiabilidade de ambientes. | SRE & Release Engineering (DevOps) |
 | **@edith** | **Edith Ranzini** | Brasil | Engenheira pioneira da USP, líder na engenharia do computador digital brasileiro "Patinho Feio" nos anos 70, autoridade em confiabilidade e verificação formal de sistemas. | Contract Validator & QA Lead |
 | **@nina** | **Nina Silva** | Brasil | Executiva de tecnologia, especialista em governança corporativa, finanças de TI e compliance de sistemas, cofundadora do Movimento Black Money e eleita Top 100 MIPAD pela ONU. | Gov, FinOps & AI Ethics Auditor |
+| **@hoare** | **C. A. R. (Tony) Hoare** | Reino Unido | Criador do Quicksort, da Lógica de Hoare para verificação formal de programas e do CSP. Autoridade em prova e conformidade estrita de código contra especificações. | Code Review & Scope Compliance Auditor (Contra-Auditoria) |
 
 ---
 

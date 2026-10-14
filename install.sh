@@ -182,6 +182,10 @@ if [[ -n "$python_version" ]]; then
 fi
 
 if [[ "$local_install" = true ]]; then
+    if [[ -f "scripts/bump_version.py" ]]; then
+        echo -e "${CYAN}🔄 Executando bump de versão antes da instalação local...${NC}"
+        python3 scripts/bump_version.py || true
+    fi
     echo -e "${CYAN}📍 Instalando Bombe Code a partir do diretório local atual...${NC}"
     INSTALL_CMD+=(".")
 else

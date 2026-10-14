@@ -1,7 +1,8 @@
 """PARIDADE OPENCODE nas teclas:
-- Ctrl+C fecha o aplicativo (keybind do binário original)
+- Ctrl+C 2× fecha o aplicativo (1º avisa, não despeja a transcrição)
 - Mouse da TUI ATIVO: roda/scrollbar rolam o chat; seleção nativa de texto
-  via Shift+arrastar (VTE); Ctrl+Shift+C copia a seleção
+  via Shift+arrastar (VTE); Ctrl+Shift+C é consumido pelo VTE (seleção)
+- F2 copia a transcrição (o hint de status aponta para tecla que EXISTE)
 - Auto-follow: texto novo só arrasta a tela se o usuário está no fim"""
 
 from bombe_code.tui.app import BombeTuiApp
@@ -22,9 +23,11 @@ def test_bindings_opencode(tmp_path):
     assert "chat_page_down" in acoes
     assert "chat_page_top" in acoes
     assert "chat_page_bottom" in acoes
+    # Copiar transcrição é ação REAL (F2): o hint não aponta mais o vazio:
+    assert "copiar_tela" in acoes
+    assert any((b.key or "").lower() == "f2" for b in BombeTuiApp.BINDINGS)
     # Nenhuma ação inventada sobrevive:
     for proibida in (
-        "copiar_tela",
         "colar_clipboard",
         "toggle_mouse",
         "ctrl_c_press",
@@ -33,7 +36,7 @@ def test_bindings_opencode(tmp_path):
     ):
         assert proibida not in acoes, f"binding inventado sobreviveu: {proibida}"
     # Teclas que o VTE consome antes do app NÃO têm binding (seriam mortas):
-    for tecla_proibida in ("ctrl+shift+c", "ctrl+shift+v", "ctrl+shift+w", "f2", "f4"):
+    for tecla_proibida in ("ctrl+shift+c", "ctrl+shift+v", "ctrl+shift+w", "f4"):
         for b in BombeTuiApp.BINDINGS:
             assert tecla_proibida not in (b.key or "").lower(), (
                 f"binding para tecla consumida pelo VTE: {b.key}"

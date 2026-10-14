@@ -16,7 +16,26 @@ O **Bombe Code** é uma plataforma e harness de desenvolvimento que transforma m
 
 Inspirado no poder computacional e na precisão da máquina *Bombe* de Bletchley Park — projetada para decifrar problemas de altíssima complexidade combinatória através de especialização mecânica —, o Bombe Code elimina a fragilidade do chamado *"vibe coding"* desgovernado (código gerado sem planejamento, sem modelagem e sem testes reais).
 
-No Bombe Code, nenhuma linha de código de produção é gerada ao acaso. O desenvolvimento segue a **Metodologia ONDA**, guiada por **24 Agentes Especialistas** e fiscalizada por **Gates Determinísticos do Turing Runtime**, onde a qualidade técnica é garantida por contratos de software em código Python imperativo, e não por promessas de modelos de linguagem.
+No Bombe Code, nenhuma linha de código de produção é gerada ao acaso. O desenvolvimento segue a **Metodologia ONDA**, guiada por **25 Agentes Especialistas** e fiscalizada por **Gates Determinísticos do Turing Runtime**, onde a qualidade técnica é garantida por contratos de software em código Python imperativo, e não por promessas de modelos de linguagem.
+
+---
+
+## 💡 Filosofia de Uso: Copiloto de Engenharia, Não Piloto Automático Cego
+
+O Bombe Code oferece **dois caminhos operacionais complementares**, ajustados ao objetivo e ao momento do projeto:
+
+1. **Modo Estruturado (Metodologia ONDA / Governança Rigorosa):**
+   - Esteira completa de engenharia guiada por etapas (`DISCOVERY`, `INCEPTION`, `PLAN`, `REFINEMENT`, `EXECUTE`, `VALIDATE`).
+   - Planejamento Upstream determinístico, decomposição atômica PBB, TDD estrito e auditoria contínua de qualidade e conformidade.
+2. **Modo Ágil / Vibe Code (Prototipagem Rápida & Iteração Livre):**
+   - Liberdade criativa imediata para experimentações, scripts avulsos, refatorações pontuais e protótipos ágeis sem cerimônias de pipeline.
+
+### ⚠️ Nível de Maturidade: De MVPs a Produtos Enterprise
+
+* **Evolução até nível MVP por criadores com conhecimento básico:**
+  Usuários com conhecimentos introdutórios de lógica e produto conseguem estruturar ideias, planejar entregas e levar aplicações funcionais até o estágio de **MVP (Mínimo Produto Viável)**, aproveitando os agentes para modelar requisitos, arquitetar fluxos e gerar a base do código.
+* **Construção de Sistemas Enterprise Grade:**
+  Quando o objetivo é um **software em escala de produção enterprise**, a ferramenta **não substitui e não isenta a responsabilidade técnica e o julgamento crítico de um profissional de engenharia qualificado**. Sistemas corporativos exigem decisões arquiteturais profundas, validação de segurança, modelagem de concorrência e conformidade regulatória. O Bombe Code atua como um **Copiloto Potencializador**, que exige **atenção, acompanhamento e decisões humanas soberanas** em cada etapa do processo.
 
 ---
 
@@ -98,9 +117,9 @@ O padrão é a **transparência total**: cada letra, cada bloco de raciocínio (
 
 ---
 
-## 👥 O Elenco Oficial: 24 Agentes Especialistas
+## 👥 O Elenco Oficial: 25 Agentes (1 Maestro + 24 Especialistas)
 
-O Bombe Code reúne 24 agentes especialistas de elite, homenageando 12 pioneiros proeminentes do Brasil e 12 expoentes internacionais seminais da computação. Cada agente atua com foco cirúrgico em sua disciplina:
+O Bombe Code reúne 25 agentes de elite, homenageando 13 pioneiros proeminentes do Brasil e 12 expoentes internacionais seminais da computação. Cada agente atua com foco cirúrgico em sua disciplina:
 
 ### Upstream (Concepção, Arquitetura, Inception & Refinamento)
 
@@ -117,7 +136,7 @@ O Bombe Code reúne 24 agentes especialistas de elite, homenageando 12 pioneiros
 | **`@caroli`** | Paulo Caroli | Brasil | Agile Master & Flow Architect | `docs/backlog/` — Lean Inception Macro, Decomposição PBB e DoR INVEST |
 | **`@nelson`** | Nelson Mattos | Brasil | Prompt Engineer & AI Specialist | Engenharia de contexto, system prompts e alinhamento de IA |
 
-### Downstream (Execução TDD & Qualidade de Código)
+### Downstream (Construção TDD, Infra & Qualidade de Código)
 
 | Agente | Pioneiro Homenageado | País | Papel Especialista | Artefatos & Foco Principal |
 | :--- | :--- | :--- | :--- | :--- |
@@ -130,14 +149,16 @@ O Bombe Code reúne 24 agentes especialistas de elite, homenageando 12 pioneiros
 | **`@diego`** | Diego Aranha | Brasil | AppSec & Offensive Security | Auditoria ofensiva, pentest, SAST/DAST e mitigação OWASP Top 10 |
 | **`@aniche`** | Maurício Aniche | Brasil | Test Architect & QA Automation | `tests/` — TDD Estrito: plano de testes, testes falhantes RED e automação |
 | **`@unclebob`** | Robert C. Martin | EUA | Tech Lead & Architectural Guardian | Clean Code, princípios SOLID, refatoração e Code Review de aprovação |
-| **`@demi`** | Demi Getschko | Brasil | SRE & Infrastructure Engineer | Docker, infraestrutura local, redes, pipelines CI/CD e observabilidade |
+| **`@demi`** | Demi Getschko | Brasil | SRE, Redes & Infraestrutura | Conectividade, DNS, redes e infraestrutura básica |
+| **`@guto`** | Guto Carvalho | Brasil | SRE & Release Engineering (DevOps) | Ferramentas de ambiente, Docker, pipelines CI/CD e saúde operacional |
 
-### Downstream (Validação, Homologação & Maestro)
+### Downstream (Validação, Contra-Auditoria & Maestro)
 
 | Agente | Pioneiro Homenageado | País | Papel Especialista | Artefatos & Foco Principal |
 | :--- | :--- | :--- | :--- | :--- |
 | **`@edith`** | Edith Ranzini | Brasil | Contract & Deliverable Validator | `docs/reports/` — Auditoria do entregável contra o PRD e emissão do Selo |
 | **`@nina`** | Nina Silva | Brasil | Gov, FinOps & AI Ethics Auditor | Auditoria de consumo de tokens, governança de custos e conformidade ética |
+| **`@hoare`** | C. A. R. Tony Hoare | UK | Code Review & Scope Compliance Auditor | Contra-Auditoria Forense (`/wave audit`): conformidade de código |
 | **`@turing`** | Alan Turing | UK | Runtime Maestro & Orquestrador | Orquestração da ONDA, máquina de estados finita e guarda de gates |
 
 ---

@@ -14,6 +14,7 @@ from textual.containers import VerticalScroll
 from textual.reactive import reactive
 from textual.widgets import Static
 
+from ...turing.fila import KanbanLeitura, quadro_da_onda
 from ..tokens import TOKENS
 
 
@@ -102,16 +103,36 @@ def _simbolo_tarefa(titulo: str) -> tuple[str, str]:
     return "⚙️", TOKENS["success"]
 
 
-# Status → (símbolo, estilo rich). Vermelho = bloqueada; laranja = revisão/
-# correção (bugs e débitos); verde = nova em execução; cinza = fila;
-# cinza escuro riscada = encerrada (visível por 60s).
-_MARCADORES = {
-    "blocked": ("🚩", f"bold {TOKENS['error']}"),
-    "review": ("🟠", f"bold {TOKENS['laranja']}"),
-    "run": ("▶", f"bold {TOKENS['success']}"),
-    "fila": ("·", TOKENS["text_muted"]),
-    "done": ("✓", f"{TOKENS['text_dim']} strike"),
-}
+# ── REGRA VISUAL ÚNICA (DRY) — vale para o board de TASKS e o de STORIES ──
+# EM DEV/execução: VERDE NEGRITO (🔨 alterna na queima) · AGUARDANDO/fila:
+# cinza claro · DEV DONE: riscado apagado · blocked: mantém a cor do STATUS,
+# só o ícone vira 🚩 · BACKLOG e DONE DEFINITIVO: nem aparecem.
+_COR_EXECUCAO = TOKENS["success"]
+_COR_FILA = TOKENS["text_muted"]
+_ESTILO_DONE = f"{TOKENS['text_dim']} strike"
+ICONE_BLOCKED = "🚩"
+ICONE_FEITA = "✓"
+
+
+def _entrada_fila(
+    rotulo: str,
+    simbolo: str,
+    cor: str,
+    rodando: bool = False,
+    negrito: bool = False,
+    depth: int = 0,
+) -> dict:
+    """Monta a entrada-padrão do quadro.
+    `negrito` = EM DEV (verde negrito); `rodando` = a queima da vez (🔨);
+    `depth` = nível hierárquico na árvore kanban (recuo proporcional)."""
+    return {
+        "rotulo": rotulo,
+        "simbolo": simbolo,
+        "cor": cor,
+        "rodando": rodando,
+        "em_andamento": negrito or rodando,
+        "depth": depth,
+    }
 
 
 class Sidebar(VerticalScroll):
@@ -187,13 +208,22 @@ class Sidebar(VerticalScroll):
         self._content_widget = Static("", id="sidebar-content")
         self.tarefas: list[dict] = []
         self.wave_id: str = ""
+        self._modelo_kanban: KanbanLeitura | None = None
 
     def compose(self) -> ComposeResult:
         yield self._content_widget
 
     def on_mount(self) -> None:
         self.set_interval(2.0, self._poll_tarefas)
+        # A alternância 🔨 é temporal (símbolo ↔ martelo a cada segundo): o
+        # re-render precisa acontecer MESMO sem mudança de dados, senão o
+        # ícone congela. Só re-renderiza se houver tarefa em andamento.
+        self.set_interval(1.0, self._tick_alternancia)
         self.refresh_view()
+
+    def _tick_alternancia(self) -> None:
+        if any(tr.get("em_andamento") for tr in self.tarefas):
+            self.refresh_view()
 
     def update_metrics(
         self,
@@ -223,6 +253,15 @@ class Sidebar(VerticalScroll):
             self.refresh_view()
 
     def _poll_tarefas(self) -> None:
+        """REGRA DA TELA: o poll NUNCA derruba o app — qualquer falha de
+        leitura (lock do processo, db ausente) apenas mantém o quadro como
+        está. A tela lê em mode=ro e NUNCA escreve no banco do processo."""
+        try:
+            self._poll_tarefas_interno()
+        except Exception:  # noqa: BLE001, S110 — estabilidade do input > quadro fresco
+            pass
+
+    def _poll_tarefas_interno(self) -> None:
         """Fila viva do kanban: Onda + Story + frase curta; atuais em cima,
         próximas embaixo; TETO de 7 somando tudo. Quando a atual sai, entra a
         próxima da fila.
@@ -245,138 +284,48 @@ class Sidebar(VerticalScroll):
             con = sqlite3.connect(f"file:{db}?mode=ro", uri=True, timeout=1.0)
             try:
                 wave_row = con.execute("SELECT wave_id FROM wave_state LIMIT 1").fetchone()
-                # FONTE PRIMÁRIA: kanban de AGENTES (task a task — o que manda).
-                cards_task = con.execute(
-                    "SELECT story_id, task_id, title, kanban_status, block_tipo, updated_at "
-                    "FROM agent_tasks WHERE task_id != '' ORDER BY ordem"
-                ).fetchall()
-                # Fallback: projetos sem kanban de agentes → stories.
-                cards = con.execute(
-                    "SELECT story_id, title, status, is_blocked, updated_at "
-                    "FROM kanban_cards ORDER BY rowid"
-                ).fetchall()
             finally:
                 con.close()
         except sqlite3.Error:
             return
         self.wave_id = (wave_row[0] if wave_row else "") or ""
-        agora = time.time()
-        nova: list[dict] = []
-        if cards_task:
-            # ORDEM DE EXECUÇÃO REAL (a ordem do kanban) — o quadro lê como o
-            # fluxo aconteceu: T1..Tn e o review no fim. Status é contado por
-            # símbolo/cor/negrito, nunca pela posição na lista.
-            prioridade_estado = {
-                "BLOCKED": 0,
-                "EM_DEV": 1,
-                "AGUARDANDO_DEV": 2,
-                "BACKLOG": 2,
-                "DEV_DONE": 3,
-                "DONE_DEFINITIVO": 4,
-            }
-            # ENCERRADAS saem após 60s SOMENTE se houver trabalho esperando
-            # vaga (saem para DAR LUGAR, nunca para esvaziar o quadro).
-            ha_espera = any(
-                c[3] in ("BLOCKED", "EM_DEV", "AGUARDANDO_DEV", "BACKLOG") for c in cards_task
+        if not self.wave_id:
+            return
+        if self._modelo_kanban is None:
+            self._modelo_kanban = KanbanLeitura(
+                str(Path(self.project_dir) / ".bombe-code" / "state.db")
             )
-            for sid, tid, titulo, kanban_status, block_tipo, atualizado_em in cards_task:
-                frase = _frase_curta(titulo)
-                rotulo = f"{sid} {tid} {frase}".strip()
-                if (
-                    kanban_status in ("DEV_DONE", "DONE_DEFINITIVO")
-                    and ha_espera
-                    and agora - float(atualizado_em or 0) > 60
-                ):
-                    continue
-                if kanban_status == "BLOCKED":
-                    entrada = {
-                        "rotulo": rotulo,
-                        "simbolo": "🚩",
-                        "cor": TOKENS["error"],
-                        "em_andamento": False,
-                    }
-                elif kanban_status == "EM_DEV":
-                    # Blocked sendo re-trabalhado mantém a bandeira; task normal
-                    # ⚙️ e bug 🐛 usam o símbolo do próprio tipo. EM ANDAMENTO =
-                    # negrito + alterna com 🔨.
-                    if block_tipo:
-                        entrada = {
-                            "rotulo": rotulo,
-                            "simbolo": "🚩",
-                            "cor": TOKENS["error"],
-                            "em_andamento": True,
-                        }
-                    else:
-                        simbolo, cor = _simbolo_tarefa(titulo)
-                        entrada = {
-                            "rotulo": rotulo,
-                            "simbolo": simbolo,
-                            "cor": cor,
-                            "em_andamento": True,
-                        }
-                elif kanban_status == "DEV_DONE":
-                    entrada = {
-                        "rotulo": rotulo,
-                        "simbolo": "✓",
-                        "cor": f"{TOKENS['text_muted']} strike",
-                        "em_andamento": False,
-                    }
-                elif kanban_status == "DONE_DEFINITIVO":
-                    entrada = {
-                        "rotulo": rotulo,
-                        "simbolo": "✓",
-                        "cor": f"{TOKENS['text_dim']} strike",
-                        "em_andamento": False,
-                    }
-                else:  # AGUARDANDO_DEV / BACKLOG — fila: símbolo do tipo, cinza
-                    simbolo_tipo, _cor_tipo = _simbolo_tarefa(titulo)
-                    entrada = {
-                        "rotulo": rotulo,
-                        "simbolo": simbolo_tipo,
-                        "cor": TOKENS["text_muted"],
-                        "em_andamento": False,
-                    }
-                entrada["prioridade"] = prioridade_estado.get(kanban_status, 2)
-                nova.append(entrada)
-            # Andon na frente — MAS só para tasks; card de REVIEW tem
-            # PRECEDÊNCIA: fica na posição dele (fim) mesmo bloqueado, pois
-            # review só é tratável quando a regra que o libera existe.
-            bloqueadas = [
-                e
-                for e in nova
-                if e["prioridade"] == 0 and not e["rotulo"].split(" ")[1].startswith("REVIEW")
-            ]
-            resto = [e for e in nova if e not in bloqueadas]
-            nova = (bloqueadas + resto)[:7]
-        else:
-            atuais: list[tuple[str, str, str]] = []
-            encerradas: list[tuple[str, str, str]] = []
-            fila: list[tuple[str, str, str]] = []
-            for sid, titulo, status, is_blocked, updated_at in cards:
-                frase = _frase_curta(titulo)
-                if is_blocked:
-                    atuais.append((sid, frase, "blocked"))
-                elif status == "IN_PROGRESS":
-                    atuais.append((sid, frase, "run"))
-                elif status in ("IN_REVIEW", "VALIDATE"):
-                    atuais.append((sid, frase, "review"))
-                elif status in ("DONE", "DEV_DONE"):
-                    # Encerrada aparece riscada por 60s; depois dá lugar à fila.
-                    if agora - float(updated_at or 0) <= 60:
-                        encerradas.append((sid, frase, "done"))
-                elif status in ("READY", "TODO", "PENDING", "BACKLOG"):
-                    fila.append((sid, frase, "fila"))
-            for s, f, e in (atuais + encerradas + fila)[:7]:
-                marcador, estilo = _MARCADORES[e]
+        quadro = quadro_da_onda(self._modelo_kanban, self.wave_id)
+        nova: list[dict] = []
+        for row in quadro:
+            sid = row["story_id"]
+            tid = row["task_id"]
+            rotulo = f"{sid} {tid} {_frase_curta(row['title'])}".strip()
+            profundidade = int(row.get("depth", 0))
+
+            if row["kanban_status"] == "DEV_DONE":
+                nova.append(_entrada_fila(rotulo, ICONE_FEITA, _ESTILO_DONE, depth=profundidade))
+                continue
+            if row["block_tipo"]:
+                nova.append(_entrada_fila(rotulo, "🚩", _COR_FILA, False, False, depth=profundidade))
+            elif row["kanban_status"] == "EM_DEV":
+                _simbolo, _ = _simbolo_tarefa(row["title"])
+                esta_queimando = bool(row.get("em_queima", row.get("proxima")))
                 nova.append(
-                    {
-                        "estado": e,
-                        "rotulo": f"{s} {f}".strip(),
-                        "simbolo": marcador,
-                        "cor": estilo,
-                        "em_andamento": e in ("run", "review"),
-                    }
+                    _entrada_fila(
+                        rotulo,
+                        _simbolo,
+                        _COR_EXECUCAO,
+                        rodando=esta_queimando,
+                        negrito=True,
+                        depth=profundidade,
+                    )
                 )
+            else:
+                simbolo_tipo, _ = _simbolo_tarefa(row["title"])
+                nova.append(_entrada_fila(rotulo, simbolo_tipo, _COR_FILA, False, False, depth=profundidade))
+
+        nova = nova[:7]
         if nova != self.tarefas:
             self.tarefas = nova
             self.refresh_view()
@@ -403,17 +352,30 @@ class Sidebar(VerticalScroll):
                 f"📋 TAREFAS{titulo_onda} ({len(self.tarefas)})\n",
                 style=f"bold {TOKENS['secondary']}",
             )
+            from rich.cells import cell_len
             for tr in self.tarefas:
-                # Regra: EM ANDAMENTO = NEGRITO + símbolo alternando entre o
-                # original da task e 🔨 (em construção). Fila = sem negrito.
-                if tr.get("em_andamento"):
+                # Regras de cor/status: EM DEV = VERDE NEGRITO; AGUARDANDO =
+                # cinza claro; DEV DONE = riscado; blocked mantém a cor do
+                # status e só troca o ícone pela bandeira. EM EXECUÇÃO (o que
+                # o agente está fazendo agora) alterna o ícone com 🔨.
+                if tr.get("rodando"):
                     alternando = int(time.time()) % 2 == 0
                     marcador = tr["simbolo"] if alternando else "🔨"
+                    estilo = f"bold {tr['cor']}"
+                elif tr.get("em_andamento"):
+                    marcador = tr["simbolo"]
                     estilo = f"bold {tr['cor']}"
                 else:
                     marcador = tr["simbolo"]
                     estilo = tr["cor"]
-                t.append(f" {marcador} {tr['rotulo']}\n", style=estilo)
+                # Recuo hierárquico proporcional ao nível da subtask na árvore kanban
+                nivel = tr.get("depth", 0)
+                recuo = "  " * nivel
+                # Emojis/símbolos de largura 1 (ex: ⚙️ ou ✓) recebem 2 espaços após o ícone,
+                # enquanto emojis largos de 2 células (ex: 🔨, 🐛, 🚩) recebem 1 espaço.
+                # Isso garante coluna alinhada e nunca gruda texto no ícone.
+                espaco_icone = "  " if cell_len(marcador) == 1 else " "
+                t.append(f" {recuo}{marcador}{espaco_icone}{tr['rotulo']}\n", style=estilo)
             t.append("─" * 36 + "\n", style=TOKENS["surface_alt"])
 
         # 2. Context & Token Usage

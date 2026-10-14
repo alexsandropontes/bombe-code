@@ -229,3 +229,18 @@ def is_quota_or_rate_limit_error(exc: Any) -> tuple[bool, str | None]:
         full_reason = base_reason
 
     return True, full_reason
+
+
+def quota_info_de_texto(texto: str | None, provider_hint: str | None = None) -> QuotaResetInfo | None:
+    """Detecta estouro de cota a partir de TEXTO (block_reason/error de um resultado).
+
+    Útil quando o erro do provedor já foi capturado num resultado de agente (ex.:
+    status QUOTA_EXHAUSTED) e precisamos reextrair a janela de reset para PAUSAR
+    e ESPERAR o provedor voltar. Retorna None quando o texto não é cota/rate-limit.
+    """
+    if not texto:
+        return None
+    is_quota, _ = is_quota_or_rate_limit_error(texto)
+    if not is_quota:
+        return None
+    return parse_quota_reset_info(texto, provider_hint=provider_hint)

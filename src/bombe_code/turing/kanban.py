@@ -152,8 +152,12 @@ class KanbanManager:
         blocked: bool | None = None,
         blocked_reason: str = "",
     ) -> bool:
-        """Atualiza a linha de status e blocked no arquivo markdown correspondente."""
-        target_path = self.workspace.find_story_file(story_id)
+        """Atualiza a linha de status e blocked no arquivo markdown correspondente.
+
+        Resolução canônica: a ONDA ATIVA do banco (única fonte) determina o
+        diretório da story — sem varredura ambígua por outras ondas."""
+        wave_ativa = (self.db.load_wave_state() or {}).get("wave_id") or None
+        target_path = self.workspace.find_story_file(story_id, wave_id=wave_ativa)
         if not target_path or not target_path.exists():
             return False
 

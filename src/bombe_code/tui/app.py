@@ -7,10 +7,10 @@ import logging
 import os
 
 # PARIDADE DE TERMINAL: o protocolo Kitty do Textual faz o terminal PARAR de
-# interceptar Ctrl+Shift+C (copiar seleção) e repassar a tecla ao app — que
-# copiaria a transcrição INTEIRA por cima da seleção do usuário. Desligado:
-# Ctrl+Shift+C volta a ser do TERMINAL (copia só o selecionado) e o mouse
-# continua rolando o chat. Tem que ser setado ANTES do import do Textual.
+# interceptar Ctrl+Shift+C (copiar a seleção) e repassar a tecla ao app — que
+# poderia agir por cima da seleção do usuário. Desligado: Ctrl+Shift+C volta a
+# ser do TERMINAL (copia só o selecionado) e o mouse continua rolando o chat.
+# Tem que ser setado ANTES do import do Textual.
 os.environ.setdefault("TEXTUAL_DISABLE_KITTY_KEY", "1")
 import os
 from pathlib import Path
@@ -86,14 +86,16 @@ class BombeTuiApp(App):
     """
 
     BINDINGS: ClassVar[list[Binding]] = [
-        Binding("shift+tab", "toggle_vibe_mode", "Alternar VIBE/TDD", show=True),
-        Binding("tab", "cycle_stage", "Alternar Etapa (TDD)", show=True),
+        Binding("shift+tab", "toggle_vibe_mode", "Alternar VIBE/FLOW", show=True),
+        Binding("tab", "cycle_stage", "Alternar Etapa (FLOW)", show=True),
         # 1º Ctrl+C (ou Ctrl+Shift+C — o terminal entrega os dois como o
         # mesmo byte) = COPIA a transcrição · 2º aperto = sai com checkpoint.
         Binding("ctrl+c", "copy_or_quit", "Copiar tela / 2× sai", show=False),
         Binding("escape", "escape_press", "Interromper (2× ESC)", show=False),
         Binding("ctrl+p", "command_palette", "Paleta de Comandos", show=True),
         Binding("ctrl+b", "toggle_sidebar", "Painel Lateral", show=True),
+        Binding("f2", "copiar_tela", "Copiar tudo (F2)", show=True),
+        Binding("f3", "copiar_selecao", "Copiar seleção (F3)", show=True),
         Binding("pageup", "chat_page_up", "Chat ↑ página", show=False, priority=True),
         Binding("pagedown", "chat_page_down", "Chat ↓ página", show=False, priority=True),
         Binding("home", "chat_page_top", "Chat início", show=False),
@@ -342,13 +344,13 @@ class BombeTuiApp(App):
             chat = self.query_one("#chat-view", ChatView)
             if new_mode == "VIBE":
                 msg = (
-                    "\n🔥 [bold #ff0000]MODO VIBE ATIVADO (Shift+Tab):[/] "
+                    "\n🔥 [bold #ff0000]MODO VIBE CODE ATIVADO (Shift+Tab):[/] "
                     "[dim]Modo livre ativado. Sem amarras formais ou travas de etapa: a LLM atende suas ordens com agilidade total.[/dim]"
                 )
             else:
                 msg = (
-                    f"\n🛡️ [{TOKENS['primary']} bold]MODO TDD ATIVADO (Shift+Tab):[/] "
-                    f"[dim]Retomando governança formal da ONDA na etapa [bold]{self.wave_station}[/bold]. Pressione Tab para alternar etapas.[/dim]"
+                    f"\n🛡️ [{TOKENS['primary']} bold]MODO VIBE FLOW ATIVADO (Shift+Tab):[/] "
+                    f"[dim]Retomando governança estruturada da ONDA na etapa [bold]{self.wave_station}[/bold]. Pressione Tab para alternar etapas.[/dim]"
                 )
             chat.mount(Static(msg))
             chat.seguir()
@@ -387,9 +389,9 @@ class BombeTuiApp(App):
         s_id = self.session_id or "conectando..."
         state = "ativo" if self._is_active_turn else "ocioso"
         if self.mode == "VIBE":
-            mode_badge = "[bold #ff0000]VIBE[/]"
+            mode_badge = "[bold #ff0000]VIBE CODE[/]"
         else:
-            mode_badge = f"[{TOKENS['primary']} bold]TDD ({self.wave_station})[/]"
+            mode_badge = f"[{TOKENS['primary']} bold]VIBE FLOW ({self.wave_station})[/]"
 
         return (
             f"Modo: {mode_badge} | "
@@ -404,16 +406,16 @@ class BombeTuiApp(App):
             logger.debug("Falha ao atualizar barra de status: %s", exc)
 
     async def on_mount(self) -> None:
-        # Título do terminal: BC|Nome do projeto (paridade do OC| do opencode).
-        # Enquanto o projeto não tem nome definido, mostra o nome da pasta;
-        # depois de definido (config/PRD), mostra o nome real. Poll leve para
-        # acompanhar a definição do nome no meio da sessão.
+        # Título da ABA do terminal (paridade do setTerminalTitle do opencode):
+        # "BC | Projeto - Onda <id> - <Nome da Onda>"; sem onda: "BC | Projeto";
+        # sem nada configurado ainda: "BC | Projeto sem nome". Poll leve para
+        # acompanhar configure/ONDA no meio da sessão.
         self._atualizar_titulo()
         self.set_interval(10.0, self._atualizar_titulo)
         # Mouse da TUI ATIVO: roda do mouse, scrollbar e cliques rolam o chat.
         # Seleção nativa de texto = Shift+arrastar (o terminal VTE ignora a
         # captura do app quando Shift está pressionado). Copiar: Ctrl+Shift+C
-        # (terminal) ou Ctrl+C (transcrição via OSC52).
+        # do terminal (seleção) | F2 / /copy (transcrição completa).
         if not self.session_id:
             try:
                 session_data = await self.client.create_session(
@@ -510,7 +512,7 @@ class BombeTuiApp(App):
                     "  • [cyan]/wave resume[/cyan]           [dim]- Retoma a ONDA exatamente do checkpoint onde parou[/dim]",
                     "  • [cyan]/wave audit [ONDA-xxx][/cyan] [dim]- Contra-Auditoria Forense do validate (@hoare)[/dim]",
                     "",
-                    "[dim]Copiar: selecione com o mouse + Ctrl+Shift+C (terminal) | F2 copia tudo | Shift+Tab: alterna modo (TDD/VIBE) | /help: comandos[/dim]",
+                    "[dim]Copiar: F2 copia tudo | Selecione com o mouse + F3 copia trecho | Shift+Tab: modo (VIBE FLOW / VIBE CODE) | /help: comandos[/dim]",
                 ]
                 await chat.mount(Static("\n".join(lines)))
             chat.scroll_to_latest()
@@ -806,16 +808,64 @@ class BombeTuiApp(App):
     _last_escape_ts: float = 0.0
 
     def _atualizar_titulo(self) -> None:
-        """Título do terminal: BC|Nome do projeto (pasta enquanto sem nome)."""
+        """Título da ABA do terminal: 'BC | <Projeto> - Onda <id> - <Nome>'.
+
+        Projeto = nome salvo no project configure (.bombeconfig). Onda ativa =
+        wave_state do banco; Nome da Onda = tabela de ondas do PRD
+        (docs/briefings/PRD.md). Sem projeto configurado: 'BC | Projeto sem
+        nome'. Sem onda: só o projeto. A sequência OSC 2 é emitida DIRETO no
+        stdout (invisível ao renderer — mesmo mecanismo do setTerminalTitle
+        do opencode original)."""
         try:
             from bombe_code.config.project_config import ProjectConfigManager
 
-            config = ProjectConfigManager(self.project_dir).load()
-            nome = (config.name or "").strip() or Path(self.project_dir).name
-            self.title = f"BC|{nome}"
-            sub_title = getattr(config, "description", None)
-            if sub_title:
-                self.sub_title = str(sub_title)[:80]
+            mgr = ProjectConfigManager(self.project_dir)
+            projeto = ""
+            if mgr.config_path.is_file():
+                projeto = (mgr.load().name or "").strip()
+
+            wave_id, wave_nome = "", ""
+            import sqlite3 as _sq
+
+            db_path = Path(self.project_dir) / ".bombe-code" / "state.db"
+            if db_path.exists():
+                con = _sq.connect(f"file:{db_path}?mode=ro", uri=True, timeout=1.0)
+                try:
+                    linha = con.execute("SELECT wave_id FROM wave_state LIMIT 1").fetchone()
+                    wave_id = (linha[0] if linha else "") or ""
+                finally:
+                    con.close()
+            if wave_id:
+                prd = Path(self.project_dir) / "docs" / "briefings" / "PRD.md"
+                if prd.exists():
+                    cache = getattr(self, "_titulo_wave_cache", ("", ""))
+                    if cache[0] != wave_id:
+                        from bombe_code.domain.wave.sequencer import WaveSequencer
+
+                        achado = next(
+                            (
+                                plano
+                                for plano in WaveSequencer.from_markdown(
+                                    prd.read_text(encoding="utf-8", errors="replace")
+                                )
+                                if plano.wave_id == wave_id
+                            ),
+                            None,
+                        )
+                        self._titulo_wave_cache = (wave_id, (achado.name if achado else ""))
+                    wave_nome = self._titulo_wave_cache[1]
+
+            titulo = f"BC | {projeto}" if projeto else "BC | Projeto sem nome"
+            if wave_id:
+                titulo += f" - Onda {wave_id}"
+                if wave_nome:
+                    titulo += f" - {wave_nome}"
+
+            self.title = titulo
+            import sys as _sys
+
+            _sys.stdout.write(f"\x1b]2;{titulo}\x07")
+            _sys.stdout.flush()
         except Exception as exc:  # noqa: BLE001 — título é cosmético
             logger.debug("Título do terminal não definido: %s", exc)
 
@@ -845,9 +895,55 @@ class BombeTuiApp(App):
         if chat:
             chat.pagina("bottom")
 
+    # ── SELEÇÃO/COPY (clonado do opencode original, util/selection.ts + app.tsx):
+    # o app É dono da seleção: mouse-up copia (copy-on-select); Ctrl+C com
+    # seleção copia A SELEÇÃO (nunca despeja a transcrição por cima); ESC com
+    # seleção só limpa a seleção. Clipboard: driver do app + cadeia Linux.
+    def on_mouse_up(self, event: Any) -> None:
+        """MOUSE-UP PASSIVO: seleção livre e estável. Soltar o mouse NÃO copia
+        nem limpa a seleção — o usuário seleciona normalmente o trecho desejado
+        e pressiona F3 para copiar a seleção (ou F2 para copiar a transcrição inteira)."""
+        pass
+
+    def action_copiar_selecao(self) -> None:
+        """F3: Copia EXCLUSIVAMENTE o texto selecionado na tela.
+        Se nada estiver selecionado, avisa com elegância sem falhar."""
+        copiou = self._copiar_selecao()
+        if not copiou:
+            self.notify(
+                "Nenhum texto selecionado. Selecione com o mouse e aperte F3.",
+                severity="warning",
+                timeout=3,
+            )
+
+    def _copiar_selecao(self) -> bool:
+        """Copia a seleção ativa do screen. Retorna True se havia seleção."""
+        texto = ""
+        try:
+            texto = self.screen.get_selected_text() or ""
+        except Exception:  # noqa: BLE001 — screen pode não ter seleção
+            texto = ""
+        if not texto.strip():
+            try:
+                selecoes = dict(getattr(self.screen, "selections", {}) or {})
+            except Exception:  # noqa: BLE001
+                selecoes = {}
+            if selecoes:
+                try:
+                    strips = self.screen._compositor.render_strips()
+                    texto = "\n".join(
+                        "".join(seg.text for seg in strip) for strip in strips
+                    ).rstrip()
+                except Exception:  # noqa: BLE001 — fallback é best-effort
+                    texto = ""
+        if not texto.strip():
+            return False
+        self.action_copiar_tela_de(texto)
+        self.notify(f"📋 Trecho copiado ({len(texto)} caracteres)", severity="information", timeout=2)
+        return True
+
     def action_copy_or_quit(self) -> None:
-        """1º Ctrl+C: COPIA a transcrição (o Ctrl+Shift+C do terminal chega
-        como o mesmo byte). 2º aperto na janela: sai com checkpoint."""
+        """CTRL+C: Interrompe ou sai com 2x aperto. Não interfere nas cópias (F2/F3)."""
         import time as _t
 
         from bombe_code.turing.progress import ABORT_EVENT
@@ -855,22 +951,53 @@ class BombeTuiApp(App):
         agora = _t.monotonic()
         anterior = getattr(self, "_last_ctrl_c_ts", 0.0)
         if agora - anterior <= 1.8:
+            self._last_ctrl_c_ts = 0.0
             if self._is_active_turn:
                 ABORT_EVENT.set()  # workers salvam checkpoint e terminam
             self.exit()
             return
         self._last_ctrl_c_ts = agora
-        self.action_copiar_tela()
+        self.notify(
+            "F2 copia tudo | Selecione + F3 trecho | 2× Ctrl+C sai",
+            severity="information",
+            timeout=3,
+        )
 
     def action_copiar_tela(self) -> None:
-        """Copia a transcrição inteira: driver nativo (OSC52 em terminais com
-        suporte) + cadeia Linux (xclip/xsel/wl-copy)."""
-        import subprocess
+        """Copia a transcrição inteira como TEXTO PURO (sem tags de cor/markup,
+        exatamente igual à extração limpa do F3): driver nativo + cadeia Linux."""
+        import re
+        from rich.text import Text
 
         chat = self.query_one("#chat-view", ChatView)
-        texto = "\n\n".join(
-            str(getattr(w, "renderable", None) or getattr(w, "content", "")) for w in chat.children
-        ).strip()
+        blocos: list[str] = []
+        for w in chat.children:
+            # Obtém a representação crua
+            raw = getattr(w, "renderable", None) or getattr(w, "content", None)
+            if hasattr(raw, "plain"):
+                conteudo = str(raw.plain)
+            else:
+                conteudo = str(raw or "")
+            if not conteudo.strip():
+                continue
+            # 1. Converte Rich markup para texto puro (remove [#89b4fa], [bold], etc.)
+            try:
+                limpo = Text.from_markup(conteudo).plain
+            except Exception:
+                limpo = conteudo
+            # 2. Remove sequências de escape ANSI se houver
+            limpo = re.sub(r"\x1b\[[0-9;]*[a-zA-Z]", "", limpo)
+            # 3. Remove quaisquer tags de markup remanescentes [tag] ou [/tag]
+            limpo = re.sub(r"\[/?[a-zA-Z0-9_#=, -]+\]", "", limpo)
+            blocos.append(limpo.strip())
+
+        texto_puro = "\n\n".join(blocos).strip()
+        self.action_copiar_tela_de(texto_puro)
+
+    def action_copiar_tela_de(self, texto: str) -> None:
+        """Copia o texto dado para o clipboard (mesma cadeia de drivers)."""
+        import subprocess
+
         try:
             self.copy_to_clipboard(texto)
         except Exception as exc:  # noqa: BLE001 — driver pode não suportar

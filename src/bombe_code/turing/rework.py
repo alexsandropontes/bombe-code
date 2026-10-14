@@ -113,7 +113,7 @@ class VetoReworkEngine:
 
     _BLOCKER_ITEM_RE = re.compile(r"^\s*(?:\d+\s*[\.\)\-]|[-*•])\s+(.+)$")
     _BLOCKER_HEADER_RE = re.compile(
-        r"^\**\s*(?:bloqueios?|achados?)\b[^\n:]*:?\**\s*$", re.IGNORECASE
+        r"^\**\s*(?:apontamentos|bloqueios?|achados?)\b[^\n:]*:?\**\s*$", re.IGNORECASE
     )
     # Cabeçalho de seção do parecer real: '## ACHADO 1 (BLOQUEANTE — tema)'
     # (sem dois-pontos; a descrição vem no próprio título ou nas linhas abaixo)
@@ -121,9 +121,9 @@ class VetoReworkEngine:
         r"^\#{1,6}\s+\**\s*(?:achados?|bloqueios?)\s*\d*\s*(?:\(([^)]*)\))?\s*[—\-:]?\s*(.*)$",
         re.IGNORECASE,
     )
-    # Inline: 'ACHADO: problema' / '**ACHADO 2 (DRY):** problema'
+    # Inline: 'ACHADO: problema' / '**ACHADO 2 (DRY):** problema' / '1. **ACHADO (bloqueante):** problema'
     _ACHADO_INLINE_RE = re.compile(
-        r"^\**\s*(?:achados?|bloqueios?)\s*\d*\s*(?:\(([^)]*)\))?\s*:\s*(.+)$",
+        r"^\s*(?:\d+[\.\)\-]\s+)?\**\s*(?:achados?|bloqueios?)\s*\d*\s*(?:\(([^)]*)\))?\s*:\**\s*(.+)$",
         re.IGNORECASE,
     )
 
@@ -169,7 +169,15 @@ class VetoReworkEngine:
                     # Texto após ':' existe → é um achado de verdade. Sem texto,
                     # o parêntese é só QUALIFICADOR de seção ("(da fatia atual)")
                     # → cabeçalho, não achado.
-                    conteudo = f"{parens} {resto_limpo}".strip() if parens else resto_limpo
+                    rotulo_bruto = m_rotulo.group(0).split(":", 1)[0]
+                    # Limpa apenas os números de lista inicial '1. ' para não duplicar
+                    rotulo_limpo = re.sub(r"^\s*\d+[\.\)\-]\s*", "", rotulo_bruto).strip(" *#")
+                    if rotulo_limpo and rotulo_limpo.lower().startswith("achado"):
+                        conteudo = f"{rotulo_limpo}: {resto_limpo}"
+                    elif rotulo_limpo and not rotulo_limpo.lower().startswith("bloqueio"):
+                        conteudo = f"{rotulo_limpo}: {resto_limpo}"
+                    else:
+                        conteudo = f"{parens} {resto_limpo}".strip() if parens else resto_limpo
                     blockers.append(conteudo)
                     ultimo_foi_header = False
                 collecting = True
@@ -190,8 +198,11 @@ class VetoReworkEngine:
                 ultimo_foi_header = False
                 continue
             if collecting:
-                # "SOLUÇÃO:" é continuação do achado — não fecha a seção
-                if low.startswith(("solução:", "solucao:")):
+                # "SOLUÇÃO:" é continuação do achado — anexa para dar contexto à correção
+                if low.startswith(("solução:", "solucao:", "**solução:", "**solucao:")):
+                    if blockers:
+                        solucao_limpa = re.sub(r"\*+", "", stripped).strip()
+                        blockers[-1] = f"{blockers[-1]} | {solucao_limpa}"
                     continue
                 item_match = self._BLOCKER_ITEM_RE.match(stripped)
                 if item_match:

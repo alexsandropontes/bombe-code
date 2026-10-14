@@ -23,16 +23,28 @@ from bombe_code.agents.runner import (
 )
 from bombe_code.config.project_config import ProjectConfigManager
 from bombe_code.llm.pydantic_factory import PydanticAiFactory
+from bombe_code.llm.quota_detector import QuotaResetInfo
 from bombe_code.permissions.stage_guard import (
     validate_safe_relative_path,
     validate_stage_permission,
 )
 from bombe_code.storage.project_db import ProjectDatabase
+from bombe_code.turing.ambiente import (
+    anunciar_instalacao_prioritaria,
+    auditar_instalacao,
+    e_bloqueio_de_instalacao,
+    evidencia_de,
+    roteamento_da_instalacao,
+    runner_ausente,
+    verificar_instalacao,
+)
+from bombe_code.turing.fila import FilaDoKanban, montar_lote_turno
 from bombe_code.turing.gates import SealGate, TemplateGate
 from bombe_code.turing.kanban import KanbanCardStatus, KanbanManager
-from bombe_code.turing.pbb import AtomicTask, AtomicTaskType, PBBDecomposer
+from bombe_code.turing.pbb import PBBDecomposer
 from bombe_code.turing.progress import ABORT_EVENT, BUS
 from bombe_code.turing.prompt_assembler import DeliveryTarget, TuringPromptAssembler
+from bombe_code.turing.quota import PoliticaDeCota
 from bombe_code.turing.review_gate import TuringReviewGate
 
 # ── Autorizações de remoção FORA da raiz (por sessão, in-memory) ──
@@ -84,6 +96,9 @@ logger = logging.getLogger(__name__)
 class WaveOrchestrator:
     """Motor de execução e orquestração do ciclo de vida da ONDA."""
 
+    # Task de instalação de ambiente pendente (impedimento nascido no meio de
+    # um ciclo): a linha PARA nela — nada mais queima com o ambiente quebrado.
+
     def __init__(
         self,
         project_dir: str = ".",
@@ -101,6 +116,9 @@ class WaveOrchestrator:
         kanban: KanbanManager | None = None,
     ) -> None:
         self.project_dir = Path(project_dir).resolve()
+        # Relógio do RED: o @aniche acorda UMA vez por story por run (primeira
+        # queima) — nunca em resume/re-burn/degrau (suíte existente = contrato).
+        self._red_ja_feito: set[str] = set()
         self.db = db or ProjectDatabase(str(self.project_dir))
         self.registry = registry or AgentRegistry.default()
         self.llm_factory = llm_factory or PydanticAiFactory()
@@ -118,8 +136,19 @@ class WaveOrchestrator:
         self.workspace = WaveWorkspace(project_dir=self.project_dir)
         # Fila de achados por story (Turing gerencia: 7 achados? guarda os 7,
         # corrige um a um com o agente certo, valida o conjunto no fim).
-        self._fila_achados: dict[str, list[str]] = {}
+        # Cota esgotada do provedor de IA: enquanto ativa, o processo PAUSA
+        # (para de queimar — 429 atrás de 429 é lixo) e ESPERA o reset. Cota
+        # é infraestrutura, NUNCA "falta de informação" — essa é a regra aqui.
         self.kanban = kanban or KanbanManager(project_dir=str(self.project_dir), db=self.db)
+        # Política de cota (SRP): estado e decisão moram em PoliticaDeCota.
+        self._cota = PoliticaDeCota(self.kanban)
+        # Fila do kanban (SRP): a única fonte das tasks que queimam.
+        self._fila = FilaDoKanban(
+            self.db,
+            wave_provider=lambda: self.state_machine.wave_id,
+            mapa_camada=self._MAPA_AGENTE_CAMADA,
+            roteador_achado=self._agente_para_achado,
+        )
         self._gate_evaluations: dict[str, Any] = {}
         self.config_mgr = ProjectConfigManager(str(self.project_dir))
         cfg = self.config_mgr.load()
@@ -197,7 +226,7 @@ class WaveOrchestrator:
             ]
             motivo: str | None = None
             if dev_done:
-                motivo = f"{len(dev_done)} story(ies) em DEV_DONE sem homologação DONE: {', '.join(dev_done)}"
+                motivo = f"{len(dev_done)} story(ies) em DEV_DONE sem homologação DONE"
             else:
                 try:
                     report = self.workspace.wave_validation_report_path(wave)
@@ -228,11 +257,20 @@ class WaveOrchestrator:
         motivo: str | None = None
 
         cards = self.kanban.list_cards(wave_id=wave_id)
+        # Se há stories em desenvolvimento ou prontas para execução, a onda pertence a EXECUTE
+        in_dev = [
+            c["story_id"]
+            for c in cards
+            if c.get("status") in (KanbanCardStatus.IN_PROGRESS.value, KanbanCardStatus.READY.value, "IN_PROGRESS", "READY")
+        ]
         dev_done = [
             c["story_id"] for c in cards if c.get("status") == KanbanCardStatus.DEV_DONE.value
         ]
-        if dev_done:
-            motivo = f"{len(dev_done)} story(ies) em DEV_DONE sem homologação DONE: {', '.join(dev_done)}"
+        if in_dev:
+            # Há trabalho em andamento no ciclo de desenvolvimento; não força VALIDATE
+            return None
+        elif dev_done:
+            motivo = f"{len(dev_done)} story(ies) em DEV_DONE sem homologação DONE"
         else:
             try:
                 report = self.workspace.wave_validation_report_path(wave_id)
@@ -344,19 +382,15 @@ class WaveOrchestrator:
         self._save_telemetry_files()
 
     def _save_telemetry_files(self) -> None:
-        """Persiste os arquivos telemetry.json e telemetria.md sob docs/ e na ONDA ativa."""
+        """Persiste a telemetria: UM json canônico por ONDA (única fonte) +
+        telemetria.md como RELATÓRIO humano gerado (nunca lido por máquina)."""
         try:
-            docs_dir = self.project_dir / "docs"
-            docs_dir.mkdir(parents=True, exist_ok=True)
-
+            if not (hasattr(self, "workspace") and hasattr(self, "state_machine")):
+                return
             telemetry_data = json.dumps(self.telemetry, indent=2, ensure_ascii=False)
-            telemetry_json = docs_dir / "telemetry.json"
-            telemetry_json.write_text(telemetry_data, encoding="utf-8")
-
-            if hasattr(self, "workspace") and hasattr(self, "state_machine"):
-                wave_telemetry = self.workspace.wave_telemetry_path(self.state_machine.wave_id)
-                wave_telemetry.parent.mkdir(parents=True, exist_ok=True)
-                wave_telemetry.write_text(telemetry_data, encoding="utf-8")
+            wave_telemetry = self.workspace.wave_telemetry_path(self.state_machine.wave_id)
+            wave_telemetry.parent.mkdir(parents=True, exist_ok=True)
+            wave_telemetry.write_text(telemetry_data, encoding="utf-8")
 
             tot = self.telemetry["total"]
             speed = round(tot["total_tokens"] / max(tot["duration_seconds"], 0.001), 1)
@@ -388,6 +422,9 @@ class WaveOrchestrator:
                     f"| *Subtotal {stg_name}* | - | *{stg_data['input_tokens']:,}* | *{stg_data['output_tokens']:,}* | *{stg_data['total_tokens']:,}* | *${stg_data['cost']:.6f}* | *{stg_data['duration_seconds']:.2f}s* | *{stg_speed:,}* |"
                 )
 
+            # RELATÓRIO humano (gerado do json canônico — a máquina não o lê).
+            docs_dir = self.project_dir / "docs"
+            docs_dir.mkdir(parents=True, exist_ok=True)
             (docs_dir / "telemetria.md").write_text("\n".join(md_lines) + "\n", encoding="utf-8")
         except OSError as exc:
             logger.warning("Falha ao salvar arquivos de telemetria: %s", exc)
@@ -526,18 +563,41 @@ class WaveOrchestrator:
                 diagnosis_parts.append(f"{len(blocked)} bloqueada(s): {', '.join(blocked)}")
             diagnosis = " | ".join(diagnosis_parts) if cards else "sem cards registrados no Kanban"
 
+            # REGRAS DA TELA: a área de conversa mostra APENAS o próximo item a
+            # ser trabalhado — NUNCA uma lista (a LLM não olha lista; olha o 1
+            # item). O diagnóstico completo fica só no retorno do CLI.
+            # FILA INDIANA: bandeira vermelha = o próximo é ela; senão o
+            # PRIMEIRO da ordem do kanban que ainda não está selado.
+            _seladas = (
+                KanbanCardStatus.DEV_DONE.value,
+                KanbanCardStatus.DONE.value,
+            )
+            _bandeiras = [c for c in cards if c.get("is_blocked")]
+            proxima = (
+                _bandeiras[0]["story_id"]
+                if _bandeiras
+                else next(
+                    (c["story_id"] for c in cards if c.get("status") not in _seladas),
+                    None,
+                )
+            )
+
             BUS.publish(
                 "wave_start",
                 agent="@turing",
                 wave_id=wave_id,
                 text=(
                     f"↩️ ONDA {wave_id} retomada na etapa {restored_stage.value} "
-                    f"(checkpoint persistido). Autonomia: {autonomy.value}. Diagnóstico: {diagnosis}"
+                    f"(checkpoint persistido). Autonomia: {autonomy.value}. "
+                    + (
+                        f"Próximo item: {proxima}."
+                        if proxima
+                        else "Nenhum item em execução."
+                    )
                 ),
                 autonomy=autonomy.value,
                 engineering_mode=eng.value,
                 resumed=True,
-                diagnosis=diagnosis,
             )
             return {
                 "success": True,
@@ -921,6 +981,7 @@ class WaveOrchestrator:
                 "hatch",
             }
             programas_leitura = {"tail", "head", "grep", "wc", "sort", "uniq", "cat", "true"}
+
             try:
                 import shlex as _shlex
             except Exception:  # noqa: BLE001 — indisponível é improvável; nega
@@ -942,28 +1003,44 @@ class WaveOrchestrator:
                     primeiro = Path(tokens[2]).name.lower()
                 return primeiro
 
-            for segmento in cmd.split("|"):
-                low_seg = f" {segmento.lower()} "
-                if any(p in low_seg for p in proibidos):
-                    return f"Erro: comando contém operação proibida ({segmento.strip()[:60]})."
-                corpo = re.split(r">|<", segmento.strip())[0].strip()
-                if not corpo:
-                    continue
-                programa = _programa(corpo)
-                if programa not in programas_validacao | programas_leitura:
-                    return (
-                        f"Erro: programa '{programa or segmento.strip()[:40]}' fora da "
-                        "lista de validação (pytest/vitest/playwright/npm/npx/node/"
-                        "uv/poetry run/scripts + filtros de leitura tail/head/grep/wc)."
-                    )
-                if programa in ("bash", "sh"):
-                    alvo = (
-                        (corpo.split(maxsplit=1) or ["", ""])[1]
-                        if len(corpo.split(maxsplit=1)) > 1
-                        else ""
-                    )
-                    if "scripts/" not in alvo and not alvo.endswith(".sh"):
-                        return "Erro: bash/sh só executa scripts/ do projeto."
+            ferramenta = auditar_instalacao(cmd)
+            if ferramenta is not None and not ferramenta.startswith("Erro"):
+                BUS.publish(
+                    "announcement",
+                    agent=(guarda.agente if guarda is not None else "@turing"),
+                    text=(
+                        f"📦 INSTALAÇÃO AUDITADA — {cmd[:80]}: dependência do projeto "
+                        f"autorizada pelo gate determinístico ({ferramenta}, local, "
+                        "sem global, sem encadeamento). Registrada no kanban/telemetria."
+                    ),
+                )
+            elif ferramenta is not None:
+                return ferramenta
+            if ferramenta is None:
+                # Whitelist normal (instalação auditada pula: já foi validada
+                # por completo no gate acima).
+                for segmento in cmd.split("|"):
+                    low_seg = f" {segmento.lower()} "
+                    if any(p in low_seg for p in proibidos):
+                        return f"Erro: comando contém operação proibida ({segmento.strip()[:60]})."
+                    corpo = re.split(r">|<", segmento.strip())[0].strip()
+                    if not corpo:
+                        continue
+                    programa = _programa(corpo)
+                    if programa not in programas_validacao | programas_leitura:
+                        return (
+                            f"Erro: programa '{programa or segmento.strip()[:40]}' fora da "
+                            "lista de validação (pytest/vitest/playwright/npm/npx/node/"
+                            "uv/poetry run/scripts + filtros de leitura tail/head/grep/wc)."
+                        )
+                    if programa in ("bash", "sh"):
+                        alvo = (
+                            (corpo.split(maxsplit=1) or ["", ""])[1]
+                            if len(corpo.split(maxsplit=1)) > 1
+                            else ""
+                        )
+                        if "scripts/" not in alvo and not alvo.endswith(".sh"):
+                            return "Erro: bash/sh só executa scripts/ do projeto."
             # Batimento: comando longo (pytest completo) é trabalho legítimo —
             # alimenta o IDLE do runner para não ser abortado aos 240s.
             import threading
@@ -997,6 +1074,12 @@ class WaveOrchestrator:
                 saida = (resultado.stdout or "") + (
                     f"\n[stderr]\n{resultado.stderr}" if resultado.stderr else ""
                 )
+                # EVIDÊNCIA PLATFORM-SIDE: comando auditado EXECUTADO pela
+                # ferramenta com exit code REAL (prosa não é evidência). Alimenta
+                # o DOD da card de INSTALACAO — cuja prova é a VALIDAÇÃO (teste
+                # de import/require) rodando verde, não o install em si.
+                if guarda is not None and hasattr(guarda, "registrar_comando_executado"):
+                    guarda.registrar_comando_executado(cmd, resultado.returncode)
                 return f"exit={resultado.returncode}\n{saida.strip()[-8000:]}"
             except subprocess.TimeoutExpired:
                 return "Erro: execução excedeu 600s (timeout da plataforma)."
@@ -1133,7 +1216,7 @@ class WaveOrchestrator:
                 wave_id=self.state_machine.wave_id,
                 title=f"Bloqueio: {agent_handle}",
                 agent=agent_handle,
-                status="BLOCKED",
+                status=KanbanCardStatus.IN_PROGRESS.value,
             )
         self.kanban.block_card(target_story, reason=reason, blocked_by=agent_handle)
 
@@ -1270,9 +1353,18 @@ class WaveOrchestrator:
                 f"Se a viabilidade for positiva para o nível solicitado ({self.delivery_target.value.upper()}), declare explicitamente: 'Status: APROVADO' ou 'Veredito: PROSSEGUIR'."
             )
             meira_prompt = self._assemble_prompt("@meira", raw_prompt, context)
-            res_meira = runner_meira.run(
-                prompt=meira_prompt,
-                context=context,
+            res_meira = self._executar_com_card(
+                self.state_machine.wave_id,
+                "DISCUSS",
+                "DISCUSS-VIABILIDADE",
+                f"Viabilidade técnica e estratégica: {topic[:100]}",
+                "@meira",
+                1,
+                lambda: runner_meira.run(prompt=meira_prompt, context=context),
+                dor=[],
+                dod=["status_aprovado_ou_prosseguir"],
+                task_tipo="DISCUSS",
+                descricao="Análise de viabilidade técnica e estratégica da demanda.",
             )
             self._record_telemetry("DISCUSS", "@meira", res_meira)
             results.append(
@@ -1362,9 +1454,18 @@ class WaveOrchestrator:
                 f"Ao concluir com sucesso, declare explicitamente no seu parecer: 'Status: APROVADO'."
             )
             grace_prompt = self._assemble_prompt("@grace", raw_prompt, context)
-            res_grace = runner_grace.run(
-                prompt=grace_prompt,
-                context=context,
+            res_grace = self._executar_com_card(
+                self.state_machine.wave_id,
+                "DISCUSS",
+                "DISCUSS-PRD",
+                f"PRD e fatiamento Lean Inception: {topic[:100]}",
+                "@grace",
+                2,
+                lambda: runner_grace.run(prompt=grace_prompt, context=context),
+                dor=["dep:DISCUSS-VIABILIDADE"],
+                dod=["status_aprovado_e_prd_gravado"],
+                task_tipo="DISCUSS",
+                descricao="Elaboração do PRD e sequenciamento de ondas do MVP.",
             )
             self._record_telemetry("DISCUSS", "@grace", res_grace)
             grace_output = res_grace.output
@@ -1508,7 +1609,19 @@ class WaveOrchestrator:
                     f"É OBRIGATÓRIO incluir as seções: '## Entry Points', '## Fluxo de Navegação', '## Telas'."
                 )
             alan_prompt = self._assemble_prompt("@alan", raw_prompt, context)
-            res_alan = runner_alan.run(prompt=alan_prompt, context=context)
+            res_alan = self._executar_com_card(
+                self.state_machine.wave_id,
+                "PLAN",
+                "PLAN-JORNADA",
+                "Mapeamento de jornada e telas",
+                "@alan",
+                1,
+                lambda: runner_alan.run(prompt=alan_prompt, context=context),
+                dor=[],
+                dod=["journey_slice_gravado"],
+                task_tipo="PLAN",
+                descricao="Mapeamento de jornada do usuário, entry points e telas da onda.",
+            )
             self._record_telemetry("PLAN", "@alan", res_alan)
             outputs["@alan"] = res_alan.output
             results.append(
@@ -1585,7 +1698,19 @@ class WaveOrchestrator:
                 f"É OBRIGATÓRIO incluir as seções: '## Decisões Arquiteturais', '## Stack'."
             )
             ieru_prompt = self._assemble_prompt("@ieru", raw_prompt, context)
-            res_ieru = runner_ieru.run(prompt=ieru_prompt, context=context)
+            res_ieru = self._executar_com_card(
+                self.state_machine.wave_id,
+                "PLAN",
+                "PLAN-ARQUITETURA",
+                "Decisões arquiteturais e stack",
+                "@ieru",
+                2,
+                lambda: runner_ieru.run(prompt=ieru_prompt, context=context),
+                dor=["dep:PLAN-JORNADA"],
+                dod=["arquitetura_gravada"],
+                task_tipo="PLAN",
+                descricao="Definição de decisões arquiteturais e stack da onda.",
+            )
             self._record_telemetry("PLAN", "@ieru", res_ieru)
             outputs["@ieru"] = res_ieru.output
             results.append(
@@ -1662,7 +1787,19 @@ class WaveOrchestrator:
                 f"Modele apenas as tabelas e dados estritamente necessários para a demanda, sem tabelas de billing ou escopo extra."
             )
             codd_prompt = self._assemble_prompt("@codd", raw_prompt, context)
-            res_codd = runner_codd.run(prompt=codd_prompt, context=context)
+            res_codd = self._executar_com_card(
+                self.state_machine.wave_id,
+                "PLAN",
+                "PLAN-DATABASE",
+                "Modelagem de dados e esquemas",
+                "@codd",
+                3,
+                lambda: runner_codd.run(prompt=codd_prompt, context=context),
+                dor=["dep:PLAN-ARQUITETURA"],
+                dod=["modelagem_concluida"],
+                task_tipo="PLAN",
+                descricao="Modelagem de dados e schemas de banco para a onda.",
+            )
             self._record_telemetry("PLAN", "@codd", res_codd)
             outputs["@codd"] = res_codd.output
             results.append(
@@ -1770,7 +1907,19 @@ class WaveOrchestrator:
                 f"- Então o resultado esperado é retornado\n"
             )
             caroli_prompt = self._assemble_prompt("@caroli", raw_prompt, context)
-            res_caroli = runner_caroli.run(prompt=caroli_prompt, context=context)
+            res_caroli = self._executar_com_card(
+                self.state_machine.wave_id,
+                "PLAN",
+                "PLAN-STORIES",
+                "Decomposição e geração de ai-stories",
+                "@caroli",
+                4,
+                lambda: runner_caroli.run(prompt=caroli_prompt, context=context),
+                dor=["dep:PLAN-DATABASE"],
+                dod=["stories_geradas"],
+                task_tipo="PLAN",
+                descricao="Decomposição PBB e escrita das ai-stories da onda.",
+            )
             self._record_telemetry("PLAN", "@caroli", res_caroli)
             outputs["@caroli"] = res_caroli.output
             results.append(
@@ -2098,12 +2247,9 @@ class WaveOrchestrator:
         return output.strip()
 
     def _agente_para_achado(self, achado: str) -> str:
-        """Roteia UM achado para o agente da especialidade (tarefa atômica).
-
-        Achado pequeno + agente certo + dado suficiente = menos token de
-        entrada, menos tempo de queima, zero cegueira.
-        """
+        """Roteia UM achado para o agente da especialidade (tarefa atômica)."""
         a = (achado or "").lower()
+        # 1. Banco de Dados, Migrations, Schemas DDL, UUID e Postgres/SQLite (@codd)
         if any(
             k in a
             for k in (
@@ -2112,15 +2258,22 @@ class WaveOrchestrator:
                 "schema",
                 "migração",
                 "migracao",
+                "migration",
                 "sql",
                 "coluna",
                 "índice",
                 "indice",
                 "foreign key",
+                "primary key",
+                "uuid",
+                "postgres",
+                "psycopg",
+                "ddl",
                 "fk ",
             )
         ):
             return "@codd"
+        # 2. Frontend, Componentes e UI/Acessibilidade (@ada)
         if any(
             k in a
             for k in (
@@ -2136,15 +2289,27 @@ class WaveOrchestrator:
                 "botão",
                 "botao",
                 "modal",
+                "view",
             )
         ):
             return "@ada"
+        # 3. Contratos de API, DTOs e Schemas de validação de request (@ieru)
         if any(
             k in a
-            for k in ("contrato", "contract", "openapi", "dto", "serialização", "serializacao")
+            for k in (
+                "contrato",
+                "contract",
+                "openapi",
+                "dto",
+                "serialização",
+                "serializacao",
+                "pydantic",
+                "schemas.py",
+            )
         ):
             return "@ieru"
-        if any(k in a for k in ("teste", "test", "suíte", "suite", "e2e", "mock", "cobertura")):
+        # 4. Testes e Suítes (@aniche)
+        if any(k in a for k in ("teste", "test", "suíte", "suite", "e2e", "mock", "cobertura", "assertion")):
             return "@aniche"
         if any(
             k in a
@@ -2247,6 +2412,184 @@ class WaveOrchestrator:
         "FOUNDATION": "@unclebob",
     }
 
+    def _run_achado_card(
+        self,
+        story: str,
+        row_ach: dict,
+        total: int,
+        parecer_integral: str,
+    ) -> Any:
+        """Queima UMA card ACHADO (a row DO KANBAN — única fonte). Escopo
+        fechado: CORRIGIR APENAS ESTE achado, com o parecer INTEGRAL como
+        contexto (nada truncado)."""
+        tid = row_ach["task_id"]
+        achado = row_ach.get("descricao") or row_ach.get("title", "")
+        agente_achado = row_ach.get("agent_role") or self._agente_para_achado(achado)
+        i = row_ach.get("ordem", 80)
+        runner_achado = self._get_runner(agente_achado)
+        prompt = self._assemble_prompt(
+            agente_achado,
+            f"Story {story} REPROVADA no code review. CORRIJA APENAS ESTE "
+            f"ACHADO ({i - 80} de {total}):\n"
+            f"ACHADO: {achado}\n\n"
+            f"Contexto (parecer integral, texto completo):\n{parecer_integral}\n\n"
+            "Entrega = arquivos GRAVADOS nesta rodada "
+            "(write_project_file). Escopo fechado: nada além deste achado.",
+        )
+        return self._executar_com_card(
+            self.state_machine.wave_id,
+            story,
+            tid,
+            f"Achado: {achado[:120]}",
+            agente_achado,
+            row_ach.get("ordem", 80),
+            lambda: runner_achado.run(prompt) if runner_achado else runner_ausente(agente_achado),
+            dor=[],
+            task_tipo="ACHADO",
+            descricao=achado[:400],
+            dod=["gravou_arquivo"],
+        )
+
+    def _queimar_instalacao(self, agente: str, prompt: str) -> Any:
+        """run_fn do burn de INSTALAÇÃO (delega runner ao ambiente)."""
+        runner = self._get_runner(agente)
+        if runner is None:
+            return runner_ausente(agente)
+        return runner.run(self._assemble_prompt(agente, prompt))
+
+    def _e_bloqueio_de_instalacao(self, texto: str | None) -> bool:
+        """Delega à governança de ambiente (SRP)."""
+        return e_bloqueio_de_instalacao(texto)
+
+    def _abrir_task_instalacao(
+        self, onda_id: str, story_id: str, task_origem: str, evidencia: str
+    ) -> str | None:
+        """GOVERNANÇA DE INSTALAÇÃO (kanban manda): bloqueio por falta de
+        ferramenta NÃO escala humano. O Turing abre task PRIORITÁRIA (ordem 0)
+        roteada pelo PAPEL (@guto infra / @unclebob biblioteca); a origem ganha
+        dep: na DOR. Os critérios são da GovernancaAmbiente (SRP)."""
+        cartoes = self.db.carregar_tasks_kanban(onda_id, story_id)
+        pendente = next(
+            (
+                c["task_id"]
+                for c in cartoes
+                if c["task_id"].startswith("INSTALACAO-")
+                and c["kanban_status"] not in ("DEV_DONE", "DONE_DEFINITIVO")
+            ),
+            None,
+        )
+        if pendente:
+            return pendente  # já existe instalação no kanban — não duplica
+        # ANTI-ARMADILHA: se uma instalação desta story JÁ FOI VALIDADA (DEV
+        # DONE — provou o ambiente com teste), a falha NÃO é falta de
+        # dependência: é impedimento real da card (ex.: suíte quebrada que
+        # MENCIONA jsdom/document). Nascer INSTALACAO de novo recriava uma DOR
+        # já resolvida (a armadilha do resume). Flag na origem basta — a linha
+        # para NELE.
+        ja_validada = any(
+            c["task_id"].startswith("INSTALACAO-")
+            and c["kanban_status"] in ("DEV_DONE", "DONE_DEFINITIVO")
+            for c in cartoes
+        )
+        if ja_validada:
+            BUS.publish(
+                "announcement",
+                agent="@turing",
+                text=(
+                    f"🛠 AMBIENTE JÁ VALIDADO — {story_id}: instalação anterior em DEV "
+                    f"Done provou o ambiente com teste. A falha de {task_origem} NÃO é "
+                    "falta de dependência — é impedimento real da card (fica flagada; "
+                    "a linha trata nele). Nenhuma instalação nova nasce."
+                ),
+            )
+            return None
+        evid = (evidencia or "")[:400]
+        roteado_para = roteamento_da_instalacao(evid)
+        proximo_n = sum(1 for c in cartoes if c["task_id"].startswith("INSTALACAO-")) + 1
+        task_id = f"INSTALACAO-{proximo_n}"
+        titulo = f"Instalar dependência/ambiente para destravar {task_origem}"
+        self.db.criar_task_kanban(
+            onda_id,
+            story_id,
+            task_id,
+            titulo,
+            roteado_para,
+            0,
+            dor=[],
+            dod=[],
+            task_tipo="INSTALACAO",
+            descricao=f"Impedimento de {task_origem}: {evid}",
+        )
+        self.db.mover_task_kanban(onda_id, story_id, task_id, "AGUARDANDO_DEV")
+        # Precedência real: a origem só re-queima depois da instalação.
+        self.db.adicionar_dep_task_kanban(onda_id, story_id, task_origem, task_id)
+        anunciar_instalacao_prioritaria(story_id, task_origem, task_id, roteado_para)
+        return task_id
+
+    def _abrir_achado_de_bloqueio(
+        self, onda_id: str, story_id: str, task_origem: str, motivo: str
+    ) -> str | None:
+        """AUTO-CURA DO KANBAN: quando uma task é bloqueada por erro/impedimento
+        técnico ou de teste, o Kanban NÃO deixa a LLM adivinhar no resume.
+        O sistema abre imediatamente um card de ACHADO específico, roteado para
+        o agente especialista (ex.: @ada se for Vue/UI, @codd se for banco, @ieru contrato),
+        e AMARRA a dependência: task_origem passa a depender do ACHADO resolvido.
+        No resume, o Kanban já está cirurgicamente pronto e o próximo passo é inequívoco."""
+        cartoes = self.db.carregar_tasks_kanban(onda_id, story_id)
+        # Evita duplicar se já houver achado aberto para o mesmo problema/origem
+        achados_origem = [
+            c for c in cartoes
+            if c["task_id"].startswith("ACHADO-")
+            and task_origem in (c.get("descricao") or "")
+            and c["kanban_status"] not in ("DEV_DONE", "DONE_DEFINITIVO")
+        ]
+        if achados_origem:
+            return achados_origem[0]["task_id"]
+
+        agente_destino = self._agente_para_achado(motivo)
+        # Se o agente destino for o próprio agente da task e for bloqueio genérico, não precisa de card cruzado
+        card_origem = next((c for c in cartoes if c["task_id"] == task_origem), None)
+        if card_origem and card_origem.get("agent_role") == agente_destino:
+            # É erro interno da própria task — o próprio card fica bloqueado com o motivo explícito
+            return None
+
+        # É discrepância de outra especialidade (ex: backend travado por erro no front/banco/contrato)
+        import re
+        maior_idx = 0
+        for c in cartoes:
+            tid = c["task_id"]
+            m = re.match(rf"^ACHADO-{re.escape(story_id)}-(\d+)$", tid)
+            if m:
+                maior_idx = max(maior_idx, int(m.group(1)))
+
+        novo_num = maior_idx + 1
+        achado_id = f"ACHADO-{story_id}-{novo_num}"
+        titulo = f"Destravar {task_origem}: {(motivo or '')[:90]}"
+        self.db.criar_task_kanban(
+            onda_id,
+            story_id,
+            achado_id,
+            titulo,
+            agente_destino,
+            -10 + novo_num,
+            dor=[],
+            dod=["gravou_arquivo"],
+            task_tipo="ACHADO",
+            descricao=f"Desacoplamento de impedimento de {task_origem}: {motivo[:350]}",
+        )
+        self.db.mover_task_kanban(onda_id, story_id, achado_id, "AGUARDANDO_DEV")
+        # Precedência mandatória: a task origem só queima após o achado ser resolvido
+        self.db.adicionar_dep_task_kanban(onda_id, story_id, task_origem, achado_id)
+        BUS.publish(
+            "announcement",
+            agent="@turing",
+            text=(
+                f"🧩 AUTO-CURA DO KANBAN — {story_id}: impedimento de {task_origem} gerou "
+                f"{achado_id} delegado para {agente_destino}. O próximo passo no resume é inequívoco."
+            ),
+        )
+        return achado_id
+
     def _executar_com_card(
         self,
         onda_id: str,
@@ -2258,15 +2601,28 @@ class WaveOrchestrator:
         run_fn: Callable[[], Any],
         dor: list[str] | None = None,
         dod: list[str] | None = None,
+        task_tipo: str = "",
+        descricao: str = "",
     ) -> Any:
         """PREMISSA INEGOCIÁVEL: NENHUM agente atua sem card.
 
         Nasce BACKLOG → AGUARDANDO DEV (DOR preenchida) → EM_DEV (agente
-        acorda) → DEV DONE ou BLOCKED (binário). Uso: planos, refinos,
-        validações, assume-do-lead — qualquer atuação fora do loop de tasks.
+        acorda — bola da vez, uma só em toda a ONDA) → DEV DONE (sucesso) ou
+        permanece NA COLUNA com a SITUAÇÃO blocked tipada (falha: blocked não
+        é coluna, é flag). Uso: planos, refinos, validações, assume-do-lead —
+        qualquer atuação fora do loop de tasks.
         """
         self.db.criar_task_kanban(
-            onda_id, story_id, task_id, titulo, agente, ordem, dor=dor, dod=dod
+            onda_id,
+            story_id,
+            task_id,
+            titulo,
+            agente,
+            ordem,
+            dor=dor,
+            dod=dod,
+            task_tipo=task_tipo,
+            descricao=descricao,
         )
         cartao = next(
             (
@@ -2278,183 +2634,148 @@ class WaveOrchestrator:
         )
         if cartao and cartao["kanban_status"] == "BACKLOG":
             self.db.mover_task_kanban(onda_id, story_id, task_id, "AGUARDANDO_DEV")
-        self.db.mover_task_kanban(onda_id, story_id, task_id, "EM_DEV")
+        if not self._acordar_task_em_dev(onda_id, story_id, task_id):
+            # DOR não atendida: NENHUM agente atua (premissa: card em DEV é
+            # condição de trabalho) — devolve bloqueado honesto.
+            return AgentExecutionResult(
+                agent_handle=agente,
+                success=False,
+                is_blocked=True,
+                block_reason=(
+                    f"DOR não atendida para {task_id} — a card não foi para EM DEV "
+                    "(precedência/entrada pendente)."
+                ),
+            )
         res = run_fn()
         escreveu = bool(getattr(res, "arquivos_escritos", None) or [])
-        if (
+        instalacao = task_id.startswith("INSTALACAO-")
+        etapa_ou_audit = task_tipo in ("DISCUSS", "PLAN", "VALIDATE", "REVIEW") or task_id.startswith(("DISCUSS-", "PLAN-", "VALIDATE-", "REVIEW-"))
+
+        deu_certo = (
             getattr(res, "success", False) is True
             and getattr(res, "is_blocked", False) is not True
-            and (escreveu or not getattr(res, "output", ""))
-        ):
+            and (escreveu or not getattr(res, "output", "") or instalacao or etapa_ou_audit)
+        )
+        if deu_certo:
+            # Instalação: binário por execução/verificação — não exige arquivo.
             self.db.mover_task_kanban(onda_id, story_id, task_id, "DEV_DONE")
         else:
-            self.db.mover_task_kanban(onda_id, story_id, task_id, "BLOCKED", "INTERNAL_SCALE")
+            # BLOCKED É SITUAÇÃO, NUNCA COLUNA: o card permanece NA coluna em
+            # que está (EM_DEV) e recebe a flag tipada do impedimento.
+            self.db.bloquear_task_kanban(onda_id, story_id, task_id, "INTERNAL_SCALE")
+        # GOVERNANÇA DE AMBIENTE: falta de ferramenta/dependência NUNCA escala
+        # humano — o Turing abre a task prioritária (Guto infra / Tech Lead
+        # biblioteca), primeira da fila, e a origem ganha dep: na DOR.
+        if not deu_certo and self._e_bloqueio_de_instalacao(evidencia_de(res)):
+            self._abrir_task_instalacao(onda_id, story_id, task_id, evidencia_de(res))
         return res
 
+    # ── COTA DO PROVEDOR ESGOTADA (infra, nunca negócio) ──
+    # A Plataforma de IA sem capacidade NÃO é bloco de agente nem falta de
+    # informação: é a camada de IA de fora. O processo PAUSA, ESPERA o reset e
+    # retoma sozinho — a escada não queima degrau atrás de degrau nem escala
+    # o humano com "Informação em falta: HTTP 429..."
+
+    @property
+    def _cota_ativa(self) -> QuotaResetInfo | None:
+        return self._cota.ativa
+
+    @_cota_ativa.setter
+    def _cota_ativa(self, valor: QuotaResetInfo | None) -> None:
+        self._cota.ativa = valor
+
     def _garcom_preparar_tasks(self, onda_id: str, story_id: str, tarefas: list[Any]) -> None:
-        """Braço ESCRITOR: a task nasce NO KANBAN, designada e ordenada, ANTES
-        de qualquer agente acordar — com REGRAS DE DOR (entrada, incluindo a
-        PRECEDÊNCIA via depends_on como item 'dep:') e DOD (saída). Cards
-        EM DEV/DEV DONE/DONE DEFINITIVO/BLOCKED não são tocados."""
-        for ordem, t in enumerate(tarefas):
-            agente = self._MAPA_AGENTE_CAMADA.get(t.task_type.value, "@valim")
-            existentes = {c["task_id"]: c for c in self.db.carregar_tasks_kanban(onda_id, story_id)}
-            cartao = existentes.get(t.id)
-            if cartao is None:
-                dor = [
-                    "especificação e regras de negócio disponíveis",
-                    "BDD/RED-GREEN definido para a task",
-                ] + [f"dep:{dep}" for dep in (t.depends_on or [])]
-                dod = ["gravou_arquivo", "implementação atende os testes da task"]
-                self.db.criar_task_kanban(
-                    onda_id, story_id, t.id, t.title, agente, ordem, dor=dor, dod=dod
-                )
-                self.db.mover_task_kanban(onda_id, story_id, t.id, "AGUARDANDO_DEV")
-            elif cartao["kanban_status"] == "BACKLOG":
-                self.db.mover_task_kanban(onda_id, story_id, t.id, "AGUARDANDO_DEV")
+        """Delega à FilaDoKanban (SRP)."""
+        self._fila.preparar(onda_id, story_id, tarefas)
 
     def _dor_satisfeita(self, cartao: dict, cartoes: list[dict]) -> tuple[bool, str]:
-        """Avalia a DOR de um card ITEM A ITEM (determinístico).
+        """Delega à FilaDoKanban (SRP)."""
+        return self._fila.dor_satisfeita(cartao, cartoes)
 
-        Itens: 'dep:{task_id}' — precedência: card alvo em DEV DONE/DONE
-        DEFINITIVO; 'all_burn_done' — todas as tasks de burn prontas; demais
-        = estáticos (satisfeitos no breakdown; faltando em execução viram
-        BLOCKED HUMAN_SCALE pelo próprio agente)."""
-        for item in cartao.get("dor") or []:
-            if item.startswith("dep:"):
-                alvo = next((c for c in cartoes if c["task_id"] == item[4:]), None)
-                if alvo is None or alvo["kanban_status"] not in (
-                    "DEV_DONE",
-                    "DONE_DEFINITIVO",
-                ):
-                    return False, item
-            elif item == "all_burn_done":
-                tasks = [c for c in cartoes if not c["task_id"].startswith("REVIEW")]
-                if not tasks or not all(
-                    c["kanban_status"] in ("DEV_DONE", "DONE_DEFINITIVO") for c in tasks
-                ):
-                    return False, item
-        return True, ""
-
-    def _garcom_carregar_fila(
-        self, onda_id: str, story_id: str, tarefas: list[Any]
-    ) -> tuple[list[Any], list[dict]]:
-        """Braço DELEGADOR: a fila vem DO KANBAN, mas o que manda é a
-        PRECEDÊNCIA, não o blocked. Regras, nesta ordem:
-
-        1. Cards de REVIEW só existem na fila se TODAS as tasks da story
-           estiverem DEV DONE/DONE DEFINITIVO (a regra que libera o review).
-           Review bloqueado NÃO pula a frente: ele espera as tasks, sempre.
-        2. Entre cards com precedência resolvida: BLOCKED primeiro (Andon),
-           depois EM DEV órfã de crash, depois AGUARDANDO DEV — na ordem.
-        3. DEV DONE/DONE DEFINITIVO: IGNORADOS no resume.
-        """
-        cartoes = self.db.carregar_tasks_kanban(onda_id, story_id)
-        cards_task = [c for c in cartoes if not c["task_id"].startswith("REVIEW")]
-        cards_review = [c for c in cartoes if c["task_id"].startswith("REVIEW")]
-
-        # DOR item a item, em SIMULAÇÃO SEQUENCIAL: percorre na ordem do kanban
-        # com um "done virtual" que cresce — uma task cuja precedência será
-        # queimada ANTES dela nesta mesma fila é elegível. O que NÃO puder ser
-        # satisfeito nesta fila (ex.: all_burn_done do review) fica fora.
-        # PRECEDÊNCIA e DEPENDÊNCIA são itens da DOR (dep:*, all_burn_done) —
-        # blocked sozinho NÃO libera nada.
-        elegiveis: list[dict] = []
-        virtual_done = {
-            c["task_id"] for c in cartoes if c["kanban_status"] in ("DEV_DONE", "DONE_DEFINITIVO")
-        }
-        for c in cartoes:
-            if c["kanban_status"] in ("DEV_DONE", "DONE_DEFINITIVO"):
-                continue
-            ok, item_faltante = True, ""
-            for item in c.get("dor") or []:
-                if item.startswith("dep:"):
-                    if item[4:] not in virtual_done:
-                        ok, item_faltante = False, item
-                        break
-                elif item == "all_burn_done":
-                    continue  # resolvido no ciclo de review, fora da fila de burn
-            if ok:
-                elegiveis.append(c)
-                virtual_done.add(c["task_id"])  # queima aqui → libera dependentes
-            else:
-                BUS.publish(
-                    "announcement",
-                    agent="@turing",
-                    text=(
-                        f"🚪 DOR — {story_id} {c['task_id']} aguarda: {item_faltante} "
-                        "(regra de entrada não satisfeita; não é fila, é precedência)."
-                    ),
-                )
-
-        bloqueados = [c for c in elegiveis if c["kanban_status"] == "BLOCKED"]
-        em_dev = [c for c in elegiveis if c["kanban_status"] == "EM_DEV"]
-        aguardando = [c for c in elegiveis if c["kanban_status"] == "AGUARDANDO_DEV"]
-        feitas = [c for c in cartoes if c["kanban_status"] in ("DEV_DONE", "DONE_DEFINITIVO")]
-
-        if feitas:
-            BUS.publish(
-                "announcement",
-                agent="@turing",
-                text=(
-                    f"⏭ {story_id}: {len(feitas)} task(s) DEV DONE/DONE DEFINITIVO "
-                    f"[{', '.join(c['task_id'] for c in feitas)}] — ignoro no resume; "
-                    "revalidar é papel do code review final da story."
-                ),
-            )
-        for c in bloqueados:
-            BUS.publish(
-                "announcement",
-                agent="@turing",
-                text=(
-                    f"🚩 ANDON — {story_id} {c['task_id']} BLOCKED "
-                    f"({c['block_tipo'] or 'sem tipo'}) e NA COLUNA EM QUE ESTÁ: "
-                    "atuo NELA primeiro dentro da precedência dela."
-                ),
-            )
-        # ⏳ PRECEDÊNCIA: review com DOR de entrada não satisfeita (all_burn_done)
-        # aguarda as tasks — blocked sozinho não pula a frente.
-        review_aguardando = [
-            c
-            for c in cards_review
-            if c["kanban_status"] not in ("DEV_DONE", "DONE_DEFINITIVO")
-            and not self._dor_satisfeita(c, cartoes)[0]
-        ]
-        if review_aguardando:
-            ids_pendentes = ", ".join(
-                c["task_id"]
-                for c in cards_task
-                if c["kanban_status"] not in ("DEV_DONE", "DONE_DEFINITIVO")
-            )
-            BUS.publish(
-                "announcement",
-                agent="@turing",
-                text=(
-                    f"⏳ PRECEDÊNCIA — review de {story_id} AGUARDA a DOR "
-                    f"'all_burn_done': tasks fora de DEV DONE [{ids_pendentes}]. "
-                    "Blocked do review NÃO pula a frente: quem libera o review é a "
-                    "precedência, não o blocked."
-                ),
-            )
-
-        ordem_fila = {c["task_id"]: i for i, c in enumerate(bloqueados + em_dev + aguardando)}
-        ids_fila = set(ordem_fila)
-        fila_tarefas = sorted(
-            (t for t in tarefas if t.id in ids_fila),
-            key=lambda t: ordem_fila[t.id],
+    def _suite_da_story_existe(self, story_id: str) -> bool:
+        """A suíte da story JÁ existe em tests/? (checagem determinística de
+        artefato: arquivo de teste cujo nome cita a story). É ISSO que decide
+        se o @aniche acorda: suíte existente é o contrato — reescrever teste
+        em resume/blocked/re-burn é reaproveitar linha de montagem parada.
+        A revalidação é papel do review (REVIEW-QA re-executa a suíte)."""
+        norma = re.sub(r"[^a-z0-9]", "", (story_id or "").lower())
+        if not norma:
+            return False
+        raiz = self.project_dir / "tests"
+        if not raiz.exists():
+            return False
+        return any(
+            norma in candidato.name.lower()
+            for candidato in raiz.rglob("*.py")
+            if candidato.is_file()
         )
-        return fila_tarefas, cartoes
 
-    def _garcom_devolver_cards_para_burn(self, onda_id: str, story_id: str, agente: str) -> int:
-        """Code review achou algo do domínio do AGENTE → os cards DEV DONE
-        dele VOLTAM PARA O BURN (AGUARDANDO DEV) — volta normal do fluxo
-        até o review aprovar. Retorna quantos voltaram."""
-        voltaram = 0
-        for c in self.db.carregar_tasks_kanban(onda_id, story_id):
-            if c["agent_role"] == agente and c["kanban_status"] == "DEV_DONE":
-                self.db.mover_task_kanban(onda_id, story_id, c["task_id"], "AGUARDANDO_DEV")
-                voltaram += 1
-        return voltaram
+    def _concluidas_da_story(self, onda_id: str, story_id: str) -> list[str]:
+        """Tasks concluídas LIDAS DO KANBAN (DEV DONE/DONE DEFINITIVO) —
+        conclusão é estado do kanban, nunca conjunto em memória."""
+        return sorted(
+            c["task_id"]
+            for c in self.db.carregar_tasks_kanban(onda_id, story_id)
+            if c["kanban_status"] in ("DEV_DONE", "DONE_DEFINITIVO")
+        )
+
+    def _garcom_carregar_fila(self, onda_id: str, story_id: str) -> tuple[list[dict], list[dict]]:
+        """Delega à FilaDoKanban (SRP)."""
+        return self._fila.carregar(onda_id, story_id)
+
+    def _garcom_devolver_cards_para_burn(
+        self,
+        onda_id: str,
+        story_id: str,
+        agente: str,
+        achados_ids: list[str] | None = None,
+    ) -> int:
+        """Delega à FilaDoKanban (SRP)."""
+        return self._fila.devolver_cards_para_burn(onda_id, story_id, agente, achados_ids=achados_ids)
+
+    def _acordar_task_em_dev(self, onda_id: str, story_id: str, task_id: str) -> bool:
+        """Delega à FilaDoKanban (SRP)."""
+        return self._fila.acordar_em_dev(onda_id, story_id, task_id)
+
+    def _nascer_fila_achados(self, story_id: str, achados: list[str]) -> None:
+        """Delega à FilaDoKanban (SRP)."""
+        self._fila.nascer_fila_achados(story_id, achados)
+
+    def _achados_pendentes(self, story_id: str) -> list[dict]:
+        """Delega à FilaDoKanban (SRP)."""
+        return self._fila.achados_pendentes(story_id)
+
+    def _anotar_cota_resultado(self, res: Any) -> None:
+        """Delega à política de cota (SRP)."""
+        self._cota.anotar_resultado(res)
+
+    def _cota_ocorreu(self, res: Any) -> bool:
+        """Anota + verifica num gesto (DRY do esqueleto da linha)."""
+        return self._cota.ocorreu(res)
+
+    def _anotar_cota_texto(self, texto: str | None) -> None:
+        self._cota.anotar_texto(texto)
+
+    @staticmethod
+    def _fmt_restante(segundos: float) -> str:
+        return PoliticaDeCota.fmt_restante(segundos)
+
+
+    def _esperar_reset_cota(self, story: str) -> tuple[str, str | None, QuotaResetInfo | None]:
+        """Delega à política de cota (SRP): pausa, espera o reset, retoma."""
+        return self._cota.esperar_reset(story)
+
+    def _parada_por_cota(
+        self, story: str, msg: str, completed_stories: list[str]
+    ) -> dict[str, Any]:
+        """Delega à política de cota (SRP): park honesto + card Impedimento."""
+        return self._cota.parada(story, msg, completed_stories)
+
+    def _gate_cota_na_escada(
+        self, story: str, esperas_cota: int, completed_stories: list[str]
+    ) -> tuple[str, int, dict[str, Any] | None]:
+        """Delega à política de cota (SRP): gate de início/fim de degrau."""
+        return self._cota.gate_escada(story, esperas_cota, completed_stories)
 
     def _run_cycle_inner(
         self,
@@ -2538,10 +2859,6 @@ class WaveOrchestrator:
             if story_file
             else f"docs/waves/{self.state_machine.wave_id}/stories/{target_story}.md"
         )
-        plan_file = (
-            self.workspace.wave_qa_dir(self.state_machine.wave_id) / f"{target_story}_test_plan.md"
-        )
-
         story_title = target_story
         tarefas = PBBDecomposer.decompose_story(
             story_id=target_story,
@@ -2554,56 +2871,26 @@ class WaveOrchestrator:
         # Braço ESCRITOR: tasks do breakdown nascem NO KANBAN, designadas, na
         # ordem — BACKLOG → AGUARDANDO DEV. Sem ordem no kanban, agente nem
         # acorda. Cards DEV DONE são IGNORADOS (revalidar é papel do code
-        # review final da story); BLOCKED tem prioridade (Andon).
+        # review final da story); BLOCKED tem prioridade (Impedimento).
         onda_id = self.state_machine.wave_id
+        # NASCIMENTO: o decompose é APENAS o escritor do kanban — os objetos
+        # em memória morrem aqui. O que queima são as ROWS do kanban.
         self._garcom_preparar_tasks(onda_id, target_story, tarefas)
-        pendentes, cartoes = self._garcom_carregar_fila(onda_id, target_story, tarefas)
+        qtd_nascidas = len(tarefas)
+        del tarefas
+        pendentes, _cartoes = self._garcom_carregar_fila(onda_id, target_story)
         # Ciclo só-de-validação? (nada a queimar — kanban 100% DEV DONE/DONE
         # DEFINITIVO). O código já está no disco de queimas anteriores; quem
         # valida é o code review — o consolidado vazio NÃO veta nada.
         houve_queima = bool(pendentes)
 
+        # ── O RELÓGIO (linha de montagem): NENHUM agente acorda fora da sua
+        # hora. O @aniche só entra DENTRO da queima de uma card DEV cuja suíte
+        # ainda não existe (primeira queima da story) — resume, instalação,
+        # achado e re-burn NUNCA o re-despertam (a suíte existente é o
+        # contrato; revalidar é papel do review). A queima COMEÇA NO RED: a
+        # card já está EM_DEV no kanban quando o @aniche escreve.
         runner_aniche = self._get_runner("@aniche")
-        test_plan_res = None
-        if runner_aniche and houve_queima:
-            # Kanban de agentes: o PLANO DE TESTES só roda quando HÁ queima
-            # (cards a executar). Ciclo só-de-validação (tudo DEV DONE) não
-            # re-elabora plano — trabalho invisível e redundante.
-            raw_aniche_prompt = (
-                f"Elabore o Plano de Testes e escreva a suíte de testes automatizados para a story {target_story}.\n"
-                f"Consulte os requisitos e os cenários BDD no arquivo '{story_rel}'.\n"
-                f"Gere e salve os testes de unidade/slice na pasta 'tests/' (ou retorne-a no seu parecer).\n"
-            )
-            aniche_prompt = self._assemble_prompt("@aniche", raw_aniche_prompt)
-            test_plan_res = runner_aniche.run(prompt=aniche_prompt)
-            self._record_telemetry("EXECUTE", "@aniche (QA Plan)", test_plan_res)
-
-            # Persiste o plano no disco da ONDA para consultas downstream
-            if test_plan_res and getattr(test_plan_res, "output", None):
-                try:
-                    plan_file.parent.mkdir(parents=True, exist_ok=True)
-                    plan_file.write_text(test_plan_res.output, encoding="utf-8")
-                    self._extract_and_write_project_files(test_plan_res.output)
-                except OSError as e:
-                    logger.warning("Falha ao salvar test plan: %s", e)
-
-            if test_plan_res and (
-                getattr(test_plan_res, "is_blocked", False)
-                or not getattr(test_plan_res, "success", True)
-            ):
-                block_reason = (
-                    getattr(test_plan_res, "block_reason", None)
-                    or "QA (@aniche) bloqueou a story: spec ambígua ou faltam cenários BDD"
-                )
-                self.kanban.block_card(target_story, reason=block_reason, blocked_by="@aniche")
-                return {
-                    "success": False,
-                    "is_blocked": True,
-                    "blocked_by": "@aniche",
-                    "error": block_reason,
-                    "message": f"Story {target_story} bloqueada no QA: {block_reason}",
-                    "test_plan_output": getattr(test_plan_res, "output", ""),
-                }
 
         # 2. FASE GREEN — EXECUÇÃO TASK-A-TASK com agendador por camada:
         # tarefas independentes de camadas distintas rodam EM PARALELO (o
@@ -2633,7 +2920,7 @@ class WaveOrchestrator:
             "announcement",
             agent="@turing",
             text=(
-                f"🧩 {target_story} decomposta em {len(tarefas)} tarefas atômicas — "
+                f"🧩 {target_story} decomposta em {qtd_nascidas} tarefas atômicas — "
                 "execução task-a-task, paralelismo por camada, review no fim da story."
             ),
         )
@@ -2662,41 +2949,136 @@ class WaveOrchestrator:
         )
         entregues: list[str] = []
         dev_outputs: list[str] = []
-        concluidas_ids: set[str] = set()
 
         # Evidência de execução: arquivos gravados pelos devs NESTE ciclo.
         # Zero escritas = plano sem código (recusa velada) — detectável.
         escritas_ciclo: list[str] = []
 
-        def _executa_tarefa(tarefa_exec: Any) -> str:
+        def _executa_tarefa(tarefa_exec: dict) -> str:
             """Uma tarefa = RED (aniche, escopo do trecho) + GREEN (dev da camada).
 
-            Kanban de agentes: card → EM_DEV antes de acordar o agente; no fim,
-            BINÁRIO — sucesso → DEV DONE; não deu certo → BLOCKED (tipado,
-            fica na coluna em que está)."""
-            self.db.mover_task_kanban(onda_id, target_story, tarefa_exec.id, "EM_DEV")
-            if runner_aniche:
+            `tarefa_exec` é a ROW DO KANBAN (única fonte da verdade): id, título,
+            tipo, descrição, agente e DOD moram nela. DOR 100% → card vai pra
+            EM_DEV ANTES de acordar o agente (bola da vez no burn); no fim,
+            BINÁRIO — sucesso → DEV DONE; não deu certo → SITUAÇÃO blocked
+            tipada, fica NA coluna em que está (blocked não é coluna, é flag)."""
+            tid = tarefa_exec["task_id"]
+            if not self._acordar_task_em_dev(onda_id, target_story, tid):
+                # DOR não atendida: NINGUÉM atua — a card não entra em DEV.
+                return (
+                    f"⛔ DOR não atendida para {tid} — a card não foi "
+                    "para EM DEV e não foi queimada (precedência pendente)."
+                )
+            if tarefa_exec.get("task_tipo") == "ACHADO" or tid.startswith("ACHADO-"):
+                # FILA ÚNICA: achado É card e queima PELA FILA DO KANBAN (ordem
+                # e DOR do kanban mandam — dependência da instalação respeitada).
+                return str(
+                    getattr(
+                        self._run_achado_card(
+                            target_story,
+                            tarefa_exec,
+                            1,
+                            tarefa_exec.get("descricao") or tarefa_exec.get("title") or "",
+                        ),
+                        "output",
+                        "",
+                    )
+                )
+            if tarefa_exec.get("task_tipo") == "INSTALACAO":
+                # Task de ambiente (Guto/Tech Lead): NÃO passa por RED/GREEN —
+                # o burn É a instalação auditada + verificação de execução
+                # (binário próprio dentro de _executar_com_card).
+                agente_inst = tarefa_exec.get("agent_role") or "@guto"
+                prompt_inst = (
+                    f"Story: {objetivo_story}{story_path_hint}\n"
+                    f"TAREFA DE AMBIENTE: {tarefa_exec.get('title', '')}\n"
+                    f"Evidência do impedimento: {tarefa_exec.get('descricao', '')}\n"
+                    "Instale a dependência/ferramenta NO PROJETO SE NECESSÁRIO (comando "
+                    "local auditado, sem -g, sem sudo) e EXECUTE OBRIGATORIAMENTE, via "
+                    "ferramenta executar_comando, o TESTE DE VALIDAÇÃO: um import/require "
+                    "simples da biblioteca (ex.: node -e \"require('jsdom')\" / python -c "
+                    "\"import x\"). A card SÓ fecha com esse teste passando (exit 0), "
+                    "registrado pela plataforma — vale para 'instalei agora', 'já estava "
+                    "instalado' e 'reinstalei'. 'Deve funcionar' e npm install sozinho "
+                    "NÃO finaliza a card."
+                )
+                def _queimar_instalacao_com_dod(
+                    ag: str = agente_inst, p: str = prompt_inst
+                ) -> Any:
+                    """DOD REAL da instalação (zero suposição) — VALIDAÇÃO, não
+                    instalação: a card só fecha com o TESTE de validação
+                    (import/require da biblioteca) EXECUTADO pela ferramenta
+                    com exit 0, registrado platform-side. Cobre os três casos:
+                    instalou agora · já estava instalado · reinstalou depois de
+                    instalar errado. 'npm install' sozinho NÃO prova que roda;
+                    prosa do agente não é evidência."""
+                    r = self._queimar_instalacao(ag, p)
+                    registro = list(getattr(r, "comandos_executados", []) or [])
+                    if getattr(r, "success", True) is True and not verificar_instalacao(
+                        registro
+                    ):
+                        return AgentExecutionResult(
+                            agent_handle=ag,
+                            success=False,
+                            is_blocked=True,
+                            block_reason=(
+                                "Instalação sem VALIDAÇÃO executada: nenhum comando "
+                                "rodou com exit 0 pela ferramenta (registro "
+                                "platform-side vazio). A prova é o teste de "
+                                "import/require da biblioteca verde — não a prosa."
+                            ),
+                        )
+                    return r
+
+                res_inst = self._executar_com_card(
+                    onda_id,
+                    target_story,
+                    tid,
+                    tarefa_exec.get("title") or "Instalação de ambiente",
+                    agente_inst,
+                    0,
+                    _queimar_instalacao_com_dod,
+                    dor=[],
+                    dod=[],
+                )
+                return str(getattr(res_inst, "output", "") or "")
+            tipo = tarefa_exec.get("task_tipo") or ""
+            titulo_t = tarefa_exec.get("title", "")
+            problema_t = tarefa_exec.get("descricao") or titulo_t
+            if (
+                runner_aniche
+                and not self._suite_da_story_existe(target_story)
+                and target_story not in self._red_ja_feito
+            ):
+                # A QUEIMA COMEÇA NO RED — a card JÁ ESTÁ EM_DEV no kanban
+                # (acordada acima) quando o @aniche escreve. Só acorda na
+                # PRIMEIRA queima da story (suíte inexistente): resume,
+                # instalação, achado e re-burn NUNCA o re-despertam — a suíte
+                # existente é o contrato; revalidar é papel do review.
                 raw_red = (
                     f"Story: {objetivo_story}{story_path_hint}\n"
-                    f"TAREFA ATUAL: [{tarefa_exec.task_type.value}] {tarefa_exec.title}\n"
-                    f"Problema único desta tarefa: {tarefa_exec.problema_unico or tarefa_exec.description}\n"
+                    "Elabore o Plano de Testes e escreva a suíte de testes da story "
+                    "(unidade/slice) na pasta 'tests/' — consulte os requisitos e os "
+                    f"cenários BDD no arquivo '{story_rel}'.\n"
+                    f"AGORA, PARA A TAREFA ATUAL: [{tipo}] {titulo_t}\n"
+                    f"Problema único desta tarefa: {problema_t}\n"
                     "Escreva APENAS os testes que falham para ESTE trecho — nada de outras "
-                    f"tarefas. Declare no fim: 'Testes falhando (RED) para a tarefa {tarefa_exec.id}'."
+                    f"tarefas. Declare no fim: 'Testes falhando (RED) para a tarefa {tid}'."
                 )
-                runner_aniche.run(self._assemble_prompt("@aniche", raw_red))
+                res_red = runner_aniche.run(self._assemble_prompt("@aniche", raw_red))
+                self._red_ja_feito.add(target_story)
+                self._anotar_cota_resultado(res_red)
+                try:
+                    escritas_ciclo.extend(getattr(res_red, "arquivos_escritos", []))
+                except Exception:  # noqa: BLE001, S110 — mock pode não ter o campo
+                    pass
 
-            executor_handle = {
-                "DATABASE": "@codd",
-                "CONTRACT": "@ieru",
-                "BACKEND_TDD": "@valim",
-                "FRONTEND_UI": "@ada",
-                "E2E_INTEGRATION": "@aniche",
-                "FOUNDATION": "@unclebob",
-            }.get(tarefa_exec.task_type.value, "@valim")
+            # O executor é o AGENTE DESIGNADO NO KANBAN (agent_role da row).
+            executor_handle = tarefa_exec.get("agent_role") or "@valim"
             # ANTI-PAPAGAIO: se o dev anterior BLOQUEOU (bandeira vermelha),
             # o próximo degrau troca o dev da camada — repetir o mesmo que
             # travou é insistência inútil.
-            if getattr(tarefa_exec, "_dev_bloqueou", False):
+            if getattr(tarefa_exec, "get", lambda *_: False)("_dev_bloqueou", False):
                 alternativos = {"@valim": "@barbara", "@barbara": "@valim"}
                 executor_handle = alternativos.get(executor_handle, executor_handle)
             runner_executor = self._get_runner(executor_handle)
@@ -2710,28 +3092,33 @@ class WaveOrchestrator:
             )
             raw_dev = (
                 f"OBJETIVO DA STORY COMPLETA: {objetivo_story}{story_path_hint}\n\n"
-                f"TAREFA ATUAL (sua entrega): [{tarefa_exec.task_type.value}] {tarefa_exec.title}\n"
-                f"Problema único: {tarefa_exec.problema_unico or tarefa_exec.description}\n"
+                f"TAREFA ATUAL (sua entrega): [{tipo}] {titulo_t}\n"
+                f"Problema único: {problema_t}\n"
                 f"Testes (RED) já escritos pelo @aniche em 'tests/'.\n"
                 f"{contexto}\n"
-                "REGRA RÍGIDA DE ESCOPO: entregue APENAS o trecho em TAREFA ATUAL. As demais "
-                "tarefas da story NÃO são suas — não as implemente, não as antecipe, não as "
-                "declare como entregues. Observações fora do escopo: registre e siga o trecho.\n"
+                "REGRA RÍGIDA DE ESCOPO E ESPECIALIDADE (ENTERPRISE GRADE):\n"
+                f"1. Você é o agente {executor_handle}. Atue ESTRITAMENTE na sua especialidade e no escopo desta tarefa.\n"
+                "2. BACKEND NUNCA edita arquivos de Frontend (.vue, .css, specs de UI) e vice-versa. Violação = veto imediato da plataforma.\n"
+                "3. GESTÃO DE ERROS FORA DO ESCOPO:\n"
+                "   - Se o erro fora de escopo IMPEDE você de terminar a sua tarefa: interrompa e declare o bloqueio com a evidência técnica do erro (o Kanban abrirá o card do especialista para destravar você).\n"
+                "   - Se o erro fora de escopo NÃO IMPEDE você de terminar: termine sua entrega (GREEN), e ao final declare no seu texto: 'ACHADO_FORA_DE_ESCOPO: <descrição do problema encontrado>' para que o @turing providencie o card no Kanban.\n"
+                "4. Entregue APENAS o trecho em TAREFA ATUAL. As demais tarefas da story NÃO são suas.\n"
                 "Implemente o mínimo para ESTES testes passarem (GREEN) e refatore (Clean Code). "
                 "Entrega desta rodada = arquivos GRAVADOS (write_project_file) — "
                 "resposta sem gravação não é entrega."
             )
             escritas_antes = len(escritas_ciclo)
             res_t = runner_executor.run(self._assemble_prompt(executor_handle, raw_dev))
+            self._anotar_cota_resultado(res_t)
             escritas_ciclo.extend(getattr(res_t, "arquivos_escritos", []))
             # DOD item a item: 'gravou_arquivo' exige gravação REAL nesta
-            # execução (sucesso sem gravação = plano, não entrega).
-            cartao_t = next((c for c in cartoes if c["task_id"] == tarefa_exec.id), {})
+            # execução (sucesso sem gravação = plano, não entrega). O DOD é
+            # lido DA ROW (kanban — única fonte).
             sinais_reais = isinstance(getattr(res_t, "success", None), bool)
             dod_ok = (
                 (not sinais_reais)
                 or bool(escritas_ciclo[escritas_antes:])
-                or ("gravou_arquivo" not in (cartao_t.get("dod") or []))
+                or ("gravou_arquivo" not in (tarefa_exec.get("dod") or []))
             )
             # BINÁRIO do card de agente: deu certo ou não deu. Sem exceções.
             # Sinais booleanos REAIS (AgentExecutionResult) decidem; sem sinal
@@ -2743,18 +3130,57 @@ class WaveOrchestrator:
             else:
                 deu_certo = True
             if deu_certo and dod_ok:
-                self.db.mover_task_kanban(onda_id, target_story, tarefa_exec.id, "DEV_DONE")
+                self.db.mover_task_kanban(onda_id, target_story, tid, "DEV_DONE")
+                # Gestão inteligente de achados que não impediram a entrega:
+                # Se o agente apontou achados fora de escopo, o Turing já registra no Kanban
+                out_texto = getattr(res_t, "output", "") or ""
+                import re as _re_ach
+                for ach_match in _re_ach.finditer(r"ACHADO_FORA_DE_ESCOPO:\s*(.+)", out_texto, _re_ach.IGNORECASE):
+                    texto_ach = ach_match.group(1).strip()
+                    if texto_ach:
+                        self._nascer_fila_achados(target_story, [texto_ach])
             else:
-                self.db.mover_task_kanban(
+                # BLOCKED É SITUAÇÃO (flag tipada NA coluna), nunca movimento:
+                # a card fica onde está e a fila segue quando resolvida.
+                self.db.bloquear_task_kanban(
                     onda_id,
                     target_story,
-                    tarefa_exec.id,
-                    "BLOCKED",
+                    tid,
                     "INTERNAL_SCALE",
                 )
+                # GOVERNANÇA DE AMBIENTE: falta de ferramenta/dependência não
+                # escala humano — abre a task prioritária de instalação.
+                evid_t = evidencia_de(res_t)
+                if self._e_bloqueio_de_instalacao(evid_t):
+                    self._abrir_task_instalacao(onda_id, target_story, tid, evid_t)
+                elif evid_t:
+                    # Auto-cura imediata do Kanban: se o erro for de outra camada ou especialidade,
+                    # abre o card de achado correspondente e amarra a dependência para o resume.
+                    self._abrir_achado_de_bloqueio(onda_id, target_story, tid, evid_t)
             return getattr(res_t, "output", "")
 
-        while pendentes:
+        falhas_ciclo: dict[str, int] = {}
+        while True:
+            # KANBAN MANDA EM TUDO — ZERO SUPOSIÇÃO: a fila é RELIDA DO BANCO
+            # a cada passada, contra o estado REAL. Uma card só libera
+            # dependente quando está REALMENTE em DEV DONE; card com 🚩
+            # (impedimento ativo) está fora da fila até o desbloqueio.
+            pendentes, _cartoes_passada = self._garcom_carregar_fila(onda_id, target_story)
+            if not pendentes:
+                break
+            if self._cota_ativa:
+                # 🚦 COTA ESGOTADA: parar de queimar AQUI (cada chamada 429 é
+                # lixo) — o ciclo devolve como bloqueado e a escada PAUSA para
+                # esperar o reset, sem gastar tentativa de convergência.
+                BUS.publish(
+                    "announcement",
+                    agent="@turing",
+                    text=(
+                        f"⏸ {target_story}: cota do provedor esgotada — parando a "
+                        "queima; aguardando reset da janela."
+                    ),
+                )
+                break
             if ABORT_EVENT.is_set():
                 BUS.publish(
                     "announcement",
@@ -2766,19 +3192,33 @@ class WaveOrchestrator:
                     "is_blocked": True,
                     "blocked_by": "@turing",
                     "error": "Interrompido pelo usuário (checkpoint salvo).",
-                    "completed_tasks": sorted(concluidas_ids),
+                    "completed_tasks": self._concluidas_da_story(onda_id, target_story),
                 }
-
-            # Lote: prontas (dependências satisfeitas), UMA por camada
-            prontas = [t for t in pendentes if all(dep in concluidas_ids for dep in t.depends_on)]
-            lote: list = []
-            camadas: set[str] = set()
-            for t in prontas:
-                if t.task_type.value not in camadas:
-                    lote.append(t)
-                    camadas.add(t.task_type.value)
+            # TURNO DO KANBAN: lote montado pela MESMA função única consumida pela tela (montar_lote_turno).
+            # Zero exceção: instalações, achados, paralelos e solos seguem a mesma regra canônica.
+            lote = montar_lote_turno(pendentes)
             if not lote:
-                lote = [pendentes[0]]  # dependências circulares: sequencial
+                lote = [pendentes[0]]
+
+            if lote[0].get("task_tipo") == "INSTALACAO" or lote[0]["task_id"].startswith("INSTALACAO-"):
+                BUS.publish(
+                    "announcement",
+                    agent="@turing",
+                    text=(
+                        f"🧰 IMPEDIMENTO DE AMBIENTE — linha parada em {target_story}: "
+                        f"{lote[0]['task_id']} ({lote[0]['agent_role']}) é a "
+                        "PRÓXIMA a queimar, antes de qualquer outra tarefa."
+                    ),
+                )
+
+            # Snapshot ANTES do burn: a flag nasce DURANTE o burn — a guarda
+            # de progresso compara o estado pré e pós-passada.
+            concluidas_antes = len(self._concluidas_da_story(onda_id, target_story))
+            flag_antes = sum(
+                1
+                for c in self.db.carregar_tasks_kanban(onda_id, target_story)
+                if c["block_tipo"]
+            )
 
             if len(lote) == 1:
                 saidas_lote = [_executa_tarefa(lote[0])]
@@ -2788,20 +3228,106 @@ class WaveOrchestrator:
                     agent="@turing",
                     text=(
                         "⚡ Paralelismo por camada: "
-                        + ", ".join(f"{t.task_type.value} ({t.id})" for t in lote)
+                        + ", ".join(f"{t.get('task_tipo') or ''} ({t['task_id']})" for t in lote)
                         + " rodando juntos (contratos já definidos pelo arquiteto)."
                     ),
                 )
                 with ThreadPoolExecutor(max_workers=len(lote)) as pool:
                     saidas_lote = list(pool.map(_executa_tarefa, lote))
 
+            # PÓS-BURN — o kanban decide (binário, sem suposição): DEV DONE
+            # real = concluída; qualquer outra coisa = flag ativa, a card
+            # está FORA da fila (impedimento) e a linha atua nela.
+            instalacao_bloqueada = False
             for t_exec, saida in zip(lote, saidas_lote):
-                concluidas_ids.add(t_exec.id)
-                pendentes.remove(t_exec)
-                entregues.append(
-                    f"{t_exec.id} — {t_exec.title} ({t_exec.problema_unico or t_exec.description})"
+                tid_exec = t_exec["task_id"]
+                cartao_pos = next(
+                    (
+                        c
+                        for c in self.db.carregar_tasks_kanban(onda_id, target_story)
+                        if c["task_id"] == tid_exec
+                    ),
+                    None,
                 )
-                dev_outputs.append(f"[{t_exec.task_type.value}] {t_exec.title}: {saida}")
+                foi_dev_done = bool(cartao_pos) and cartao_pos["kanban_status"] == "DEV_DONE"
+                if foi_dev_done:
+                    entregues.append(
+                        f"{tid_exec} — {t_exec['title']} ({t_exec.get('descricao') or t_exec['title']})"
+                    )
+                    dev_outputs.append(
+                        f"[{t_exec.get('task_tipo') or ''}] {t_exec['title']}: {saida}"
+                    )
+                    if t_exec.get("task_tipo") == "INSTALACAO":
+                        # A informação que causou os blocks de ambiente EXISTE:
+                        # cards flagged com dep:INSTALACAO-n são desbloqueadas.
+                        self._fila.desbloquear_apos_instalacao(
+                            onda_id, target_story, tid_exec
+                        )
+                elif t_exec.get("task_tipo") == "INSTALACAO":
+                    # A INSTALAÇÃO em si falhou (sem evidência real de
+                    # execução): linha PARADA de verdade — queimar o resto com
+                    # o ambiente quebrado é desperdício de cota.
+                    instalacao_bloqueada = True
+                else:
+                    # TETO DE TENTATIVAS (determinístico): a 2ª falha da MESMA
+                    # task no ciclo PARA A LINHA de vez — o impedimento que
+                    # sobrevive à correção do ambiente exige decisão, não
+                    # repetição infinita de instalação/queima.
+                    falhas_ciclo[tid_exec] = falhas_ciclo.get(tid_exec, 0) + 1
+                    if falhas_ciclo[tid_exec] >= 2:
+                        BUS.publish(
+                            "announcement",
+                            agent="@turing",
+                            text=(
+                                f"🛑 {target_story} {tid_exec}: 2ª falha no mesmo "
+                                "ciclo — linha parada de vez. O impedimento "
+                                "sobreviveu à correção; repetir não é solução."
+                            ),
+                        )
+                        return {
+                            "success": False,
+                            "is_blocked": True,
+                            "blocked_by": "@turing",
+                            "error": (
+                                f"{tid_exec} falhou 2x no ciclo mesmo após a "
+                                "correção de ambiente — linha parada (impedimento)."
+                            ),
+                            "completed_tasks": self._concluidas_da_story(
+                                onda_id, target_story
+                            ),
+                        }
+            if instalacao_bloqueada:
+                BUS.publish(
+                    "announcement",
+                    agent="@turing",
+                    text=(
+                        f"🧰 IMPEDIMENTO DE AMBIENTE — instalação bloqueada em "
+                        f"{target_story}: nada mais queima neste ciclo (as cards "
+                        "continuam no kanban; resume retoma pela instalação)."
+                    ),
+                )
+                break
+            # GUARDA DETERMINÍSTICA: passada sem progresso REAL (nada em DEV
+            # DONE, nenhuma flag nova) = a linha para — nunca gira em falso.
+            flag_agora = sum(
+                1
+                for c in self.db.carregar_tasks_kanban(onda_id, target_story)
+                if c["block_tipo"]
+            )
+            if (
+                len(self._concluidas_da_story(onda_id, target_story)) == concluidas_antes
+                and flag_agora == flag_antes
+                and not instalacao_bloqueada
+            ):
+                BUS.publish(
+                    "announcement",
+                    agent="@turing",
+                    text=(
+                        f"🛑 {target_story}: passada sem progresso real — linha "
+                        "parada (nada queimou, nada foi resolvido)."
+                    ),
+                )
+                break
 
         dev_res_texto = "\n\n".join(dev_outputs)
 
@@ -2817,8 +3343,30 @@ class WaveOrchestrator:
 
         dev_res = _DevConsolidado()
 
+        if self._cota_ativa:
+            # 🚦 COTA ESGOTADA DURANTE A QUEIMA: o broker morreu no meio da rodada.
+            # Devolve bloqueado pelo motivo REAL (429) SEM chamar o review/downstream
+            # (seria outra chamada garantidamente 429) — a escada do lado de fora
+            # espera o reset SEM queimar degrau.
+            BUS.publish(
+                "announcement",
+                agent="@turing",
+                text=(
+                    f"⏸ {target_story}: cota esgotada no meio da queima — "
+                    "review/downstream suspensos até o reset do provedor."
+                ),
+            )
+            return {
+                "success": False,
+                "is_blocked": True,
+                "blocked_by": "@turing",
+                "error": "Cota esgotada no provedor — queima pausada (infra).",
+                "review_output": "",
+                "arquivos_escritos": escritas_ciclo,
+            }
+
         # 🚩 REGRA DO KANBAN DE AGENTES: review SÓ com TODAS as tasks da story
-        # em DEV DONE. Alguma task terminou BLOCKED? A linha para AQUI (Andon):
+        # em DEV DONE. Alguma task terminou BLOCKED? A linha para AQUI (Impedimento):
         # nada de review sobre trabalho incompleto — o escada/fila atua na
         # task bloqueada primeiro (ela é a primeira da fila no próximo ciclo).
         cartoes_fim = self.db.carregar_tasks_kanban(onda_id, target_story)
@@ -2837,7 +3385,7 @@ class WaveOrchestrator:
                 "announcement",
                 agent="@turing",
                 text=(
-                    f"🚩 ANDON — {target_story}: {len(nao_prontas)} task(s) fora de DEV "
+                    f"🚩 IMPEDIMENTO — {target_story}: {len(nao_prontas)} task(s) fora de DEV "
                     f"DONE [{detalhes}]. Code review NÃO roda sobre story incompleta; "
                     "a linha atua nas tasks bloqueadas primeiro."
                 ),
@@ -2858,7 +3406,7 @@ class WaveOrchestrator:
                 "blocked_by": "@turing",
                 "error": (
                     f"🚩 {target_story}: story com task fora de DEV DONE "
-                    f"[{detalhes}] — review suspenso (Andon)."
+                    f"[{detalhes}] — review suspenso (Impedimento)."
                 ),
                 "review_output": "",
                 "arquivos_escritos": escritas_ciclo,
@@ -2896,6 +3444,7 @@ class WaveOrchestrator:
                 dor=["all_burn_done"],
                 dod=["parecer_integral_gravado"],
             )
+            self._anotar_cota_resultado(bob_res)
 
             if bob_res and (
                 getattr(bob_res, "is_blocked", False) or not getattr(bob_res, "success", True)
@@ -2947,6 +3496,7 @@ class WaveOrchestrator:
                 dor=["all_burn_done"],
                 dod=["veredito_explicito_da_suite"],
             )
+            self._anotar_cota_resultado(aniche_val_res)
 
         # Avalia veredictos com a LEI DA RESTRIÇÃO (DEFAULT-DENY)
         aniche_approved, aniche_reason = self._check_explicit_approval(aniche_val_res)
@@ -2988,7 +3538,7 @@ class WaveOrchestrator:
             status=final_status,
             reviews=reviews_dict,
         )
-        # Andon flag: ciclo aprovado limpa o bloqueio anterior (o card segue
+        # Impedimento flag: ciclo aprovado limpa o bloqueio anterior (o card segue
         # o fluxo — a flag de bloqueio é ortogonal ao status).
         card_ciclo = self.kanban.get_card(target_story)
         if is_cycle_approved and card_ciclo and card_ciclo.get("is_blocked"):
@@ -2997,11 +3547,12 @@ class WaveOrchestrator:
         # ── KANBAN DE AGENTES: destino final do ciclo ──
         if is_cycle_approved:
             # Story 100% aprovada → cards viram DONE DEFINITIVO (nunca mais
-            # voltam; mexer depois = CHANGE = novo card formalizado).
-            for t in tarefas:
-                self.db.mover_task_kanban(onda_id, target_story, t.id, "DONE_DEFINITIVO")
-            self.db.mover_task_kanban(onda_id, target_story, "REVIEW-TECH", "DONE_DEFINITIVO")
-            self.db.mover_task_kanban(onda_id, target_story, "REVIEW-QA", "DONE_DEFINITIVO")
+            # voltam; mexer depois = CHANGE = novo card formalizado). A lista
+            # de cards vem DO KANBAN (única fonte) — não de memória.
+            for c in self.db.carregar_tasks_kanban(onda_id, target_story):
+                self.db.mover_task_kanban(
+                    onda_id, target_story, c["task_id"], "DONE_DEFINITIVO"
+                )
         # Rejeição: os cards DEV_DONE aguardam — a fila de achados devolve
         # para o BURN apenas os cards do agente afetado (garçom lá em cima).
 
@@ -3023,7 +3574,7 @@ class WaveOrchestrator:
             "story_id": target_story,
             "is_blocked": not is_cycle_approved,
             "error": block_msg if not is_cycle_approved else None,
-            "test_plan_output": getattr(test_plan_res, "output", "") if test_plan_res else "",
+            "test_plan_output": "",
             "dev_output": getattr(dev_res, "output", "") if dev_res else "",
             "aniche_output": getattr(aniche_val_res, "output", "") if aniche_val_res else "",
             "review_output": getattr(bob_res, "output", "") if bob_res else "",
@@ -3103,158 +3654,6 @@ class WaveOrchestrator:
             "message": f"Story {story_id} desbloqueada com sucesso após intervenção de {delegated_agent}.",
         }
 
-    def run_story_tasks(
-        self,
-        story_id: str,
-        tasks: list[AtomicTask],
-        context: dict[str, Any] | None = None,
-    ) -> dict[str, Any]:
-        """Executa a decomposição atômica de uma story task-por-task no ciclo TDD (ST-037)."""
-        completed_tasks: set[str] = set()
-        results: list[dict[str, Any]] = []
-
-        # Marca o card como IN_PROGRESS se estiver no Kanban
-        try:
-            self.kanban.update_status(story_id, KanbanCardStatus.IN_PROGRESS.value)
-        except Exception as exc:  # noqa: BLE001 — kanban é best-effort no ciclo TDD
-            logger.debug("Falha ao atualizar card %s para IN_PROGRESS: %s", story_id, exc)
-
-        for task in tasks:
-            # 1. Validação de dependências prévias
-            for dep_id in task.depends_on:
-                if dep_id not in completed_tasks:
-                    task.status = "BLOCKED"
-                    err = f"Task {task.id} bloqueada por dependência não concluída: {dep_id}"
-                    task.error = err
-                    return {"success": False, "story_id": story_id, "error": err}
-
-            # 2. Execução determinística de fundação (STORY-0 / FOUNDATION)
-            if task.task_type == AtomicTaskType.FOUNDATION:
-                found_res = self._execute_foundation_task(task, context)
-                if not found_res["success"]:
-                    task.status = "FAILED"
-                    task.error = found_res.get("error")
-                    return {
-                        "success": False,
-                        "story_id": story_id,
-                        "task_id": task.id,
-                        "error": task.error,
-                    }
-                task.status = "COMPLETED"
-                task.output = found_res.get("output")
-                completed_tasks.add(task.id)
-                results.append(
-                    {
-                        "task_id": task.id,
-                        "agent": task.responsible_agent,
-                        "success": True,
-                    }
-                )
-                continue
-
-            # 3. Despacha o agente especialista responsável
-            runner = self._get_runner(task.responsible_agent)
-            if not runner:
-                task.status = "FAILED"
-                err = f"Agente {task.responsible_agent} não encontrado para executar a task {task.id}."
-                task.error = err
-                return {"success": False, "story_id": story_id, "error": err}
-
-            task_prompt = (
-                f"Execute a tarefa atômica [{task.id}] da Story {story_id}.\n"
-                f"Tipo: {task.task_type.value}\n"
-                f"Título: {task.title}\n"
-                f"Instruções:\n{task.description}\n"
-                f"Atue única e exclusivamente no escopo desta tarefa (Princípio de Responsabilidade Única).\n"
-            )
-            assembled = self._assemble_prompt(task.responsible_agent, task_prompt, context)
-            res = runner.run(prompt=assembled, context=context)
-            self._record_telemetry("EXECUTE", task.responsible_agent, res)
-
-            if not res.success or getattr(res, "is_blocked", False):
-                task.status = "FAILED"
-                task.error = (
-                    getattr(res, "error", None)
-                    or getattr(res, "block_reason", None)
-                    or "Falha de execução"
-                )
-                return {
-                    "success": False,
-                    "story_id": story_id,
-                    "task_id": task.id,
-                    "error": task.error,
-                }
-
-            task.status = "COMPLETED"
-            task.output = res.output
-            completed_tasks.add(task.id)
-            results.append(
-                {
-                    "task_id": task.id,
-                    "agent": task.responsible_agent,
-                    "success": True,
-                }
-            )
-
-        # Todas as tarefas concluídas: promove card no Kanban para DEV_DONE
-        try:
-            self.kanban.update_status(story_id, KanbanCardStatus.DEV_DONE.value)
-        except Exception as exc:  # noqa: BLE001 — kanban é best-effort no ciclo TDD
-            logger.debug("Falha ao promover card %s para DEV_DONE: %s", story_id, exc)
-
-        return {"success": True, "story_id": story_id, "results": results}
-
-    def _execute_foundation_task(
-        self,
-        task: AtomicTask,
-        context: dict[str, Any] | None = None,
-    ) -> dict[str, Any]:
-        """Executa deterministicamente a fundação de Starter na STORY-0 (ST-045)."""
-        from ..starters.decision import load_starter_decision
-        from ..starters.engine import StarterEngine
-
-        starter_data = load_starter_decision(self.project_dir)
-        starter_id = starter_data.get("starter_id") if starter_data else None
-
-        if not starter_id:
-            for text in (task.title, task.description):
-                if "'" in text:
-                    candidate = text.split("'")[1].strip()
-                    if candidate:
-                        starter_id = candidate
-                        break
-                elif '"' in text:
-                    candidate = text.split('"')[1].strip()
-                    if candidate:
-                        starter_id = candidate
-                        break
-
-        if not starter_id:
-            starter_id = "python-mono"
-
-        engine = StarterEngine()
-        apply_res = engine.apply_starter(
-            starter_id=starter_id,
-            target_dir=str(self.project_dir),
-            force=True,
-        )
-
-        if not apply_res.get("success"):
-            err = apply_res.get("error", "Falha no scaffolding de fundação")
-            runner = self._get_runner("@unclebob")
-            if runner:
-                fix_prompt = f"Falha no scaffolding de fundação do starter '{starter_id}': {err}. Corrija a fundação."
-                res = runner.run(prompt=fix_prompt, context=context)
-                if getattr(res, "success", False):
-                    return {"success": True, "output": f"Recuperado pelo Tech Lead: {res.output}"}
-            return {"success": False, "error": err}
-
-        created = apply_res.get("created_files", [])
-        return {
-            "success": True,
-            "output": f"Starter '{starter_id}' aplicado com sucesso. Arquivos gerados: {len(created)}.",
-        }
-
     def run_execute(
         self,
         stories: list[str] | None = None,
@@ -3290,11 +3689,17 @@ class WaveOrchestrator:
             AutonomyMode.SEMI_AUTO,
         )
 
+        # Cota do provedor: estado limpo por lote — cada execução recomeça
+        # sem janela de reset herdada.
+        self._cota_ativa = None
+
         for story in target_stories:
             # 🚩 IMPEDIMENTO — REGRA ABSOLUTA: bandeira vermelha PARA A LINHA
             # INTEIRA. Não se segue com erro, não se pula fila, não existe
             # tolerância. Enquanto houver bandeira erguida, a ÚNICA coisa que a
             # linha faz é resolver a história flagada — as demais aguardam.
+            # FILA INDIANA: a tela mostra APENAS o item que roda — nunca o
+            # que espera (a LLM não olha lista; olha o 1 item).
             bandeiras = [
                 c
                 for c in self.kanban.list_cards(wave_id=self.state_machine.wave_id)
@@ -3309,9 +3714,7 @@ class WaveOrchestrator:
                         agent="@turing",
                         text=(
                             f"🔴 LINHA DE PRODUÇÃO PARADA — bandeira vermelha na {story_bandeira}. "
-                            f"{story} aguarda: nada avança sem resolver o "
-                            "impedimento. A correção da história flagada é o único "
-                            "trabalho permitido agora."
+                            "Resolvê-la é o único trabalho permitido agora."
                         ),
                         wave_id=self.state_machine.wave_id,
                     )
@@ -3474,6 +3877,7 @@ class WaveOrchestrator:
                         self._record_telemetry(
                             "EXECUTE", "@unclebob (re-emissão do parecer)", res_reemit
                         )
+                        self._anotar_cota_resultado(res_reemit)
                         novo_parecer = (getattr(res_reemit, "output", "") or "").strip()
                         if novo_parecer and motor.extract_blockers(novo_parecer):
                             parecer_integral = novo_parecer
@@ -3491,91 +3895,48 @@ class WaveOrchestrator:
                                 "declare bloqueio explicitamente — NÃO invente correções."
                             )
 
-                if len(achados_enfileirados) >= 2:
-                    self._fila_achados[story] = list(achados_enfileirados)
-                    BUS.publish(
-                        "veto_analysis",
-                        agent="@turing",
-                        text=(
-                            f"📋 {story}: {len(achados_enfileirados)} achados ENFILEIRADOS — "
-                            "cada um com seu agente; correção um a um, validação integral no fim."
-                        ),
-                    )
-                    escritas_fila: list[str] = []
-                    for i, achado in enumerate(achados_enfileirados, 1):
-                        agente_achado = self._agente_para_achado(achado)
-                        # Code review achou algo do domínio do agente → os
-                        # cards DEV DONE dele VOLTAM PARA O BURN (fluxo normal:
-                        # voltar até o review aprovar; DONE DEFINITivo não volta).
-                        voltaram = self._garcom_devolver_cards_para_burn(
-                            self.state_machine.wave_id, story, agente_achado
+                # ── FILA ÚNICA: achados NASCEM COMO CARDS no kanban — e queimam
+                # PELA FILA (ordem + DOR), no próximo ciclo. AQUI NÃO SE QUEIMA
+                # NADA: sem loop paralelo, sem segunda fila, sem exceção.
+                if len(achados_enfileirados) >= 1:
+                    self._nascer_fila_achados(story, achados_enfileirados)
+                    pendentes_ach = self._achados_pendentes(story)
+                    # Agrupa achados por agente para amarrar a DOR dos cards devolvidos
+                    achados_por_agente: dict[str, list[str]] = {}
+                    for row_ach in pendentes_ach:
+                        agente_achado = row_ach.get("agent_role") or self._agente_para_achado(
+                            row_ach.get("descricao", "")
                         )
+                        achados_por_agente.setdefault(agente_achado, []).append(row_ach["task_id"])
                         BUS.publish(
                             "veto_rework",
                             agent=agente_achado,
                             text=(
-                                f"🔧 [ACHADO {i}/{len(achados_enfileirados)}] "
-                                f"{agente_achado}: {achado[:90]}"
-                                + (
-                                    f" — {voltaram} card(s) de {agente_achado} voltaram "
-                                    "para o BURN."
-                                    if voltaram
-                                    else ""
-                                )
+                                f"🔧 ACHADO NO KANBAN — {agente_achado}: "
+                                f"{(row_ach.get('descricao') or '')[:90]}"
                             ),
                         )
-                        # PREMISSA KANBAN: achado É card (processo oficial único).
-                        id_card_ach = f"ACHADO-{story}-{i}"
-                        res_ach = self._executar_com_card(
-                            self.state_machine.wave_id,
-                            story,
-                            id_card_ach,
-                            f"Achado: {achado[:120]}",
-                            agente_achado,
-                            80 + i,
-                            lambda runner_achado=self._get_runner(agente_achado), ach=achado: (
-                                runner_achado.run(
-                                    self._assemble_prompt(
-                                        agente_achado,
-                                        f"Story {story} REPROVADA no review. CORRIJA APENAS ESTE "
-                                        f"ACHADO ({i} de {len(achados_enfileirados)}):\n"
-                                        f"ACHADO: {achado}\n\n"
-                                        f"Contexto (parecer integral, texto completo):\n{parecer_integral}\n\n"
-                                        "Entrega = arquivos GRAVADOS nesta rodada "
-                                        "(write_project_file). Escopo fechado: nada além deste achado.",
-                                    )
-                                )
-                                if runner_achado
-                                else AgentExecutionResult(
-                                    agent_handle=agente_achado,
-                                    success=False,
-                                    is_blocked=True,
-                                    block_reason="runner indisponível",
-                                )
-                            ),
-                            dor=[],
-                            dod=["gravou_arquivo"],
+                    for ag_ach, aids in achados_por_agente.items():
+                        self._garcom_devolver_cards_para_burn(
+                            self.state_machine.wave_id, story, ag_ach, achados_ids=aids
                         )
-                        self._record_telemetry(
-                            "EXECUTE",
-                            f"{agente_achado} (achado {i}/{len(achados_enfileirados)})",
-                            res_ach,
-                        )
-                        escritas_fila.extend(getattr(res_ach, "arquivos_escritos", []))
-                    escreveu_alguma_vez = bool(escritas_fila)
                     BUS.publish(
-                        "veto_rework",
+                        "veto_analysis",
                         agent="@turing",
                         text=(
-                            f"✅ Fila processada ({len(achados_enfileirados)} achados, "
-                            f"{len(escritas_fila)} arquivo(s) gravado(s)) — validação INTEGRAL "
-                            "da story..."
+                            f"📋 {story}: {len(pendentes_ach)} achados no kanban — "
+                            "a FILA ÚNICA queima um a um (ordem + DOR), e o review "
+                            "só re-roda quando a fila do kanban estiver limpa."
                         ),
                     )
+                    # O rework deste degrau É a fila queimar os achados:
+                    # próximo ciclo relê o kanban e queima na ordem.
                     cycle_res = self._run_cycle_inner(
                         story,
                         rework_feedback=(
-                            "Achados da fila corrigidos um a um — valide a story INTEIRA."
+                            "Achados nasceram como cards no kanban — queime a fila "
+                            "na ordem (DOR respeitada) e valide a story INTEIRA no fim.\n\n"
+                            + feedback_integral
                         ),
                     )
                     if cycle_res.get("success"):
@@ -3587,9 +3948,8 @@ class WaveOrchestrator:
                             "announcement",
                             agent="@turing",
                             text=(
-                                f"🟢 IMPEDIMENTO RESOLVIDO — {story}: fila de "
-                                f"{len(achados_enfileirados)} achados corrigida e story "
-                                "aprovada. Bandeira recolhida; a linha volta a correr."
+                                f"🟢 IMPEDIMENTO RESOLVIDO — {story}: achados corrigidos "
+                                "pela fila única e story aprovada. Bandeira recolhida."
                             ),
                         )
                     else:
@@ -3599,7 +3959,9 @@ class WaveOrchestrator:
                             or motivo
                         )
                         motivo = novo_motivo
-                        novo_parecer = self._parecer_da_review(cycle_res.get("review_output") or "")
+                        novo_parecer = self._parecer_da_review(
+                            cycle_res.get("review_output") or ""
+                        )
                         if novo_parecer:
                             parecer_integral = novo_parecer
                         feedback_integral = _feedback_com_parecer(motivo, parecer_integral)
@@ -3643,11 +4005,24 @@ class WaveOrchestrator:
                             self._assemble_prompt("@caroli", prompt_refino)
                         )
                         self._record_telemetry("EXECUTE", "@caroli (refino de story)", res_caroli)
+                        self._anotar_cota_resultado(res_caroli)
                         self._extract_and_write_project_files(getattr(res_caroli, "output", ""))
 
-                for degrau in range(1, 5):
+                degrau = 1
+                esperas_cota = 0
+                while degrau < 5:
                     if retrabalho_ok:
                         break  # a fila de achados já convergiu — escada desnecessária
+                    if self._cota_ativa:
+                        # 🚦 COTA NO INÍCIO DO DEGRAU — PAUSA a escada SEM consumir
+                        # degrau: corrigir com o provedor de fora é queimar tentativa
+                        # de convergência em chamada que garante 429.
+                        decisao_cota, esperas_cota, retorno_cota = self._gate_cota_na_escada(
+                            story, esperas_cota, completed_stories
+                        )
+                        if decisao_cota == "return":
+                            return retorno_cota
+                        continue  # janela resetou → re-tenta o MESMO degrau
                     if ABORT_EVENT.is_set():
                         # ESC ESC do usuário: checkpoint salvo, NADA de escalar
                         # nem de continuar queimando degraus.
@@ -3711,6 +4086,7 @@ class WaveOrchestrator:
                             self._record_telemetry(
                                 "EXECUTE", "@unclebob (validação de plano)", res_bob
                             )
+                            self._anotar_cota_resultado(res_bob)
                             plano_aprovado = getattr(res_bob, "output", "") or plano
                         feedback_degrau = (
                             "PLANO APROVADO PELO TECH LEAD — implemente NESTA rodada. "
@@ -3762,70 +4138,26 @@ class WaveOrchestrator:
                             self._record_telemetry(
                                 "EXECUTE", "@unclebob (assumiu a implementação)", res_lead
                             )
+                            self._anotar_cota_resultado(res_lead)
                         cycle_res = self._run_cycle_inner(story, rework_feedback=feedback_integral)
-                    elif estrategia == "dirigido" and achados_enfileirados:
-                        # Achados ESTRUTURADOS → delega AO DONO DO ARQUIVO, não
-                        # ao RED cego: o achado é uma correção cirúrgica com
-                        # responsável (frontend→@ada, spec→@aniche, banco→@codd).
-                        BUS.publish(
-                            "veto_rework",
-                            agent="@turing",
-                            text=(
-                                f"🔥 [DEGRAU {degrau}/4] {len(achados_enfileirados)} achado(s) "
-                                f"delegados aos donos de camada para correção cirúrgica."
-                            ),
-                        )
-                        for i, achado in enumerate(achados_enfileirados, 1):
-                            agente_achado = self._agente_para_achado(achado)
-                            BUS.publish(
-                                "veto_rework",
-                                agent=agente_achado,
-                                text=(
-                                    f"🔧 [DEGRAU {degrau} · ACHADO {i}/"
-                                    f"{len(achados_enfileirados)}] {agente_achado}: {achado[:90]}"
-                                ),
-                            )
-                            # PREMISSA KANBAN: achado em correção É um card de
-                            # task de agente — nasce NO KANBAN, designado, antes
-                            # do agente acordar (processo oficial único).
-                            id_card_ach = f"ACHADO-{story}-{i}"
-                            escritas_ach: list[str] = []
-                            res_ach = self._executar_com_card(
-                                self.state_machine.wave_id,
-                                story,
-                                id_card_ach,
-                                f"Achado: {achado[:120]}",
-                                agente_achado,
-                                80 + i,
-                                lambda runner_ach=self._get_runner(agente_achado), ach=achado: (
-                                    runner_ach.run(
-                                        self._assemble_prompt(
-                                            agente_achado,
-                                            f"Story {story} REPROVADA no code review. CORRIJA APENAS "
-                                            f"ESTE ACHADO:\nACHADO: {ach}\n\n"
-                                            f"Contexto (parecer integral):\n{parecer_integral}\n\n"
-                                            "Entrega = arquivos GRAVADOS nesta rodada "
-                                            "(write_project_file). Escopo fechado: nada além deste achado.",
-                                        )
-                                    )
-                                    if runner_ach
-                                    else AgentExecutionResult(
-                                        agent_handle=agente_achado,
-                                        success=False,
-                                        is_blocked=True,
-                                        block_reason="runner indisponível",
-                                    )
-                                ),
-                                dor=[],
-                                dod=["gravou_arquivo"],
-                            )
-                            self._record_telemetry(
-                                "EXECUTE",
-                                f"{agente_achado} (achado {i}/{len(achados_enfileirados)})",
-                                res_ach,
-                            )
-                            escritas_ach.extend(getattr(res_ach, "arquivos_escritos", []))
-                        escreveu_alguma_vez = True
+                    elif estrategia == "dirigido":
+                        # FILA ÚNICA (sem segunda fila, sem exceção): achados
+                        # estruturados NASCEM COMO CARDS (nascimento idempotente)
+                        # e queimam PELA FILA DO KANBAN dentro do ciclo abaixo —
+                        # ordem + DOR mandam. O degrau NÃO queima nada por fora.
+                        if achados_enfileirados:
+                            self._nascer_fila_achados(story, achados_enfileirados)
+                            pendentes_ach = self._achados_pendentes(story)
+                            achados_por_agente: dict[str, list[str]] = {}
+                            for row_ach in pendentes_ach:
+                                agente_achado = row_ach.get("agent_role") or self._agente_para_achado(
+                                    row_ach.get("descricao", "")
+                                )
+                                achados_por_agente.setdefault(agente_achado, []).append(row_ach["task_id"])
+                            for ag_ach, aids in achados_por_agente.items():
+                                self._garcom_devolver_cards_para_burn(
+                                    self.state_machine.wave_id, story, ag_ach, achados_ids=aids
+                                )
                         cycle_res = self._run_cycle_inner(story, rework_feedback=feedback_integral)
                     else:  # dirigido (clássico, sem achados estruturados)
                         BUS.publish(
@@ -3867,6 +4199,17 @@ class WaveOrchestrator:
                     if novo_parecer:
                         parecer_integral = novo_parecer
                     feedback_integral = _feedback_com_parecer(motivo, parecer_integral)
+
+                    if self._cota_ativa:
+                        # 🚦 COTA NO FIM DO DEGRAU — o degrau falhou POR INFRA; a
+                        # escada PAUSA e espera o reset SEM gastar o degrau.
+                        decisao_cota, esperas_cota, retorno_cota = self._gate_cota_na_escada(
+                            story, esperas_cota, completed_stories
+                        )
+                        if decisao_cota == "return":
+                            return retorno_cota
+                        continue  # janela resetou → re-tenta o MESMO degrau
+                    degrau += 1
 
                 if not retrabalho_ok:
                     if not escreveu_alguma_vez:
@@ -4039,7 +4382,19 @@ class WaveOrchestrator:
         edith_res = None
         if runner_edith:
             edith_prompt = self._assemble_prompt("@edith", self._build_edith_audit_prompt())
-            edith_res = runner_edith.run(edith_prompt)
+            edith_res = self._executar_com_card(
+                self.state_machine.wave_id,
+                "VALIDATE",
+                "VALIDATE-HOMOLOGACAO",
+                "Homologação integrada de produto",
+                "@edith",
+                1,
+                lambda: runner_edith.run(edith_prompt),
+                dor=[],
+                dod=["status_aprovado_sem_ressalvas"],
+                task_tipo="VALIDATE",
+                descricao="Homologação funcional ponta a ponta e auditoria de valor de produto.",
+            )
             self._record_telemetry("VALIDATE", "@edith (Product Homologation)", edith_res)
 
         # 3. Governança e FinOps: @nina audita consumo de tokens e ética
@@ -4047,7 +4402,19 @@ class WaveOrchestrator:
         nina_res = None
         if runner_nina:
             nina_prompt = self._assemble_prompt("@nina", self._build_nina_audit_prompt())
-            nina_res = runner_nina.run(nina_prompt)
+            nina_res = self._executar_com_card(
+                self.state_machine.wave_id,
+                "VALIDATE",
+                "VALIDATE-GOVERNANCA",
+                "Auditoria de governança, ética e finops",
+                "@nina",
+                2,
+                lambda: runner_nina.run(nina_prompt),
+                dor=[],
+                dod=["status_aprovado_sem_ressalvas"],
+                task_tipo="VALIDATE",
+                descricao="Auditoria de governança de IA, conformidade ética e eficiência de tokens.",
+            )
             self._record_telemetry("VALIDATE", "@nina (Gov & FinOps)", nina_res)
 
         # Avaliação com a LEI DA RESTRIÇÃO (DEFAULT-DENY)
@@ -4302,8 +4669,21 @@ class WaveOrchestrator:
                 )
 
                 if analysis.veto_class is VetoClass.APPROVAL_MISSING:
-                    # Rota RE_AUDIT: o validador re-emite o parecer.
-                    res = info["runner"].run(engine.build_rework_prompt(analysis, original_demand))
+                    # Rota RE_AUDIT: o validador re-emite o parecer com card.
+                    rework_prompt = engine.build_rework_prompt(analysis, original_demand)
+                    res = self._executar_com_card(
+                        self.state_machine.wave_id,
+                        "VALIDATE",
+                        f"VALIDATE-REAUDIT-{name.replace('@', '').upper()}-{attempt}",
+                        f"Re-auditoria de {name} (#{attempt})",
+                        name,
+                        10 + attempt,
+                        lambda: info["runner"].run(rework_prompt),
+                        dor=[],
+                        dod=["parecer_emitido"],
+                        task_tipo="VALIDATE",
+                        descricao=f"Re-auditoria {attempt} após parecer pendente de {name}.",
+                    )
                     self._record_telemetry("VALIDATE", f"{name} (re-auditoria #{attempt})", res)
                     approved, reason = self._check_explicit_approval(res)
                     info["approved"] = approved
@@ -4449,7 +4829,20 @@ class WaveOrchestrator:
             "correções foram aplicadas pelos autores responsáveis e as stories foram re-executadas. "
             "Reavalie o entregável atual."
         )
-        res = info["runner"].run(self._assemble_prompt(validator_name, fresh_prompt))
+        fresh_assembled = self._assemble_prompt(validator_name, fresh_prompt)
+        res = self._executar_com_card(
+            self.state_machine.wave_id,
+            "VALIDATE",
+            f"VALIDATE-REAUDIT-{validator_name.replace('@', '').upper()}-{attempt}",
+            f"Re-auditoria de {validator_name} (#{attempt})",
+            validator_name,
+            20 + attempt,
+            lambda: info["runner"].run(fresh_assembled),
+            dor=[],
+            dod=["status_aprovado_ou_reprovado"],
+            task_tipo="VALIDATE",
+            descricao=f"Re-auditoria de validação {attempt} após correções autônomas.",
+        )
         self._record_telemetry("VALIDATE", f"{validator_name} (re-auditoria #{attempt})", res)
         approved, reason = self._check_explicit_approval(res)
         info["approved"] = approved

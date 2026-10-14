@@ -29,16 +29,20 @@ Bem-vindo ao **Bombe Code**, o ambiente autônomo de engenharia de software com 
 ## 🌟 Visão Geral & Filosofia
 
 O Bombe Code opera como uma esteira de engenharia completa e local-first dentro do diretório do seu projeto. Ele une o melhor de dois mundos:
-* **Rigor Arquitetural (TDD):** Garantia de qualidade, testes escritos antes do código pelo QA (`@aniche`), revisão técnica independente por Tech Lead (`@unclebob`), homologação por `@edith` e fiscalização determinística por quality gates em código Python imperativo.
-* **Agilidade Criativa (VIBE):** Liberdade total para prototipagem rápida, experimentação e alterações diretas sem cerimônias formais.
+* **Modo Estruturado (Metodologia ONDA):** Rigor arquitetural, planejamento Upstream (PRD, jornadas, modelo de dados), testes antes do código com QA (`@aniche`), revisão técnica independente por Tech Lead (`@unclebob`), homologação por `@edith` e fiscalização determinística por quality gates em código Python imperativo.
+* **Modo Ágil (Vibe Code):** Liberdade criativa imediata para prototipagem rápida, experimentação, automação e alterações diretas sem cerimônias formais.
+
+### ⚠️ Copiloto Humano-no-Loop: MVP vs. Enterprise Grade
+* **Construção de MVPs:** Uma pessoa com conhecimento introdutório de produto e lógica de programação consegue evoluir ideias e levar projetos funcionais até o nível de **MVP**, contando com a orquestração dos 25 agentes especializados.
+* **Escala Enterprise:** Em cenários corporativos e de missão crítica, a ferramenta **não isenta nem substitui a responsabilidade, o discernimento e a profundidade técnica do profissional de engenharia**. O Bombe Code é um **Copiloto**, exigindo acompanhamento crítico, revisão e decisões humanas soberanas em cada marco da entrega.
 
 Toda a persistência física das especificações é mantida em arquivos Markdown versionáveis no Git (`docs/briefings/`, `docs/architecture/`, `docs/backlog/`, `docs/reports/`) e o estado operacional fica salvo no banco SQLite local (`.bombe-code/state.db` ou `state.db`).
 
 ---
 
-## 🧭 Os Dois Grandes Modos: TDD vs VIBE
+## 🧭 Os Dois Grandes Modos: VIBE FLOW vs VIBE CODE
 
-O Bombe Code organiza sua experiência em dois modos autônomos de engenharia:
+O Bombe Code organiza sua experiência em dois modos de trabalho:
 
 ```
                   ┌────────────────────────────────────────┐
@@ -47,9 +51,9 @@ O Bombe Code organiza sua experiência em dois modos autônomos de engenharia:
                                       │
                ┌──────────────────────┴──────────────────────┐
                ▼                                             ▼
-    🛡️ MODO TDD (`tdd-code`)                      🔥 MODO VIBE (`vibe-code`)
+    🛡️ MODO VIBE FLOW (`tdd-code`)                🔥 MODO VIBE CODE (`vibe-code`)
  ┌───────────────────────────────┐              ┌───────────────────────────────┐
- │ • Governança formal da ONDA   │              │ • Modo livre e irrestrito     │
+ │ • Governança estruturada ONDA │              │ • Modo livre e irrestrito     │
  │ • Travas rígidas por etapa    │              │ • Sem etapas ou travas        │
  │ • Tab cicla etapas contextuais│              │ • Tab NÃO cicla etapas        │
  │ • Ciclo TDD: RED ➔ GREEN ➔    │              │ • Badge em VERMELHO VIVO      │
@@ -59,22 +63,22 @@ O Bombe Code organiza sua experiência em dois modos autônomos de engenharia:
 
 ---
 
-### 🛡️ Modo TDD (`tdd-code` — Engenharia Formal & Governada)
+### 🛡️ Modo VIBE FLOW (Engenharia Estruturada & Governada pela ONDA)
 
-* **O que é:** O modo de entrega profissional da ONDA. Toda alteração de código passa pela governança arquitetural, onde requisitos são clarificados antes de desenhar a solução e testes automatizados são concebidos antes da implementação.
+* **O que é:** O modo de entrega profissional e estruturado da ONDA. Toda evolução de código segue o fluxo de engenharia, onde o problema e a arquitetura são clarificados no Upstream e testes automatizados são concebidos antes da implementação no Downstream.
 * **Controle:** O desenvolvedor e a LLM estão **presos às diretrizes da etapa ativa**. Se a LLM tentar escrever código de produção na etapa de concepção ou planejamento, as ferramentas de escrita em `src/` são bloqueadas deterministicamente com mensagens de veto instrutivas (`StageGuard`).
-* **Navegação Contextual:** A tecla **`Tab`** avança ciclicamente pelas etapas autorizadas para o tipo de onda ativa.
+* **Navegação Contextual:** A tecla **`Tab`** avança ciclicamente pelas etapas autorizadas para o tipo de onda ativa (`DISCOVERY` ➔ `INCEPTION` na Onda 0; `PLAN` ➔ `REFINEMENT` ➔ `EXECUTE` ➔ `VALIDATE` nas demais).
 
 ---
 
-### 🔥 Modo VIBE (`vibe-code` — Vibe Coding Livre & Ágil)
+### 🔥 Modo VIBE CODE (Prototipagem Ágil & Iteração Livre)
 
-* **O que é:** O modo de liberdade criativa total. Aqui o desenvolvedor pode fazer vibe coding à vontade, solicitando qualquer funcionalidade, refatoração, arquivo avulso, protótipo ou script direto sem cerimônias formais.
+* **O que é:** O modo de liberdade criativa total. Aqui o desenvolvedor pode fazer vibe coding à vontade, solicitando qualquer funcionalidade, refatoração, arquivo avulso, protótipo ou script direto sem cerimônias de pipeline.
 * **Sem Sub-etapas:** Não há divisões ou travas por etapa. A LLM executa prontamente o que você pedir.
-* **Comportamento do `Tab`:** No modo VIBE, pressionar **`Tab` NÃO cicla etapas** (ele é reservado exclusivamente para autocompletar `/comandos` ou `@arquivos`).
+* **Comportamento do `Tab`:** No modo VIBE CODE, pressionar **`Tab` NÃO cicla etapas** (ele é reservado exclusivamente para autocompletar `/comandos` ou `@arquivos`).
 * **Sinalização em VERMELHO VIVO:** A barra de status exibe o indicador em vermelho vivo:  
-  `Modo: [VIBE]` (destaque visual marcante).
-* **Permanência:** Uma vez no modo VIBE, você só sai de lá pressionando `Shift + Tab` novamente (ou digitando `/mode tdd`).
+  `Modo: [VIBE CODE]` (destaque visual marcante).
+* **Permanência:** Uma vez no modo VIBE CODE, você só sai de lá pressionando `Shift + Tab` novamente (ou digitando `/mode flow`).
 
 ---
 
@@ -82,8 +86,8 @@ O Bombe Code organiza sua experiência em dois modos autônomos de engenharia:
 
 A qualquer momento durante o desenvolvimento na TUI:
 
-* **Pressione `Shift + Tab`:** Comuta instantaneamente entre o **Modo TDD** e o **Modo VIBE**.
-* **Retorno Inteligente:** Ao retornar para o Modo TDD, o sistema restaura com segurança exatamente a etapa onde você parou.
+* **Pressione `Shift + Tab`:** Comuta instantaneamente entre o **Modo VIBE FLOW** e o **Modo VIBE CODE**.
+* **Retorno Inteligente:** Ao retornar para o Modo VIBE FLOW, o sistema restaura com segurança exatamente a etapa onde você parou.
 * Funciona mesmo com o foco ativo no campo de digitação de texto.
 
 ---
@@ -159,9 +163,9 @@ Você tem dois jeitos elegantes de trabalhar:
 
 ---
 
-## 👥 Elenco Oficial de 24 Agentes Especialistas
+## 👥 Elenco Oficial de 25 Agentes (1 Maestro + 24 Especialistas)
 
-O Bombe Code conta com 24 agentes especialistas de elite (12 brasileiros e 11 internacionais) que podem ser chamados com `@nome`:
+O Bombe Code conta com 25 agentes de elite (13 pioneiros brasileiros e 12 referências mundiais) que podem ser chamados diretamente com `@nome`:
 
 ### Upstream (Concepção, Inception, Arquitetura & Refinamento)
 * **`@meira`** (Silvio Meira — Brasil): Senior Research & Viability Analyst. Análise de viabilidade técnica, mercado e inovação.
@@ -175,7 +179,7 @@ O Bombe Code conta com 24 agentes especialistas de elite (12 brasileiros e 11 in
 * **`@caroli`** (Paulo Caroli — Brasil): Agile Master & Flow Architect. Lean Inception Macro, Canvas MVP, Sequenciador e Decomposição PBB de `ai-stories` em `docs/backlog/`.
 * **`@nelson`** (Nelson Mattos — Brasil): Prompt Engineer & AI Context Specialist. Engenharia de contexto, system prompts e alinhamento de IA.
 
-### Downstream (Construção TDD & Qualidade de Código)
+### Downstream (Construção TDD, Infra & Qualidade de Código)
 * **`@valim`** (José Valim — Brasil): Senior Elixir Backend Developer. Concorrência funcional, OTP, alta escala e BEAM.
 * **`@barbara`** (Barbara Liskov — EUA): Senior Python & Go Backend Developer. APIs FastAPI, Pydantic v2, concorrência Go e microsserviços.
 * **`@scott`** (Scott Guthrie — EUA): Senior .NET Backend Developer. ASP.NET Core 8+, C# 12, Minimal APIs e Entity Framework Core.
@@ -185,11 +189,13 @@ O Bombe Code conta com 24 agentes especialistas de elite (12 brasileiros e 11 in
 * **`@diego`** (Diego Aranha — Brasil): AppSec Pentest & Offensive Security Auditor. Auditoria ofensiva, testes SAST/DAST e mitigação OWASP Top 10.
 * **`@aniche`** (Maurício Aniche — Brasil): Test Architect & QA Automation. Estratégia de testes, escrita de testes falhantes (`RED`) e automação completa.
 * **`@unclebob`** (Robert C. Martin — EUA): Tech Lead & Architectural Guardian. Clean Code, princípios SOLID, refatoração e Code Review de aprovação.
-* **`@demi`** (Demi Getschko — Brasil): SRE & Infrastructure Engineer. Redes, containers Docker, pipelines CI/CD e observabilidade local.
+* **`@demi`** (Demi Getschko — Brasil): SRE, Redes & Infraestrutura. Redes, conectividade e DNS.
+* **`@guto`** (Guto Carvalho — Brasil): SRE & Release Engineering (DevOps). Infraestrutura de execução, ferramentas de ambiente, Docker, pipelines e saúde operacional do projeto.
 
-### Downstream (Validação, Homologação & Maestro)
+### Downstream (Validação, Contra-Auditoria & Maestro)
 * **`@edith`** (Edith Ranzini — Brasil): Contract & Deliverable Validator. Auditoria final do entregável contra o PRD e emissão do Selo de Entrega em `docs/reports/`.
 * **`@nina`** (Nina Silva — Brasil): Gov, FinOps & AI Ethics Auditor. Auditoria de consumo de tokens, governança de custos e conformidade ética e LGPD.
+* **`@hoare`** (C. A. R. Tony Hoare — UK): Code Review & Scope Compliance Auditor. Contra-Auditoria Forense (`/wave audit`): confronto rigoroso entre o que foi pedido e o código entregue.
 * **`@turing`** (Alan Turing — UK): Runtime Maestro & Orquestrador. Orquestração da ONDA, máquina de estados finita e guarda de quality gates.
 
 ---
@@ -200,12 +206,14 @@ O Bombe Code conta com 24 agentes especialistas de elite (12 brasileiros e 11 in
 |---|---|
 | **`Enter`** | **Envia a mensagem ou prompt digitado** |
 | **`Shift + Enter`** | **Insere uma quebra de linha (modo multilinha)** |
-| **`Shift + Tab`** | **Comuta entre Modo TDD e Modo VIBE (Chave Mestra)** |
-| **`Tab`** | **Alterna ciclicamente as etapas do Modo TDD** (contextual por tipo de onda) |
+| **`Shift + Tab`** | **Comuta entre Modo Estruturado (ONDA) e Modo Ágil (VIBE)** |
+| **`Tab`** | **Alterna ciclicamente as etapas da ONDA** (contextual: Upstream na Onda 0, Downstream nas demais) |
 | **`Tab` (em `/` ou `@`)** | Autocompleta comandos de barra ou arquivos do projeto |
+| **`F2`** | **Copia toda a transcrição da tela** (texto puro, sem poluição de tags Rich/ANSI) |
+| **`F3`** | **Copia exclusivamente o trecho selecionado com o mouse** (seleção estável e limpa) |
 | **`Ctrl + P`** | Abre a Paleta de Comandos unificada |
 | **`Ctrl + B`** | Alterna a exibição do Painel Lateral (Sidebar) com métricas de contexto |
-| **`Ctrl + C`** / **`Esc`** | Interrompe o turno ativo da LLM |
+| **`2× Ctrl + C`** / **`2× Esc`** | Interrompe o fluxo ativo ou sai com salvamento de checkpoint |
 | **`Ctrl + Q`** | Fecha a TUI com segurança imediata (sem travamentos) |
 | **`Up` / `Down`** | Navega no histórico de prompts enviados |
 

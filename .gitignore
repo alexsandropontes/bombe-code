@@ -58,9 +58,22 @@ secrets/
 
 # ============================================================
 # Do projeto em si (produto) — versionável:
-# README.md, docs/ (do produto), src/, testes, configs do app
+# Apenas documentação macro: README.md, PRD, ADRs, Arquitetura macro, Design System
 # ============================================================
 
-# cobertura de testes
+# Documentos operacionais do ciclo de desenvolvimento (não versionados)
+docs/backlog/
+docs/reports/
+docs/waves/
+docs/telemetry.json
+docs/telemetria.md
+docs/status/*audit*.md
+
+# Arquivos temporários e rascunhos de briefings
+docs/briefings/PRD.md
+docs/briefings/VIABILITY.md
+
+# Cobertura de testes
 .coverage
 htmlcov/
+

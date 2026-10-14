@@ -59,6 +59,13 @@ class AgentExecutionResult(BaseModel):
     total_tokens: int = Field(default=0, description="Total de tokens consumidos")
     cost: float = Field(default=0.0, description="Custo calculado em USD")
     duration_seconds: float = Field(default=0.0, description="Duração da chamada em segundos")
+    comandos_executados: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Comandos auditados EXECUTADOS pela plataforma com exit 0 nesta "
+            "execução (registro da ferramenta, não narrativa do agente)."
+        ),
+    )
     arquivos_escritos: list[str] = Field(
         default_factory=list,
         description="Arquivos gravados nesta execução (evidência de trabalho, não promessa)",
@@ -302,6 +309,9 @@ class AgentRunner:
                     total_tokens=total_tokens,
                     cost=cost,
                     duration_seconds=duration_seconds,
+                    comandos_executados=(
+                        self.guarda.comandos_executados() if self.guarda is not None else []
+                    ),
                     arquivos_escritos=(
                         (self.guarda.arquivos_escritos() if self.guarda is not None else [])
                         or (["__mock__"] if is_mock else [])

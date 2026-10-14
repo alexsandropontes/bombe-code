@@ -46,13 +46,19 @@ def test_find_story_file_resilient(tmp_path: Path):
     ws = WaveWorkspace(project_dir=tmp_path)
     ws.ensure_wave_structure("ONDA-001")
 
-    # Cria story na nova pasta da onda
+    # Cria story na pasta canônica da onda
     story_file = ws.wave_stories_dir("ONDA-001") / "ST-001.md"
     story_file.write_text("# Story 1", encoding="utf-8")
 
     found = ws.find_story_file("ST-001", wave_id="ONDA-001")
     assert found == story_file
 
-    # Fallback sem informar wave_id
-    found_any = ws.find_story_file("ST-001")
-    assert found_any == story_file
+    # Resolução canônica: SEM a onda e SEM berço no backlog → None
+    # (a varredura "qualquer onda" era ambiguidade — verdade é UMA)
+    assert ws.find_story_file("ST-001") is None
+
+    # Berço legítimo: nascida no backlog, resolve pelo berço
+    backlog_story = tmp_path / "docs" / "backlog" / "stories" / "ST-002.md"
+    backlog_story.parent.mkdir(parents=True, exist_ok=True)
+    backlog_story.write_text("# Story 2", encoding="utf-8")
+    assert ws.find_story_file("ST-002") == backlog_story

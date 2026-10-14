@@ -289,7 +289,7 @@ def test_tui_app_toggle_vibe_mode_and_red_badge(tmp_path: Path):
     assert app.mode == "TDD"
     assert app.wave_station == "DISCOVERY"
     status_tdd = app._status_text()
-    assert "TDD" in status_tdd
+    assert "VIBE FLOW" in status_tdd
 
 
 def test_orchestrator_start_wave_switch_archives_checkpoint(tmp_path: Path):

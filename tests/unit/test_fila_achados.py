@@ -70,6 +70,9 @@ def _prompts_por_agente(orch: WaveOrchestrator, saidas: dict[str, str] | None = 
 
 
 def test_fila_roteia_cada_achado_para_o_especialista_e_valida_o_todo(project_env):
+    """FILA ÚNICA: os achados NASCEM COMO CARDS no kanban e o ciclo é mandado
+    QUEIMAR A FILA na ordem (DOR respeitada). run_execute NÃO queima nada por
+    fora — o único processo de queima é a fila do kanban."""
     tmp_path, db = project_env
     orch = _orch(tmp_path, db)
     capturados = _prompts_por_agente(orch)
@@ -77,7 +80,7 @@ def test_fila_roteia_cada_achado_para_o_especialista_e_valida_o_todo(project_env
 
     def fake_cycle(story_id=None, rework_feedback=None):
         chamadas_ciclo.append(rework_feedback or "inicial")
-        if "valide a story INTEIRA" in (rework_feedback or ""):
+        if "queime a fila" in (rework_feedback or ""):
             return {"success": True, "message": "conjunto aprovado", "arquivos_escritos": ["a.py"]}
         return {
             "success": False,
@@ -92,16 +95,19 @@ def test_fila_roteia_cada_achado_para_o_especialista_e_valida_o_todo(project_env
     res = orch.run_execute(stories=["ST-001"])
 
     assert res["success"] is True, res.get("error")
-    # Os 3 achados guardados na fila
-    assert len(orch._fila_achados["ST-001"]) == 3
-    # Roteamento por especialidade (cada achado com seu dono)
-    assert any("ACHADO: coluna origem_id" in p for p in capturados["@codd"])
-    assert any("botão salvar sem aria-label" in p for p in capturados["@ada"])
-    assert any("dependência domínio→api" in p for p in capturados["@unclebob"])
-    # Tarefa atômica: escopo fechado no prompt de cada achado
-    assert all("APENAS ESTE ACHADO" in p for p in capturados["@codd"])
-    # Validação INTEGRAL no fim (o review julga o conjunto, não a fatia)
-    assert "valide a story INTEIRA" in chamadas_ciclo[-1]
+    # Os 3 achados nascem COMO CARDS no kanban (única fonte da fila)
+    cartoes = orch.db.carregar_tasks_kanban("ONDA-001", "ST-001")
+    achado_cards = [c for c in cartoes if c["task_id"].startswith("ACHADO-")]
+    assert len(achado_cards) == 3
+    assert all(c["task_tipo"] == "ACHADO" for c in achado_cards)
+    assert all(c["descricao"] for c in achado_cards), "o texto do achado mora no kanban"
+    # Roteamento por especialidade mora NO KANBAN (agent_role da row)
+    roteamento = {c["agent_role"] for c in achado_cards}
+    assert {"@codd", "@ada", "@unclebob"} <= roteamento
+    # run_execute NÃO queima achado por fora: zero prompt de queima fora do ciclo
+    assert capturados == {}, "nenhum agente queima fora da fila do kanban"
+    # O ciclo foi mandado QUEIMAR A FILA na ordem
+    assert any("queime a fila" in c for c in chamadas_ciclo)
 
 
 def test_ordem_de_achados_sem_lista_obriga_reemissao(project_env):
@@ -141,8 +147,11 @@ def test_ordem_de_achados_sem_lista_obriga_reemissao(project_env):
     # O reviewer foi obrigado a RE-EMITIR com a lista (ACHADO/SOLUÇÃO)
     reemissao = [p for p in capturados["@unclebob"] if "Re-emita" in p or "RE-EMITA" in p]
     assert reemissao, "parecer sem lista passou sem re-emissão — o dev ia inventar"
-    # A fila nasceu da lista re-emitida
-    assert len(orch._fila_achados["ST-001"]) == 2
+    # A fila nasceu da lista re-emitida (cards ACHADO no kanban)
+    cartoes = orch.db.carregar_tasks_kanban("ONDA-001", "ST-001")
+    assert (
+        len([c for c in cartoes if c["task_id"].startswith("ACHADO-")]) == 2
+    )
 
 
 def test_sem_lista_e_sem_reemissao_o_feedback_proibe_inventar(project_env):
@@ -187,6 +196,41 @@ def test_roteador_de_achados_por_especialidade(project_env):
     ]
     for achado, esperado in casos:
         assert orch._agente_para_achado(achado) == esperado, achado
+
+
+def test_escada_nao_tem_processo_proprio_de_achado(project_env):
+    """UMA FILA, UM PROCESSO: a escada de retrabalho NÃO possui caminho próprio
+    de achados — nenhum agente é queimado fora da fila do kanban, em degrau
+    nenhum. Re-trabalho = nascer cards + o ciclo queimar a fila."""
+    tmp_path, db = project_env
+    orch = _orch(tmp_path, db)
+    capturados = _prompts_por_agente(orch)
+    chamadas_ciclo: list[str] = []
+
+    def fake_cycle(story_id=None, rework_feedback=None):
+        chamadas_ciclo.append(rework_feedback or "inicial")
+        if len(chamadas_ciclo) >= 3:
+            return {"success": True, "message": "ok", "arquivos_escritos": ["a.py"]}
+        return {
+            "success": False,
+            "is_blocked": True,
+            "error": "REJEIÇÃO",
+            "review_output": PARECER_COM_LISTA,
+            "arquivos_escritos": [],
+        }
+
+    orch._run_cycle_inner = fake_cycle
+
+    res = orch.run_execute(stories=["ST-001"])
+
+    assert res["success"] is True, res.get("error")
+    # ZERO queima fora da fila — em degrau nenhum (fila única, sem exceção)
+    total_fora = sum(len(v) for v in capturados.values())
+    assert total_fora == 0, (
+        f"queima fora da fila do kanban ({total_fora} chamadas) — segundo processo existente"
+    )
+    # Os degraus re-invocam O CICLO (que queima a fila), nunca agentes soltos
+    assert len(chamadas_ciclo) >= 2
 
 
 def test_extrator_reconhece_achados_com_solucao():
@@ -365,3 +409,61 @@ def test_resumo_canonico_da_story_e_o_que_o_agente_recebe(project_env):
     assert "cliente canônico" in resumo
     assert "palavra palavra" not in resumo, "o resumo puxou prosa fora da seção"
     assert len(resumo) < 500, "resumo canônico deve ser curto por design"
+
+
+def test_cards_devolvidos_ao_burn_recebem_precedencia_dos_achados_na_dor(project_env):
+    """PRECEDÊNCIA MANDATÓRIA: quando o review reprova e nascem achados para um
+    agente, as cards de desenvolvimento desse agente (ex: T4 da @ada) voltam para
+    AGUARDANDO_DEV e RECEBEM CADA ACHADO COMO 'dep:' NA SUA DOR. A card só volta a
+    queimar quando todos os achados do seu domínio estiverem em DEV DONE."""
+    tmp_path, db = project_env
+    orch = _orch(tmp_path, db)
+    # Cria uma task de dev para @ada em DEV_DONE
+    orch.db.criar_task_kanban(
+        "ONDA-001",
+        "ST-001",
+        "ST-001-T4",
+        "Interface",
+        "@ada",
+        3,
+        dor=[],
+        dod=["gravou_arquivo"],
+        task_tipo="FRONTEND_UI",
+    )
+    orch.db.mover_task_kanban("ONDA-001", "ST-001", "ST-001-T4", "DEV_DONE")
+
+    # Review reprova com achados do front
+    parecer = (
+        "## Veredito\n"
+        "REJEITADO — corrijam os 2 achados:\n\n"
+        "**Bloqueios:**\n"
+        "1. ACHADO: botão quebrado no modal de front\n"
+        "SOLUÇÃO: adicione o handler de clique no componente de front\n"
+        "2. ACHADO: aria-label ausente no componente de front\n"
+        "SOLUÇÃO: adicione aria-label no componente de front\n"
+    )
+    chamadas: list[str] = []
+
+    def fake_cycle(story_id=None, rework_feedback=None):
+        chamadas.append(rework_feedback or "inicial")
+        if "queime a fila" in (rework_feedback or ""):
+            return {"success": True, "message": "ok", "arquivos_escritos": ["a.py"]}
+        return {
+            "success": False,
+            "is_blocked": True,
+            "error": "REJEIÇÃO",
+            "review_output": parecer,
+            "arquivos_escritos": [],
+        }
+
+    orch._run_cycle_inner = fake_cycle
+    orch.run_execute(stories=["ST-001"])
+
+    cards = {c["task_id"]: c for c in orch.db.carregar_tasks_kanban("ONDA-001", "ST-001")}
+    t4 = cards["ST-001-T4"]
+    assert t4["kanban_status"] == "AGUARDANDO_DEV", "card voltou para o burn"
+    achado_ids = [c["task_id"] for c in cards.values() if c["task_id"].startswith("ACHADO-")]
+    assert len(achado_ids) >= 1
+    for aid in achado_ids:
+        assert f"dep:{aid}" in t4["dor"], f"achado {aid} não está declarado na DOR da card devolvida"
+
