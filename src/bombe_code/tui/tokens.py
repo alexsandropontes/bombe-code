@@ -10,6 +10,8 @@ TOKENS = {
     "secondary": "#b4befe",
     "success": "#a6e3a1",
     "warning": "#f9e2af",
+    "laranja": "#fab387",
+    "text_dim": "#585b70",
     "error": "#f38ba8",
     "border": "#45475a",
 }

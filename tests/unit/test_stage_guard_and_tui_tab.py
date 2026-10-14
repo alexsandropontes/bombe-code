@@ -289,7 +289,7 @@ def test_tui_app_toggle_vibe_mode_and_red_badge(tmp_path: Path):
     assert app.mode == "TDD"
     assert app.wave_station == "DISCOVERY"
     status_tdd = app._status_text()
-    assert "TDD" in status_tdd
+    assert "VIBE FLOW" in status_tdd
 
 
 def test_orchestrator_start_wave_switch_archives_checkpoint(tmp_path: Path):
@@ -348,7 +348,7 @@ def test_orchestrator_fs_tools_block_invalid_path(tmp_path: Path):
     from bombe_code.turing.orchestrator import WaveOrchestrator
 
     orch = WaveOrchestrator(project_dir=str(tmp_path))
-    _read_fn, write_fn, _list_fn = orch._get_project_fs_tools()
+    _read_fn, write_fn, _list_fn, _delete_fn, _exec_fn = orch._get_project_fs_tools()
 
     malformed_path = (
         "</parameter></function></tool_call><tool_call><function=write>?<parameter=content>"

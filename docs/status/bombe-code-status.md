@@ -1,11 +1,10 @@
 # Status — Bombe Code
 
-> Versão atual: **v0.1.19+dev** (`pyproject.toml` mantém a tag v0.1.19; a `dev` contém refactor DDD `4e3cbef`, workspace governance `d84b00e`, **verbosidade + Ciclo Autônomo de Vetos + RESUME de checkpoint + web obrigatória + LICENSE/NOTICE + lint 0** — aguardando bump de release).
-> Atualizado em: 2026-10-05 (3ª auditoria as-is: suíte 449, ruff 0, LICENSE/NOTICE, coverage 80%, RESUME pós-veto).
-> Suíte de testes: **449 testes passando, 0 falhas** (~3min25s) com `uv sync` puro — **web UI é dependência obrigatória** (reflex saiu do extra; `uv sync` sozinho cobre tudo).
-> Cobertura: **80%** (9549 stmts, `coverage run -m pytest`; `coverage` no dev group).
-> Linter: **`ruff check` 0 erros e `ruff format` 100% limpo** (débito histórico de 91 débitos pago neste ciclo, incluindo 1 bug latente real `F821` em teste).
+> Versão atual: **v0.3.0+dev** (`pyproject.toml` na v0.3.0; branch `dev-working-ia` com refactor DDD, governança de ambiente/SRE com @guto, cota com escada de persistência, Kanban estrito sem fraude, 25 agentes).
+> Atualizado em: 2026-10-12 (Auditoria AS-IS: suíte com 588+ testes passando, ruff 0, 25 agentes registrados no roster).
+> Suíte de testes: **589 testes automatizados** com execução real de componentes.
 > Provedor padrão: **Z.ai GLM-5.3-Flash**.
+
 
 ## 1. Missão original (a que nos guia)
 

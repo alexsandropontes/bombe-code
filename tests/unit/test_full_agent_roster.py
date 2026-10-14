@@ -11,8 +11,8 @@ def test_full_agent_roster_count_and_majority():
     registry = AgentRegistry.default()
     agents = registry.list_all()
 
-    # Total: 1 Maestro Turing + 23 Especialistas = 24 Agentes (inclui @hoare)
-    assert len(agents) == 24
+    # Total: 1 Maestro Turing + 24 Especialistas = 25 Agentes (inclui @hoare e @guto)
+    assert len(agents) == 25, 'roster oficial (inclui @guto, SRE/DevOps)'
 
     # Maestro
     turing = registry.get("@turing")
@@ -21,13 +21,13 @@ def test_full_agent_roster_count_and_majority():
 
     # Especialistas
     specialists = [a for a in agents if not a.is_universal]
-    assert len(specialists) == 23
+    assert len(specialists) == 24, 'especialistas (inclui @guto, SRE/DevOps)'
 
     brazilians = [a for a in specialists if a.origin == AgentOrigin.BRAZIL]
     world = [a for a in specialists if a.origin == AgentOrigin.WORLD]
 
     # Maioria de pioneiros brasileiros de TI: 12 Brasileiros e 10 Mundiais
-    assert len(brazilians) == 12
+    assert len(brazilians) == 13, 'maioria brasileira (inclui @guto)'
     assert len(world) == 11
 
     br_handles = {a.handle for a in brazilians}
@@ -44,6 +44,7 @@ def test_full_agent_roster_count_and_majority():
         "@claudia",
         "@nelson",
         "@nina",
+        "@guto",
     }
     assert br_handles == expected_br
 

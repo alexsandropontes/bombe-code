@@ -41,13 +41,16 @@ def mock_orchestrator(tmp_path: Path):
     return orch
 
 
-def test_run_cycle_dispatches_aniche_first_for_test_plan(mock_orchestrator):
-    """Garante que @aniche cria o plano de testes ANTES do Dev codificar."""
+def test_red_nao_e_mais_passo_pre_fila(mock_orchestrator):
+    """LEI NOVA (relógio/linha de montagem): o @aniche NÃO é mais um passo
+    pré-fila de 'plano de testes' em todo ciclo — ele só acorda DENTRO da
+    queima de uma card DEV cuja suíte ainda não existe. O test_plan_output
+    de ciclo nasce vazio (nada de fantasma antes da fila)."""
     res = mock_orchestrator.run_cycle("ST-001")
 
     assert res["success"] is True
     assert "test_plan_output" in res
-    assert res["test_plan_output"] != ""
+    assert res["test_plan_output"] == ""
 
     # Verifica status DEV_DONE
     card = mock_orchestrator.kanban.get_card("ST-001")

@@ -153,7 +153,54 @@ class PydanticAiFactory:
         system_prompt: str = "",
         tools: list[Any] | None = None,
     ) -> Agent:
-        """Cria e retorna uma instância tipada de Agent do Pydantic AI."""
+        """Cria e retorna uma instância tipada de Agent do Pydantic AI.
+
+        SOB PYTEST: devolve um stub determinístico — testes unitários NUNCA
+        queimam tokens nem chamam a rede (mesmo com chaves no .env).
+        """
+        import os as _os
+
+        # Opt-out para os testes da própria fábrica (construção é offline)
+        if _os.environ.get("PYTEST_CURRENT_TEST") and not _os.environ.get("BOMBE_TEST_REAL_LLM"):
+
+            class _StubTestAgent:
+                def run_sync(self, prompt: str, **kwargs: Any) -> Any:
+                    from types import SimpleNamespace
+
+                    return SimpleNamespace(
+                        output="OK (stub de teste — sem chamada real de LLM)",
+                        usage=lambda: None,
+                    )
+
+                def run(self, prompt: str, **kwargs: Any) -> Any:
+                    return self.run_sync(prompt)
+
+                def run_stream_events(self, prompt: str, usage_limits: Any = None) -> Any:
+                    class _CM:
+                        async def __aenter__(self_inner) -> Any:
+                            return self_inner
+
+                        async def __aexit__(self_inner, *a: object) -> bool:
+                            return False
+
+                        def __aiter__(self_inner) -> Any:
+                            return self_inner
+
+                        async def __anext__(self_inner) -> Any:
+                            from types import SimpleNamespace as _NS
+
+                            from pydantic_ai import AgentRunResultEvent
+
+                            if not getattr(self_inner, "_done", False):
+                                self_inner._done = True
+                                res = _NS(output="OK (stub de teste)", usage=lambda: None)
+                                return AgentRunResultEvent(result=res)
+                            raise StopAsyncIteration
+
+                    return _CM()
+
+            return _StubTestAgent()
+
         resolved = self.resolve_model(model_name)
         res_type = result_type if result_type is not None else str
 

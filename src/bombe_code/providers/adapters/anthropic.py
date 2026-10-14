@@ -41,6 +41,13 @@ def parse_anthropic_sse(lines) -> Iterator[dict]:
                 }
         elif event_type == "message_delta":
             stop_reason = (event.get("delta") or {}).get("stop_reason")
+            usage = event.get("usage") or {}
+            if usage:
+                yield {
+                    "type": "usage",
+                    "input_tokens": usage.get("input_tokens", 0) or 0,
+                    "output_tokens": usage.get("output_tokens", 0) or 0,
+                }
 
     for index in sorted(tool_blocks):
         entry = tool_blocks[index]

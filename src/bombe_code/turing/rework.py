@@ -112,7 +112,20 @@ class VetoReworkEngine:
     ]
 
     _BLOCKER_ITEM_RE = re.compile(r"^\s*(?:\d+\s*[\.\)\-]|[-*•])\s+(.+)$")
-    _BLOCKER_HEADER_RE = re.compile(r"^\**\s*bloqueios?\b[^\n:]*:?\**\s*$", re.IGNORECASE)
+    _BLOCKER_HEADER_RE = re.compile(
+        r"^\**\s*(?:apontamentos|bloqueios?|achados?)\b[^\n:]*:?\**\s*$", re.IGNORECASE
+    )
+    # Cabeçalho de seção do parecer real: '## ACHADO 1 (BLOQUEANTE — tema)'
+    # (sem dois-pontos; a descrição vem no próprio título ou nas linhas abaixo)
+    _ACHADO_HEADER_RE = re.compile(
+        r"^\#{1,6}\s+\**\s*(?:achados?|bloqueios?)\s*\d*\s*(?:\(([^)]*)\))?\s*[—\-:]?\s*(.*)$",
+        re.IGNORECASE,
+    )
+    # Inline: 'ACHADO: problema' / '**ACHADO 2 (DRY):** problema' / '1. **ACHADO (bloqueante):** problema'
+    _ACHADO_INLINE_RE = re.compile(
+        r"^\s*(?:\d+[\.\)\-]\s+)?\**\s*(?:achados?|bloqueios?)\s*\d*\s*(?:\(([^)]*)\))?\s*:\**\s*(.+)$",
+        re.IGNORECASE,
+    )
 
     def __init__(
         self,
@@ -133,32 +146,79 @@ class VetoReworkEngine:
 
     # ------------------------------------------------------------ extração
     def extract_blockers(self, output: str) -> list[str]:
-        """Extrai bloqueios de pareceres reais: prefixo 'BLOQUEIO:', seções
-        'Bloqueios (...):' com listas numeradas/bullets."""
+        """Extrai bloqueios/achados de pareceres reais: prefixo 'BLOQUEIO:',
+        'ACHADO:' simples, '**ACHADO 2 (DRY):' inline com número/parêntese,
+        cabeçalho de seção '## ACHADO 1 (BLOQUEANTE — tema)' SEM dois-pontos,
+        e seções 'Bloqueios/Achados:' com listas numeradas/bullets."""
         if not output:
             return []
         blockers: list[str] = []
         collecting = False
+        # Cabeçalho '## ACHADO N (...)' seguido de detalhes numerados: os
+        # detalhes FUNDEM no achado do cabeçalho (não viram itens soltos).
+        ultimo_foi_header = False
         for raw_line in output.splitlines():
             stripped = raw_line.strip()
             low = stripped.lower().lstrip("*#>- ")
-            if low.startswith("bloqueio:"):
-                blockers.append(stripped.split(":", 1)[1].strip(" -*"))
+            # Inline: 'ACHADO 2 (DRY): ...' / 'ACHADO: ...' / 'BLOQUEIO: ...'
+            m_rotulo = self._ACHADO_INLINE_RE.match(stripped)
+            if m_rotulo:
+                parens, resto = m_rotulo.group(1), m_rotulo.group(2)
+                resto_limpo = re.sub(r"\*+", "", resto or "").strip(" -*")
+                if resto_limpo:
+                    # Texto após ':' existe → é um achado de verdade. Sem texto,
+                    # o parêntese é só QUALIFICADOR de seção ("(da fatia atual)")
+                    # → cabeçalho, não achado.
+                    rotulo_bruto = m_rotulo.group(0).split(":", 1)[0]
+                    # Limpa apenas os números de lista inicial '1. ' para não duplicar
+                    rotulo_limpo = re.sub(r"^\s*\d+[\.\)\-]\s*", "", rotulo_bruto).strip(" *#")
+                    if rotulo_limpo and rotulo_limpo.lower().startswith("achado"):
+                        conteudo = f"{rotulo_limpo}: {resto_limpo}"
+                    elif rotulo_limpo and not rotulo_limpo.lower().startswith("bloqueio"):
+                        conteudo = f"{rotulo_limpo}: {resto_limpo}"
+                    else:
+                        conteudo = f"{parens} {resto_limpo}".strip() if parens else resto_limpo
+                    blockers.append(conteudo)
+                    ultimo_foi_header = False
                 collecting = True
                 continue
-            if self._BLOCKER_HEADER_RE.match(stripped):
+            # Cabeçalho '## ACHADO 1 (BLOQUEANTE — tema)' — sem dois-pontos
+            m_header = self._ACHADO_HEADER_RE.match(stripped)
+            if m_header:
+                parens, resto = m_header.group(1), m_header.group(2)
+                conteudo = f"{parens} {resto}" if parens else resto
+                conteudo = re.sub(r"\*+", "", conteudo).strip(" -*")
+                if conteudo:
+                    blockers.append(conteudo)
+                    ultimo_foi_header = True
                 collecting = True
+                continue
+            if self._BLOCKER_HEADER_RE.match(low):
+                collecting = True
+                ultimo_foi_header = False
                 continue
             if collecting:
+                # "SOLUÇÃO:" é continuação do achado — anexa para dar contexto à correção
+                if low.startswith(("solução:", "solucao:", "**solução:", "**solucao:")):
+                    if blockers:
+                        solucao_limpa = re.sub(r"\*+", "", stripped).strip()
+                        blockers[-1] = f"{blockers[-1]} | {solucao_limpa}"
+                    continue
                 item_match = self._BLOCKER_ITEM_RE.match(stripped)
                 if item_match:
                     item = item_match.group(1).strip()
                     if item:
-                        blockers.append(item)
+                        if ultimo_foi_header and blockers:
+                            blockers[-1] = f"{blockers[-1]} — {item}"
+                        else:
+                            blockers.append(item)
                     continue
                 if not stripped:
-                    continue  # linha em branco dentro da seção
-                collecting = False  # fim da seção de bloqueios
+                    collecting = False  # linha em branco fecha a seção
+                    continue
+                # Continuação do texto do último achado (parecer real quebra linha)
+                if blockers:
+                    blockers[-1] = f"{blockers[-1]} {stripped}".strip()
         return blockers
 
     def extract_story_ids(self, text: str) -> list[str]:
@@ -277,8 +337,8 @@ class VetoReworkEngine:
                 "- APPROVAL_MISSING: o parecer não declarou aprovação explícita, mas não há objeção real.\n"
                 "- PRODUCT_GAP: há bloqueios/requisitos de produto não atendidos listados.\n"
                 "- TEST_FAILURE: a suíte de testes ou verificação técnica falhou.\n\n"
-                f"Motivo do veto: {reason[:500]}\n\n"
-                f"Parecer do validador (trecho): {validator_output[:1500]}\n\n"
+                f"Motivo do veto: {reason}\n\n"
+                f"Parecer do validador (integral): {validator_output}\n\n"
                 'Responda exclusivamente: {"veto_class": "<categoria>"}'
             )
             raw = agent.run_sync(prompt)
@@ -309,7 +369,7 @@ class VetoReworkEngine:
             f"Seu parecer anterior foi vetado. Motivo registrado pelo gate: {analysis.reason}\n"
         )
         if original_demand:
-            header += f"Demanda original em auditoria: {original_demand[:300]}\n"
+            header += f"Demanda original em auditoria: {original_demand}\n"
         body = (
             "O veto ocorreu porque o parecer não declarou aprovação explícita (Lei da Restrição / Default-Deny).\n"
             "Reavalie o entregável e emita um parecer novo e conclusivo:\n"
@@ -354,7 +414,7 @@ class VetoReworkEngine:
             f"Artefato esperado sob sua responsabilidade: {artifact}\n\n"
             f"Bloqueios declarados pela auditoria:\n{blocker_lines}\n\n"
             f"Stories afetadas: {stories}\n"
-            + (f"Demanda original: {original_demand[:300]}\n" if original_demand else "")
+            + (f"Demanda original: {original_demand}\n" if original_demand else "")
             + "\nSua missão como AUTOR do artefato:\n"
             "1. Corrija/atualize o artefato de sua responsabilidade para eliminar a causa dos bloqueios.\n"
             "2. Se a causa afetar stories, atualize os ARQUIVOS das stories (critérios de aceite/BDD) para refletir a correção.\n"
@@ -370,7 +430,7 @@ class VetoReworkEngine:
         attempts: int,
         validator_outputs: dict[str, str] | None = None,
     ) -> dict[str, Any]:
-        """DÚVIDA DE NEGÓCIO estruturada — ÚLTIMO recurso após esgotar o ciclo autônomo."""
+        """ESCALAÇÃO AO HUMANO (laranja) — furo de informação após esgotar o ciclo autônomo."""
         suggested_owner = analysis.fix_owner or (
             {
                 VetoClass.APPROVAL_MISSING: analysis.target_agent or "@edith",
@@ -386,9 +446,9 @@ class VetoReworkEngine:
                 blockers.extend(self.extract_blockers(output or ""))
 
         question = (
-            f"❓ DÚVIDA DE NEGÓCIO (intervenção humana — último recurso após {attempts} rodada(s) autônoma(s) de retrabalho).\n"
-            f"Os vetos persistem e exigem decisão de negócio que excede a autonomia dos agentes.\n"
-            f"Classificação: {analysis.veto_class.value} | Responsável técnico sugerido: {suggested_owner}.\n"
+            f"🟠 ESCALAÇÃO AO HUMANO (falta de informação — após {attempts} rodada(s) autônoma(s) de correção).\n"
+            f"Os vetos persistem e exigem informação/decisão que os agentes não têm.\n"
+            f"Classificação: {analysis.veto_class.value} | Responsável sugerido: {suggested_owner}.\n"
             + (
                 "Bloqueios em aberto:\n" + "\n".join(f"- {b}" for b in blockers)
                 if blockers
@@ -397,7 +457,7 @@ class VetoReworkEngine:
         )
 
         return {
-            "type": "business_question",
+            "type": "human_escalation",
             "veto_class": analysis.veto_class.value,
             "classification_source": analysis.source,
             "reason": analysis.reason,

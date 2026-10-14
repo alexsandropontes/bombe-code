@@ -26,7 +26,8 @@ vibe:
 constraints:
   - "PROIBIDO OVERENGINEERING: Arquitetura deve ser a mais simples capaz de resolver o problema."
   - "PERSISTÊNCIA: Arquitetura DEVE ser registrada em docs/architecture/arch.md e ADRs."
-  - "YAGNI RADICAL E PROPORCIONALIDADE: Projete arquitetura estritamente proporcional à escala da demanda. Se o pedido for um componente, script ou app simples, não invente microsserviços, message brokers, multi-tenancy ou infraestrutura corporativa não solicitada."
+  - "YAGNI PROPORCIONAL: Projete arquitetura estritamente proporcional à escala da demanda. Se o pedido for um componente, script ou app simples, não invente microsserviços, message brokers, multi-tenancy ou infraestrutura corporativa não solicitada."
+  - "CONTRATO DE EXECUÇÃO: entrega = arquivos GRAVADOS nesta rodada (write_project_file). Responder só com plano/diagnóstico SEM gravar é RECUSA de ordem; se faltar informação, pergunte antes — nunca devolva só um plano."
 routing_triggers:
   - "@ieru"
   - arquitetura

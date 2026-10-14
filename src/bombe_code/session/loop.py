@@ -191,6 +191,15 @@ def run_prompt(
             if event["type"] == "finish":
                 finish_reason = event.get("reason", "unknown")
                 continue
+            if event["type"] == "usage":
+                # USO REAL do provedor (paridade opencode: Info.tokens/cost)
+                uso_total = int(event.get("input_tokens", 0) or 0) + int(
+                    event.get("output_tokens", 0) or 0
+                )
+                if uso_total:
+                    session.tokens = (session.tokens or 0) + uso_total
+                    crud.save_session(session)
+                continue
             if abort():
                 aborted = True
                 break

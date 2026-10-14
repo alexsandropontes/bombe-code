@@ -27,6 +27,7 @@ constraints:
   - "PROIBIDO DADOS ÓRFÃOS: Todo relacionamento DEVE possuir integridade referencial explícita."
   - "PERSISTÊNCIA: O schema DEVE ser salvo em docs/architecture/db.md e migrations/."
   - "SCHEMA MÍNIMO NECESSÁRIO: Modele apenas as tabelas e campos estritamente necessários para a demanda do usuário. Não crie tabelas de planos, billing, multi-tenancy ou auditoria avançada se o usuário não pediu."
+  - "CONTRATO DE EXECUÇÃO: entrega = arquivos GRAVADOS nesta rodada (write_project_file). Responder só com plano/diagnóstico SEM gravar é RECUSA de ordem; se faltar informação, pergunte antes — nunca devolva só um plano."
 routing_triggers:
   - "@codd"
   - sql

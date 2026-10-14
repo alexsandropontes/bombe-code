@@ -83,12 +83,14 @@ def main() -> int:
     # Filtra commits de release anteriores
     commits = [c for c in commits if "chore(release):" not in c]
 
-    if not commits:
+    force = "--force" in sys.argv or "-f" in sys.argv
+
+    if not commits and not force:
         print("ℹ️  Nenhum commit novo desde a última tag de release.")
         return 0
 
     base_version = latest_tag.lstrip("v") if latest_tag else current_ver
-    bump_type = calculate_bump(commits)
+    bump_type = calculate_bump(commits) if commits else "patch"
     new_version = bump_version(base_version, bump_type)
 
     print(f"🚀 Bump de versão: {base_version} ➔ {new_version} ({bump_type.upper()})")

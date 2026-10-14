@@ -396,17 +396,17 @@ def wave_validate(
         typer.echo("ONDA homologada com sucesso.")
     elif res.get("blocked"):
         escalation = (res.get("rework") or {}).get("escalation") or {}
+        typer.echo("🟠 ESCALAÇÃO — impedimento em aberto após esforço autônomo completo.", err=True)
         typer.echo(
-            "❓ DÚVIDA DE NEGÓCIO — intervenção humana solicitada (último recurso).", err=True
-        )
-        typer.echo(
-            f"Responsável técnico sugerido: {escalation.get('suggested_owner', '@turing')}",
+            f"Responsável sugerido: {escalation.get('suggested_owner', '@turing')}",
             err=True,
         )
         for bloqueio in escalation.get("blockers", []):
             typer.echo(f"  • {bloqueio}", err=True)
         typer.echo(res.get("error") or "", err=True)
-        typer.echo("Resolva e reexecute: bombe-code wave validate", err=True)
+        typer.echo(
+            "Dê resume para um novo ciclo de correção focado: bombe-code wave validate", err=True
+        )
     else:
         typer.echo(f"Validação não aprovada: {res.get('error')}", err=True)
 
@@ -1058,9 +1058,22 @@ def tui(
         base_url = f"http://127.0.0.1:{port}"
         auth = ("bombe", password)
 
+    def _mouse_livre_tui() -> None:
+        """Paridade opencode: mouse LIVRE na TUI — o terminal faz a seleção
+        nativa e o Ctrl+Shift+C do terminal copia a seleção (Kitty off). Dentro
+        de tmux o atalho não intercepta; o app trata o Ctrl+C que chega com
+        dica + F2//copy para o transcrição completa."""
+        try:
+            with open("/dev/tty", "w") as tty:
+                tty.write("\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l")
+                tty.flush()
+        except OSError:
+            pass
+
     import atexit
 
     atexit.register(_restaurar_terminal)
+    _mouse_livre_tui()  # já no boot: seleção nativa disponível desde o início
     try:
         try:
             client = BombeClient(base_url, auth=auth)
@@ -1069,6 +1082,10 @@ def tui(
             )
             tui_app.run()
         finally:
+            from ..turing.progress import ABORT_EVENT
+
+            ABORT_EVENT.set()  # fechamento graceful: workers salvam e terminam
+            _mouse_livre_tui()
             _restaurar_terminal()
             if server_thread:
                 server_thread.stop()

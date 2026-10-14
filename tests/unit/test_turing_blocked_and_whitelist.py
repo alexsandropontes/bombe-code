@@ -110,9 +110,9 @@ def test_orchestrator_project_fs_tools(tmp_path: Path):
     orch = WaveOrchestrator(project_dir=tmp_path, db=db)
     orch.state_machine._current_state = WaveState.EXECUTE
     tools = orch._get_project_fs_tools()
-    assert len(tools) == 3
+    assert len(tools) == 5
 
-    read_fn, write_fn, list_fn = tools
+    read_fn, write_fn, list_fn, _delete_fn, _exec_fn = tools
     write_res = write_fn("js/app.js", "console.log('hello');")
     assert "gravado com sucesso" in write_res
     assert (tmp_path / "js" / "app.js").exists()

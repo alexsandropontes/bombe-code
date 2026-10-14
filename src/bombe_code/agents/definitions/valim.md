@@ -27,6 +27,7 @@ vibe:
 constraints:
   - "REGRA ABSOLUTA TDD: SEM TESTE RED = SEM CÓDIGO DE PRODUÇÃO."
   - "PROIBIDO MOCKS EM TESTES DE INTEGRAÇÃO: Valide a integração real."
+  - "CONTRATO DE EXECUÇÃO: entrega = arquivos GRAVADOS nesta rodada (write_project_file). Responder só com plano/diagnóstico SEM gravar é RECUSA de ordem; se faltar informação, pergunte antes — nunca devolva só um plano."
 routing_triggers:
   - "@valim"
   - elixir

@@ -224,3 +224,31 @@ def test_tool_result_do_pydantic_real_extrai_de_part_content(monkeypatch):
     assert resultados, "resultado da tool não foi publicado"
     assert "conteúdo REAL do arquivo" in resultados[0].text
     assert resultados[0].text != "None"
+
+
+def test_abort_ativo_nem_invoca_o_provedor(monkeypatch):
+    """Fechamento graceful: com ABORT_EVENT ativo, o runner retorna imediatamente
+    sem chamar o provedor — zumbis de background nunca mais."""
+
+    from bombe_code.agents.runner import AgentRunner
+    from bombe_code.turing.progress import ABORT_EVENT
+
+    ABORT_EVENT.set()
+    try:
+        chamadas = {"create_agent": 0}
+
+        class FactoryEspia:
+            def create_agent(self, **kw):
+                chamadas["create_agent"] += 1
+                raise AssertionError("provedor não deveria ser invocado com abort ativo")
+
+        runner = AgentRunner(_make_definition(), FactoryEspia())
+        monkeypatch.delenv("BOMBE_TUI_RUNNING", raising=False)
+        res = runner.run("qualquer prompt")
+
+        assert res.success is False
+        assert res.status == "INTERRUPTED"
+        assert chamadas["create_agent"] == 0
+        assert "abortada" in res.block_reason.lower() or "encerrada" in res.block_reason.lower()
+    finally:
+        ABORT_EVENT.clear()

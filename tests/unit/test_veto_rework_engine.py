@@ -90,9 +90,9 @@ def test_escalation_estruturada_com_bloqueios_extraidos():
             "@edith": "BLOQUEIO: autenticação ausente\nBLOQUEIO: sem testes e2e",
         },
     )
-    assert escalation["type"] == "business_question"
+    assert escalation["type"] == "human_escalation"
     assert escalation["veto_class"] == "APPROVAL_MISSING"
     assert escalation["attempts"] == 2
     assert escalation["suggested_owner"] == "@edith"
     assert escalation["blockers"] == ["autenticação ausente", "sem testes e2e"]
-    assert "DÚVIDA DE NEGÓCIO" in escalation["question"]
+    assert "ESCALAÇÃO AO HUMANO" in escalation["question"]

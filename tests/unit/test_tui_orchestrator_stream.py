@@ -221,36 +221,27 @@ def test_agent_usage_alimenta_sidebar_custo_oculto():
     assert final["cost"] == 0.02  # custo medido (exibição é oculta na sidebar)
 
 
-def test_copiar_tela_envia_transcricao_ao_clipboard(monkeypatch):
-    """Ctrl+C / Ctrl+Shift+C copiam a transcrição — nunca interrompem."""
-    import pyperclip
-
-    from bombe_code.tui.app import BombeTuiApp
-    from bombe_code.tui.client import BombeClient
-
-    copiado = {}
-    monkeypatch.setattr(pyperclip, "copy", lambda t: copiado.update(texto=t))
-
-    client = BombeClient("http://127.0.0.1:9999")
-    app = BombeTuiApp(client=client, session_id="ses_copy")
-    chat = type(
-        "FakeChatView",
-        (),
-        {
-            "children": [
-                type("W", (), {"content": "mensagem 1"})(),
-                type("W", (), {"content": "mensagem 2"})(),
-            ]
-        },
-    )()
-    monkeypatch.setattr(
-        type(app),
-        "query_one",
-        lambda self, _sel, _t=None: chat,
-        raising=False,
+def test_file_write_registra_arquivo_na_sidebar():
+    """Escrita de agente da ONDA (evento file_write no BUS) registra o caminho
+    na sidebar — projetos sem git dependem disto para 'arquivos modificados'."""
+    chat = FakeChat()
+    arquivos: list[str] = []
+    sidebar = SimpleNamespace(
+        update_metrics=lambda **kw: None,
+        registrar_arquivo=arquivos.append,  # type: ignore[attr-defined]
     )
+    app_falso = SimpleNamespace(query_one=lambda _id, _tipo=None: sidebar)
 
-    app.action_copiar_tela()
+    def orchestrator_fake() -> dict[str, Any]:
+        BUS.publish("file_write", agent="@valim", text="src/lexpontes/jobs.py", preview="x = 1")
+        BUS.publish("file_write", agent="@ada", text="(caminho não informado)")
+        return {"success": True}
 
-    assert "mensagem 1" in copiado["texto"]
-    assert "mensagem 2" in copiado["texto"]
+    async def cenario() -> None:
+        await _run_orchestrator_with_stream(chat, orchestrator_fake, app=app_falso)
+
+    asyncio.run(cenario())
+
+    assert arquivos == ["src/lexpontes/jobs.py"], (
+        "escrita do agente não chegou à sidebar — 'ARQUIVOS MODIFICADOS (0)' de novo"
+    )

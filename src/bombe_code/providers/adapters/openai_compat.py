@@ -19,6 +19,15 @@ def parse_sse(lines) -> Iterator[dict]:
             chunk = json.loads(data)
         except json.JSONDecodeError:
             continue
+        # Uso REAL (tokens) vem no chunk final do provedor
+        usage = chunk.get("usage")
+        if usage:
+            yield {
+                "type": "usage",
+                "input_tokens": usage.get("prompt_tokens", 0) or 0,
+                "output_tokens": usage.get("completion_tokens", 0) or 0,
+            }
+
         choices = chunk.get("choices") or []
         if not choices:
             continue

@@ -18,6 +18,7 @@ BRAZILIAN_HANDLES = {
     "ieru",
     "barreto",
     "diego",
+    "guto",
     "caroli",
     "valim",
     "aniche",
@@ -52,6 +53,7 @@ COUNTRY_MAP = {
     "demi": "Brasil",
     "edith": "Brasil",
     "nina": "Brasil",
+    "guto": "Brasil",
 }
 
 HOMAGE_MAP = {
@@ -78,6 +80,7 @@ HOMAGE_MAP = {
     "demi": "Demi Getschko - Pioneiro da Internet no Brasil, diretor-presidente do NIC.br e membro do Internet Hall of Fame (Brasil).",
     "edith": "Edith Ranzini - Engenheira pioneira da USP, líder na engenharia do computador Patinho Feio (Brasil).",
     "nina": "Nina Silva - Executiva de tecnologia e governança, cofundadora do Movimento Black Money e eleita Top 100 MIPAD pela ONU (Brasil).",
+    "guto": "Guto Carvalho - Referência brasileira em infraestrutura e DevOps, anos de liderança em comunidades e operações de Puppet/Ansible/CI-CD em produção (Brasil).",
 }
 
 STAGE_MAP = {
@@ -104,6 +107,7 @@ STAGE_MAP = {
     "demi": TuringStage.EXECUTE,
     "edith": TuringStage.VALIDATE,
     "nina": TuringStage.VALIDATE,
+    "guto": TuringStage.EXECUTE,
 }
 
 INPUT_OUTPUT_MAP = {

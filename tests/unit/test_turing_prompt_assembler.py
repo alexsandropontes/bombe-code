@@ -41,7 +41,7 @@ def test_tdd_code_mode_mvp_includes_operational_mvp_and_anti_scope_creep():
         mode="tdd-code",
     )
     # Modo TDD com MVP Operacional
-    assert "ANTI-SCOPE CREEP / YAGNI RADICAL" in prompt
+    assert "ANTI-SCOPE CREEP / YAGNI PROPORCIONAL" in prompt
     assert "TETO MÁXIMO DA DEMANDA" in prompt
     assert "MVP OPERACIONAL" in prompt
     assert (

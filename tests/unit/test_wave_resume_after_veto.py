@@ -271,9 +271,9 @@ def test_autocura_global_nao_hijacked_onda_com_trabalho_em_voo(project_env):
     assert orch2.state_machine.wave_id == "ONDA-002"
 
 
-def test_orcamento_de_retrabalho_escala_ao_esgotar_sessao(project_env):
-    """Teto de sessão: rodadas persistentes ≥ MAX → escala com evidência em vez
-    de queimar tokens infinitamente (o limbo de 1h24 do make-books)."""
+def test_orcamento_por_turno_escada_completa_cada_resume(project_env):
+    """Cada resume/turno roda a escada COMPLETA do zero — sem orçamento
+    persistido entre turnos (o orçamento antigo matava o resume)."""
     tmp_path, db = project_env
     (tmp_path / "app.py").write_text("def app():\n    return 1\n", encoding="utf-8")
     orch = WaveOrchestrator(project_dir=str(tmp_path), db=db)
@@ -282,19 +282,32 @@ def test_orcamento_de_retrabalho_escala_ao_esgotar_sessao(project_env):
     orch.transition_to(TuringStage.EXECUTE)
     orch.transition_to(TuringStage.VALIDATE)
 
-    # Simula sessão já exaurida anteriormente (crash/loop histórico)
+    # Nenhum orçamento persistido de turnos anteriores pode bloquear o turno:
     db.set_meta("rework_rounds:ONDA-001", "3")
 
-    edith = _runner_fake(["Parecer vago sem aprovação."])
-    nina = _runner_fake(["Governança: APROVADO."])
-    runners = {"@edith": edith, "@nina": nina}
-    orch._get_runner = lambda handle: runners.get(handle)
+    # Turno 1: a escada roda completa (re-auditoria + re-burn + revalidação)
+    edith_t1 = _runner_fake(["Parecer vago sem aprovação."])
+    nina_t1 = _runner_fake(["Governança: APROVADO."])
+    # Turno 2: a escada roda COMPLETA de novo — do zero, sem herdar orçamento
+    edith_t2 = _runner_fake(["Homologação: APROVADO. Entrega íntegra."])
+    nina_t2 = _runner_fake(["Governança: APROVADO."])
+    chamadas = {"edith": 0, "@nina": 0}
+
+    def get_runner(handle: str):
+        if handle == "@edith":
+            chamadas["edith"] += 1
+            return edith_t1 if chamadas["edith"] == 1 else edith_t2
+        chamadas["@nina"] += 1
+        return nina_t1 if chamadas["@nina"] == 1 else nina_t2
+
+    orch._get_runner = get_runner
 
     res = orch.run_validate()
     assert res["success"] is False
-    escalation = res["rework"]["escalation"]
-    assert "ORÇAMENTO DE RETRABALHO ESGOTADO" in escalation["message"]
-    assert edith.run.call_count == 1  # nenhuma rodada nova queimada
+    # O meta velho (3) NÃO bloqueou o turno: a escada rodou
+    # (auditoria inicial + re-auditorias do retrabalho direcionado)
+    assert edith_t1.run.call_count >= 2
+    assert "VALIDATE não aprovado" in (res.get("error") or "")
 
 
 def test_sucesso_zera_orcamento_de_retrabalho(project_env):

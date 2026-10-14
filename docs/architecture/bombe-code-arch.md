@@ -1,7 +1,7 @@
 # Arquitetura — Bombe Code
 
 > Reimplementação Python do opencode (MIT). Padrão: monolito modular em camadas com fronteiras explícitas — cada subpacote espelha um pacote do original (ver `docs/research/opencode-dissection.md`).
-> **Atualização as-is (pós-DDD, commits `4e3cbef`/`d84b00e`):** o núcleo de sessão/providers/tools/server permanece parity com o original; o orquestrador ganhou camadas DDD (`domain/`, `application/`, `infrastructure/`) e o motor Turing (`turing/`).
+> **Atualização as-is (versão v0.3.0 / branch `dev-working-ia`):** o núcleo de sessão/providers/tools/server permanece parity com o original; o orquestrador possui camadas DDD (`domain/`, `application/`, `infrastructure/`), motor Turing (`turing/`) com governança de ambiente/SRE (@guto), persistência de cota com escada, fila de achados e elenco de 25 agentes (1 Maestro + 24 Especialistas).
 
 ## 1. Estrutura de módulos (as-is, 188 módulos)
 
@@ -50,7 +50,7 @@ src/bombe_code/                  # backend (path configurado em .bombeconfig)
 │   ├── kanban.py                # KanbanManager (SQLite + markdown, Andon flag)
 │   ├── pbb.py                   # decomposição PBB em tarefas atômicas
 │   └── prompt_assembler.py      # LEGO de prompts por DeliveryTarget
-├── agents/                      # EP-003 — 23 definições (definitions/*.md) + registry/runner
+├── agents/                      # EP-003/AS-IS — 25 definições (definitions/*.md) + registry/runner
 ├── skills/                      # EP-003 — discovery, manifest, registry on-demand
 ├── commands/                    # slash commands (loader, templates)
 ├── tools/                       # F5 — parity: opencode/src/tool/*

@@ -82,6 +82,8 @@ class ProjectDatabase:
                 );
                 """
             )
+            # Migração do kanban de agentes (colunas de card de fluxo)
+            self._migra_kanban_task(conn)
             # Migração segura para tabelas já criadas
             try:
                 conn.execute(
@@ -103,6 +105,283 @@ class ProjectDatabase:
                 pass
 
             conn.commit()
+
+    # ── KANBAN DE TASK DE AGENTE (fonte ÚNICA de verdade do fluxo) ──
+    # A task de agente nasce NO KANBAN, designada ao agente, ANTES de qualquer
+    # delegação. Sem ordem no kanban, agente nem acorda. Colunas: BACKLOG →
+    # AGUARDANDO DEV → EM DEV → DEV DONE → DONE DEFINITIVO (final, sem volta;
+    # mudança depois = CHANGE = novo card). BLOCKED NÃO É COLUNA — é SITUAÇÃO
+    # (flag booleana, tipada: HUMAN_SCALE | HUMAN_SCALE_ERROR | INTERNAL_SCALE)
+    # que acontece NA coluna em que o card está: o card NUNCA sai do status por
+    # causa dela; ela sinaliza o impedimento que impede a próxima coluna, e sai
+    # quando o impedimento é resolvido.
+
+    def _migra_kanban_task(self, conn: Any) -> None:
+        """Migração segura: colunas de kanban na agent_tasks já existente +
+        NORMALIZAÇÃO DO LEGADO: rows com kanban_status='BLOCKED' (modelo errado
+        antigo, blocked como pseudo-coluna) voltam à coluna real
+        (AGUARDANDO_DEV) mantendo a SITUAÇÃO (block_tipo, default
+        INTERNAL_SCALE)."""
+        for alter in (
+            "ALTER TABLE agent_tasks ADD COLUMN wave_id TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE agent_tasks ADD COLUMN task_id TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE agent_tasks ADD COLUMN ordem INTEGER NOT NULL DEFAULT 0",
+            "ALTER TABLE agent_tasks ADD COLUMN kanban_status TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE agent_tasks ADD COLUMN block_tipo TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE agent_tasks ADD COLUMN dor_json TEXT NOT NULL DEFAULT '[]'",
+            "ALTER TABLE agent_tasks ADD COLUMN dod_json TEXT NOT NULL DEFAULT '[]'",
+            "ALTER TABLE agent_tasks ADD COLUMN task_tipo TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE agent_tasks ADD COLUMN descricao TEXT NOT NULL DEFAULT ''",
+        ):
+            try:
+                conn.execute(alter)
+            except Exception:  # noqa: BLE001, S110 — coluna já existe
+                pass
+        conn.execute(
+            """
+            UPDATE agent_tasks
+            SET kanban_status = 'AGUARDANDO_DEV',
+                block_tipo = CASE WHEN block_tipo = '' THEN 'INTERNAL_SCALE' ELSE block_tipo END
+            WHERE kanban_status = 'BLOCKED'
+            """
+        )
+        # TIPO PELO PRÓPRIO ID: cards nascidas antes da coluna task_tipo
+        # (INSTALACAO-1, ACHADO-*, REVIEW-*) recebem o tipo que o ID declara —
+        # a prioridade de instalação/achado não depende do build que nasceu.
+        conn.execute(
+            """
+            UPDATE agent_tasks SET task_tipo = CASE
+                WHEN task_id LIKE 'INSTALACAO-%' AND (task_tipo IS NULL OR task_tipo = '')
+                    THEN 'INSTALACAO'
+                WHEN task_id LIKE 'ACHADO-%' AND (task_tipo IS NULL OR task_tipo = '')
+                    THEN 'ACHADO'
+                WHEN task_id LIKE 'REVIEW-%' AND (task_tipo IS NULL OR task_tipo = '')
+                    THEN 'REVIEW'
+                ELSE task_tipo
+            END
+            WHERE task_id != ''
+            """
+        )
+
+    def criar_task_kanban(
+        self,
+        wave_id: str,
+        story_id: str,
+        task_id: str,
+        title: str,
+        agent: str,
+        ordem: int,
+        dor: list[str] | None = None,
+        dod: list[str] | None = None,
+        task_tipo: str = "",
+        descricao: str = "",
+    ) -> None:
+        """Braço ESCRITOR do Turing: cria o card em BACKLOG, designado, na ordem,
+        com suas REGRAS DE DOR (entrada) e DOD (saída) — nada está ali por acaso.
+        Tudo o que a queima precisa (tipo da task, descrição do problema) MOR A
+        NO KANBAN: a fila nunca lê task de outra fonte."""
+        chave = f"{wave_id}:{story_id}:{task_id}"
+        dor_json = json.dumps(dor or [], ensure_ascii=False)
+        dod_json = json.dumps(dod or [], ensure_ascii=False)
+        with self._get_connection() as conn:
+            self._migra_kanban_task(conn)
+            conn.execute(
+                """
+                INSERT INTO agent_tasks
+                    (id, story_id, agent_role, title, status, output, created_at, updated_at,
+                     wave_id, task_id, ordem, kanban_status, block_tipo, dor_json, dod_json,
+                     task_tipo, descricao)
+                VALUES (?, ?, ?, ?, 'task_kanban', '', ?, ?, ?, ?, ?, 'BACKLOG', '', ?, ?, ?, ?)
+                ON CONFLICT(id) DO NOTHING
+                """,
+                (
+                    chave,
+                    story_id,
+                    agent,
+                    title,
+                    time.time(),
+                    time.time(),
+                    wave_id,
+                    task_id,
+                    ordem,
+                    dor_json,
+                    dod_json,
+                    task_tipo,
+                    descricao,
+                ),
+            )
+
+    def stories_da_onda(self, wave_id: str) -> list[str]:
+        """Stories da ONDA que têm cards de task no kanban (determinístico).
+        Ordena com prioridade para stories que possuem tarefas EM_DEV ou mais recentes,
+        garantindo que etapas de ONDA (DISCUSS, PLAN, VALIDATE) ou a story sendo queimada
+        apareçam no topo do Kanban."""
+        with self._get_connection() as conn:
+            self._migra_kanban_task(conn)
+            rows = conn.execute(
+                """
+                SELECT story_id,
+                       MAX(CASE WHEN kanban_status = 'EM_DEV' THEN 2
+                                WHEN kanban_status = 'AGUARDANDO_DEV' THEN 1
+                                ELSE 0 END) AS prioridade,
+                       MAX(updated_at) AS max_updated
+                FROM agent_tasks
+                WHERE wave_id = ? AND task_id != ''
+                GROUP BY story_id
+                ORDER BY prioridade DESC, max_updated DESC, story_id ASC
+                """,
+                (wave_id,),
+            ).fetchall()
+            return [r["story_id"] for r in rows]
+
+    def mover_task_kanban(
+        self, wave_id: str, story_id: str, task_id: str, kanban_status: str, block_tipo: str = ""
+    ) -> None:
+        """Braço ESCRITOR: move o card (binário no fim do trabalho do agente).
+
+        As únicas colunas que EXISTEM: BACKLOG, AGUARDANDO_DEV, EM_DEV,
+        DEV_DONE, DONE_DEFINITIVO. 'BLOCKED' não é movimento — não existe
+        como status; blocked é SITUAÇÃO (flag): use bloquear_task_kanban."""
+        colunas = ("BACKLOG", "AGUARDANDO_DEV", "EM_DEV", "DEV_DONE", "DONE_DEFINITIVO")
+        if kanban_status not in colunas:
+            raise ValueError(
+                f"Status '{kanban_status}' não existe. Colunas reais: {', '.join(colunas)}. "
+                "Blocked não é coluna — é SITUAÇÃO (flag): use bloquear_task_kanban()."
+            )
+        chave = f"{wave_id}:{story_id}:{task_id}"
+        with self._get_connection() as conn:
+            self._migra_kanban_task(conn)
+            conn.execute(
+                "UPDATE agent_tasks SET kanban_status = ?, block_tipo = ?, updated_at = ? "
+                "WHERE id = ?",
+                (kanban_status, block_tipo, time.time(), chave),
+            )
+
+    def buscar_task_kanban(self, wave_id: str, task_id: str) -> dict | None:
+        """Procura UMA card de task em TODAS as stories da ONDA (para resolver
+        precedência entre stories: dep:'ST-001-T3' dentro da ST-002)."""
+        with self._get_connection() as conn:
+            self._migra_kanban_task(conn)
+            row = conn.execute(
+                """
+                SELECT id, story_id, agent_role, title, task_id, ordem, kanban_status, block_tipo,
+                       dor_json, dod_json, task_tipo, descricao
+                FROM agent_tasks
+                WHERE wave_id = ? AND task_id = ? AND task_id != ''
+                ORDER BY ordem, task_id
+                LIMIT 1
+                """,
+                (wave_id, task_id),
+            ).fetchone()
+        if row is None:
+            return None
+        cols = (
+            "id",
+            "story_id",
+            "agent_role",
+            "title",
+            "task_id",
+            "ordem",
+            "kanban_status",
+            "block_tipo",
+            "dor",
+            "dod",
+            "task_tipo",
+            "descricao",
+        )
+        d = dict(zip(cols, row, strict=False))
+        try:
+            d["dor"] = json.loads(d["dor"] or "[]")
+            d["dod"] = json.loads(d["dod"] or "[]")
+        except (ValueError, TypeError):
+            d["dor"], d["dod"] = [], []
+        return d
+
+    def bloquear_task_kanban(self, wave_id: str, story_id: str, task_id: str, block_tipo: str) -> None:
+        """SITUAÇÃO (não coluna): sinaliza o impedimento NA coluna em que o card
+        está — o status NÃO muda. Sai da situação quando o impedimento resolve."""
+        chave = f"{wave_id}:{story_id}:{task_id}"
+        with self._get_connection() as conn:
+            self._migra_kanban_task(conn)
+            conn.execute(
+                "UPDATE agent_tasks SET block_tipo = ?, updated_at = ? WHERE id = ?",
+                (block_tipo, time.time(), chave),
+            )
+
+    def desbloquear_task_kanban(self, wave_id: str, story_id: str, task_id: str) -> None:
+        """Resolve a situação blocked (impedimento resolvido) — coluna intacta."""
+        self.bloquear_task_kanban(wave_id, story_id, task_id, "")
+
+    def adicionar_dep_task_kanban(
+        self, wave_id: str, story_id: str, task_id: str, dep_task_id: str
+    ) -> None:
+        """Acrescenta precedência (`dep:{dep_task_id}`) à DOR da card — usada
+        quando um impedimento de ambiente gera task prioritária: a origem só
+        re-queima depois da instalação DEV DONE. Idempotente."""
+        cartao = next(
+            (
+                c
+                for c in self.carregar_tasks_kanban(wave_id, story_id)
+                if c["task_id"] == task_id
+            ),
+            None,
+        )
+        if cartao is None:
+            return
+        item = f"dep:{dep_task_id}"
+        dor = list(cartao.get("dor") or [])
+        if item not in dor:
+            dor.append(item)
+            chave = f"{wave_id}:{story_id}:{task_id}"
+            with self._get_connection() as conn:
+                self._migra_kanban_task(conn)
+                conn.execute(
+                    "UPDATE agent_tasks SET dor_json = ?, updated_at = ? WHERE id = ?",
+                    (json.dumps(dor, ensure_ascii=False), time.time(), chave),
+                )
+
+    def carregar_tasks_kanban(self, wave_id: str, story_id: str) -> list[dict]:
+        """Cards de task da story, na ordem de execução. DESEMPATE
+        DETERMINÍSTICO: mesma `ordem` → ordena por task_id (rodar 10× escolhe
+        sempre a mesma card primeiro)."""
+        with self._get_connection() as conn:
+            self._migra_kanban_task(conn)
+            rows = conn.execute(
+                """
+                SELECT id, story_id, agent_role, title, task_id, ordem, kanban_status, block_tipo,
+                       dor_json, dod_json, task_tipo, descricao, updated_at
+                FROM agent_tasks
+                WHERE wave_id = ? AND story_id = ? AND task_id != ''
+                ORDER BY ordem, task_id
+                """,
+                (wave_id, story_id),
+            ).fetchall()
+        chaves = (
+            "id",
+            "story_id",
+            "agent_role",
+            "title",
+            "task_id",
+            "ordem",
+            "kanban_status",
+            "block_tipo",
+            "dor",
+            "dod",
+            "task_tipo",
+            "descricao",
+            "updated_at",
+        )
+        cartoes: list[dict] = []
+        for r in rows:
+            d = dict(zip(chaves, r))
+            try:
+                d["dor"] = json.loads(d.get("dor") or "[]")
+                d["dod"] = json.loads(d.get("dod") or "[]")
+            except (ValueError, TypeError):
+                d["dor"] = []
+                d["dod"] = []
+            cartoes.append(d)
+        return cartoes
 
     def save_wave_state(
         self,

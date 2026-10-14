@@ -2,8 +2,8 @@
 
 Nenhum veto pode parar o processo: o Turing determinístico classifica o veto,
 rastreia a causa até o autor do artefato, devolve para conserto, re-queima as
-stories no ciclo TDD e re-auditá. O humano só é convocado como ÚLTIMO recurso
-com uma DÚVIDA DE NEGÓCIO estruturada.
+stories no ciclo TDD e re-auditá. O humano só é convocado por FALTA DE
+INFORMAÇÃO (escalação laranja); linha vermelha é parada total (último recurso).
 """
 
 from pathlib import Path
@@ -190,46 +190,30 @@ def test_product_gap_dispara_retrabalho_upstream_e_re_burn_autonomo(project_env)
     assert edith.run.call_count == 2
 
 
-def test_ciclo_autonomo_esgota_e_converte_em_duvida_de_negocio(project_env):
+def test_ciclo_autonomo_esgota_e_para_com_status_tecnico_honesto(project_env):
+    """Escada esgotada → STATUS TÉCNICO honesto (não falsa dúvida de negócio):
+    o Turing sabe por que parou e a ação é resume (ele mesmo refaz focado)."""
     tmp_path, db = project_env
     orch = _prepara_orchestrator(tmp_path, db)
-
     orch.kanban.add_card(
-        story_id="ST-003",
-        wave_id="ONDA-001",
-        title="Story ST-003",
-        agent="@valim",
-        status="DEV_DONE",
+        story_id="ST-001", wave_id="ONDA-001", title="Story 1", agent="@valim", status="IN_PROGRESS"
     )
 
-    veto_persistente = (
-        "🔴 REJEITADO\n**Bloqueios:**\n1. Requisito RF-03 do PRD não atendido pelo editor."
-    )
+    veto_persistente = "🔴 REJEITADO — achados técnicos: commit pós-dequeue ausente."
     edith = _runner_fake([veto_persistente])
     nina = _runner_fake(["Governança: APROVADO."])
-    autor = _runner_fake(["RETRABALHO UPSTREAM CONCLUÍDO."])
-    runners = {"@edith": edith, "@nina": nina, "@grace": autor}
+    runners = {"@edith": edith, "@nina": nina}
     orch._get_runner = lambda handle: runners.get(handle)
-
-    def fake_cycle(story_id=None):
-        orch.state_machine.transition_to(WaveState.VALIDATE)
-        return {"success": True, "message": "re-queimada"}
-
-    orch._run_cycle_inner = fake_cycle
 
     res = orch.run_validate()
 
     assert res["success"] is False
     assert res["blocked"] is True
-    escalation = res["rework"]["escalation"]
-    # Escalonamento é DÚVIDA DE NEGÓCIO estruturada (último recurso)
-    assert escalation["type"] == "business_question"
-    assert "DÚVIDA DE NEGÓCIO" in escalation["question"]
-    assert escalation["suggested_owner"] == "@grace"  # rastreado do PRD
-    assert escalation["attempts"] >= 1
-    # Rodadas autônomas limitadas pelo orçamento de sessão (máx. 3) — a dupla
-    # defesa (rework + rede de segurança) nunca ultrapassa o teto
-    assert res["rework"]["attempts"] <= 3
+    esc = res["rework"]["escalation"]
+    assert esc["type"] == "technical_status"
+    assert "VALIDATE não aprovado" in esc["message"]
+    # Linguagem de negócio sem falso pedido de decisão
+    assert "decisão de negócio" not in esc["message"]
 
 
 def test_modo_manual_nao_executa_ciclo_autonomo(project_env):
@@ -422,8 +406,8 @@ def test_ciclo_reprovado_pelo_review_dispara_rework_dirigido_e_aprova(project_en
     assert card["is_blocked"] == 0
 
 
-def test_nao_convergencia_no_ciclo_escala_duvida_de_negocio_com_parecer(project_env):
-    """Mesmo veto repetido após correção dirigida → escala com parecer e
+def test_escada_exaurida_vira_escalacao_laranja_com_opcoes_de_pm(project_env):
+    """Escada completa sem convergência → ESCALAÇÃO AO HUMANO (laranja) com
     opções de PM (informar/simplificar/adiar) — nunca parada silenciosa."""
     tmp_path, db = project_env
     (tmp_path / "app.py").write_text("def app():\n    return 1\n", encoding="utf-8")
@@ -446,6 +430,7 @@ def test_nao_convergencia_no_ciclo_escala_duvida_de_negocio_com_parecer(project_
             "is_blocked": True,
             "error": "Tech Lead: veredito de REJEIÇÃO",
             "review_output": "Parecer completo: o editor continua read-only.",
+            "arquivos_escritos": ["src/fix.py"],
         }
 
     orch._run_cycle_inner = fake_cycle_sempre_veta
@@ -455,7 +440,8 @@ def test_nao_convergencia_no_ciclo_escala_duvida_de_negocio_com_parecer(project_
     assert res["success"] is False
     assert res["blocked"] is True
     esc = res["escalation"]
-    assert esc["type"] == "business_question"
+    assert esc["type"] == "human_escalation"
+    assert "🟠" in esc["message"]
     assert (
         "INFORMAR" in esc["message"]
         and "SIMPLIFICAR" in esc["message"]
@@ -465,6 +451,82 @@ def test_nao_convergencia_no_ciclo_escala_duvida_de_negocio_com_parecer(project_
     assert esc["suggested_owner"] == "@unclebob"
     card = orch.kanban.get_card("ST-001")
     assert card["is_blocked"] == 1
+
+
+def test_veto_sistemico_declarado_por_agente_produz_linha_parada_vermelha(project_env):
+    """Agente DECLAROU impedimento e a escada inteira não convergiu → 🔴 LINHA
+    PARADA: nem a automação resolve; o motivo claro fica em destaque."""
+    tmp_path, db = project_env
+    (tmp_path / "app.py").write_text("def app():\n    return 1\n", encoding="utf-8")
+    orch = WaveOrchestrator(project_dir=str(tmp_path), db=db)
+    orch.start_wave("ONDA-001", autonomy_mode="AUTO")
+    orch.transition_to(TuringStage.PLAN)
+    orch.transition_to(TuringStage.EXECUTE)
+    orch.kanban.add_card(
+        story_id="ST-001", wave_id="ONDA-001", title="Story 1", agent="@valim", status="IN_PROGRESS"
+    )
+
+    def fake_cycle_sempre_bloqueia(story_id=None, rework_feedback=None):
+        orch.kanban.block_card(
+            story_id,
+            reason="🛑 Agente reportou bloqueio: dependência externa indisponível",
+            blocked_by="@valim",
+        )
+        return {
+            "success": False,
+            "is_blocked": True,
+            "error": "agente bloqueado",
+            "review_output": "parecer",
+            "arquivos_escritos": ["src/fix.py"],
+        }
+
+    orch._run_cycle_inner = fake_cycle_sempre_bloqueia
+
+    res = orch.run_execute(stories=["ST-001"])
+
+    assert res["success"] is False
+    esc = res["escalation"]
+    assert esc["type"] == "line_stop"
+    assert "🔴" in esc["message"]
+    assert "dependência externa" in esc["message"]
+
+
+def test_impedimento_historia_flagada_pode_queimar_multiplas_bandeiras(project_env):
+    """ANTI-DEADLOCK: com VÁRIAS bandeiras erguidas (caso real make-books),
+    a história flagada CONTINUA podendo queimar — ela É o trabalho de correção.
+    Só história nova (não flagada) espera. Recusar a flagada travava a linha
+    para sempre: a correção da bandeira era bloqueada pela própria bandeira."""
+    tmp_path, db = project_env
+    (tmp_path / "app.py").write_text("def app():\n    return 1\n", encoding="utf-8")
+    orch = WaveOrchestrator(project_dir=str(tmp_path), db=db)
+    orch.start_wave("ONDA-001", autonomy_mode="AUTO")
+    orch.transition_to(TuringStage.PLAN)
+    orch.transition_to(TuringStage.EXECUTE)
+    for sid in ("ST-001", "ST-301", "ST-002"):
+        orch.kanban.add_card(
+            story_id=sid,
+            wave_id="ONDA-001",
+            title=f"Story {sid}",
+            agent="@valim",
+            status="IN_PROGRESS",
+        )
+    # Sessão anterior deixou DUAS bandeiras erguidas.
+    orch.kanban.block_card("ST-001", reason="veto anterior", blocked_by="@edith")
+    orch.kanban.block_card("ST-301", reason="veto anterior", blocked_by="@edith")
+
+    def fake_cycle(story_id=None, rework_feedback=None):
+        if story_id in ("ST-001", "ST-301"):
+            orch.kanban.unblock_card(story_id)
+        return {"success": True, "message": "ok"}
+
+    orch._run_cycle_inner = fake_cycle
+
+    res = orch.run_execute(stories=["ST-001", "ST-301", "ST-002"])
+
+    assert res["success"] is True, res.get("error")
+    assert res["completed_stories"] == ["ST-001", "ST-301", "ST-002"]
+    assert orch.kanban.get_card("ST-001")["is_blocked"] == 0
+    assert orch.kanban.get_card("ST-301")["is_blocked"] == 0
 
 
 def test_escada_de_convergencia_refina_story_e_aprova_no_degrau_3(project_env):
@@ -496,6 +558,7 @@ def test_escada_de_convergencia_refina_story_e_aprova_no_degrau_3(project_env):
                 "is_blocked": True,
                 "error": "Tech Lead: REJEIÇÃO",
                 "review_output": "parecer",
+                "arquivos_escritos": ["src/fix.py"],
             }
         orch.state_machine.transition_to(WaveState.VALIDATE)
         return {"success": True, "message": "aprovado no degrau 3"}
@@ -520,7 +583,20 @@ def test_escada_de_convergencia_refina_story_e_aprova_no_degrau_3(project_env):
 
     orch._get_runner = fake_get_runner
 
-    res = orch.run_execute(stories=["ST-001"])
+    from bombe_code.turing.progress import BUS
+
+    textos_publicados: list[str] = []
+    publicar_original = BUS.publish
+
+    def _capturar(etype, **kw):
+        textos_publicados.append(kw.get("text", ""))
+        return publicar_original(etype, **kw)
+
+    BUS.publish = _capturar
+    try:
+        res = orch.run_execute(stories=["ST-001"])
+    finally:
+        BUS.publish = publicar_original
 
     assert res["success"] is True, res.get("error")
     assert len(degraus) == 4  # 2 dirigidos + 2 pós-refino
@@ -528,6 +604,9 @@ def test_escada_de_convergencia_refina_story_e_aprova_no_degrau_3(project_env):
     assert "REPROVADA duas vezes" in refinamentos[0]
     card = orch.kanban.get_card("ST-001")
     assert card["is_blocked"] == 0
+    assert any(t.startswith("🟢") for t in textos_publicados), (
+        "escada convergiu sem anúncio verde de impedimento resolvido"
+    )
 
 
 def test_escada_completa_antes_de_escalar_humano(project_env):
@@ -554,6 +633,7 @@ def test_escada_completa_antes_de_escalar_humano(project_env):
             "is_blocked": True,
             "error": "Tech Lead: REJEIÇÃO",
             "review_output": "p",
+            "arquivos_escritos": ["src/fix.py"],
         }
 
     orch._run_cycle_inner = fake_cycle
@@ -578,10 +658,10 @@ def test_escada_completa_antes_de_escalar_humano(project_env):
     assert res["blocked"] is True
     assert chamadas["ciclo"] == 5  # 1 original + 4 degraus
     assert chamadas["caroli"] == 2  # degraus 3 e 4
-    assert res["escalation"]["type"] == "business_question"
+    assert res["escalation"]["type"] == "human_escalation"
 
 
-def test_andon_impedimento_para_a_linha_nenhuma_story_avanca(project_env):
+def test_impedimento_para_a_linha_nenhuma_story_avanca(project_env):
     """REGRA ABSOLUTA: bandeira vermelha = IMPEDIMENTO para a linha inteira.
     Com a ST-003 flagada, a ST-004 NÃO pode ser executada — a linha só
     trabalha a história flagada até resolver."""

@@ -3,7 +3,6 @@ TDD Estrito: RED -> GREEN -> REFACTOR.
 """
 
 from pathlib import Path
-from unittest.mock import MagicMock
 
 from bombe_code.agents.runner import AgentExecutionResult
 from bombe_code.turing.orchestrator import WaveOrchestrator
@@ -43,8 +42,13 @@ def test_agent_execution_result_telemetry_values():
 
 
 def test_wave_orchestrator_record_telemetry(tmp_path: Path):
-    db_mock = MagicMock()
-    orch = WaveOrchestrator(project_dir=tmp_path, db=db_mock)
+    from bombe_code.storage.project_db import ProjectDatabase
+    from bombe_code.turing.state_machine import TuringStage
+
+    db = ProjectDatabase(str(tmp_path))
+    orch = WaveOrchestrator(project_dir=tmp_path, db=db)
+    orch.start_wave("ONDA-001", autonomy_mode="AUTO")
+    orch.transition_to(TuringStage.DISCUSS)
 
     res1 = AgentExecutionResult(
         agent_handle="@meira",
@@ -69,7 +73,7 @@ def test_wave_orchestrator_record_telemetry(tmp_path: Path):
     assert len(stage["agents"]) == 1
 
     # Gravação dos arquivos de telemetria
-    telemetry_file = tmp_path / "docs" / "telemetry.json"
+    telemetry_file = tmp_path / "docs" / "waves" / "ONDA-001" / "telemetry.json"
     telemetria_md = tmp_path / "docs" / "telemetria.md"
     assert telemetry_file.exists()
     assert telemetria_md.exists()

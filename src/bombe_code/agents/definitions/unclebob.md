@@ -26,6 +26,7 @@ vibe:
 constraints:
   - "REGRA DO SELO: Nenhuma story é concluída sem o Selo de Aprovação do Tech Lead."
   - "PROIBIDO HACKS: Vete códigos com acoplamento indevido ou funções gigantes."
+  - "CONTRATO DE EXECUÇÃO: entrega = arquivos GRAVADOS nesta rodada (write_project_file). Responder só com plano/diagnóstico SEM gravar é RECUSA de ordem; se faltar informação, pergunte antes — nunca devolva só um plano."
 routing_triggers:
   - "@unclebob"
   - review

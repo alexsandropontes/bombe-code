@@ -190,6 +190,20 @@ async def _run_orchestrator_with_stream(
                 for linha in previa.splitlines()[:8]:
                     t.append(f"\n  │ {linha}", style="dim")
                 await chat.mount(_novo_widget(t))
+                # Arquivo gravado por agente da ONDA → sidebar (projetos sem git)
+                caminho_escrito = (ev.text or "").strip()
+                if (
+                    caminho_escrito
+                    and caminho_escrito != "(caminho não informado)"
+                    and app is not None
+                ):
+                    try:
+                        from .widgets.sidebar import Sidebar
+
+                        sidebar = app.query_one("#sidebar", Sidebar)
+                        sidebar.registrar_arquivo(caminho_escrito)
+                    except Exception as exc:  # noqa: BLE001 — sidebar é best-effort
+                        logger.debug("Sidebar indisponível para arquivo: %s", exc)
                 continue
 
             if etype == "tool_result":
@@ -217,9 +231,24 @@ async def _run_orchestrator_with_stream(
                 "escalation": TOKENS["warning"],
                 "stage_failed": TOKENS["warning"],
             }.get(etype, TOKENS["secondary"])
+            # 🚦 Semáforo de impedimentos — a cor conta a história:
+            # 🔴 vermelho = linha de produção PARADA (motivo claro em destaque)
+            # 🟠 laranja = escalação do humano (falta informação, não ação técnica)
+            # 🟢 verde = impedimento resolvido pelo próprio fluxo da plataforma
+            if ev.text.startswith("🔴"):
+                style = TOKENS["error"]
+            elif ev.text.startswith("🟠"):
+                style = TOKENS["laranja"]
+            elif ev.text.startswith("🟢"):
+                style = TOKENS["success"]
             await chat.mount(
                 Static(f"[{style}]{colorizar_handles(_rich_escape(ev.text))}[/{style}]")
             )
+            # Escalações pintadas pelo dreno: o resultado não repinta (anti-duplicação)
+            if etype == "escalation" and app is not None:
+                if not hasattr(app, "_escalacoes_pintadas"):
+                    app._escalacoes_pintadas = set()
+                app._escalacoes_pintadas.add(ev.text)
 
     worker_task = asyncio.create_task(_worker())
     drain_task = asyncio.create_task(_drain())
@@ -379,6 +408,28 @@ async def handle_slash_command(app: BombeTuiApp, raw_text: str) -> bool:
     cmd = parts[0].lower()
     arg = parts[1].strip() if len(parts) > 1 else ""
     chat = app.query_one("#chat-view")
+
+    # /permitir apagar <caminho> — permissão explícita para remoção FORA da
+    # raiz do projeto (SEMI-AUTO/MANUAL). Vale nesta sessão.
+    if cmd == "permitir":
+        sub = arg.split(maxsplit=1)
+        acao = sub[0].lower() if sub else ""
+        caminho = sub[1].strip() if len(sub) > 1 else ""
+        if acao != "apagar" or not caminho:
+            _mount_status(
+                chat,
+                f"[{TOKENS['warning']}]Uso: /permitir apagar <caminho-absoluto>[/{TOKENS['warning']}]",
+            )
+            return True
+        from ..turing.orchestrator import autorizar_remocao
+
+        autorizado = autorizar_remocao(caminho)
+        _mount_status(
+            chat,
+            f"[{TOKENS['laranja']}]🟠 Autorizado nesta sessão: apagar '{autorizado}' fora da raiz.[/{TOKENS['laranja']}]\n"
+            f"[dim]O agente pode repetir a remoção — nada fora da raiz se apaga sem este comando.[/dim]",
+        )
+        return True
 
     # 1. /connect
     if cmd == "connect":
@@ -1353,11 +1404,20 @@ async def handle_slash_command(app: BombeTuiApp, raw_text: str) -> bool:
                     )
             elif res.get("escalation"):
                 esc = res["escalation"]
+                # Anti-duplicação: se o dreno já pintou esta escalação, não repinta.
+                if esc.get("message") in getattr(app, "_escalacoes_pintadas", set()):
+                    return True
+                # 🚦 Semáforo: 🔴 linha parada (nem automação resolve) vs
+                # 🟠 escalação do humano (falta informação, não ação técnica).
+                if esc.get("type") == "line_stop":
+                    cor, rotulo = TOKENS["error"], "🔴 LINHA DE PRODUÇÃO PARADA"
+                else:
+                    cor, rotulo = TOKENS["laranja"], "🟠 ESCALAÇÃO AO HUMANO"
                 await chat.mount(
                     Static(
-                        f"[{TOKENS['warning']} bold]❓ DÚVIDA DE NEGÓCIO — {esc.get('story', 'story')} não convergiu.[/{TOKENS['warning']} bold]\n"
+                        f"[{cor} bold]{rotulo} — {esc.get('story', 'story')} não convergiu.[/{cor} bold]\n"
                         f"{esc.get('message', '')}\n"
-                        f"[dim]Responsável técnico sugerido: {esc.get('suggested_owner')}[/dim]"
+                        f"[dim]Responsável sugerido: {esc.get('suggested_owner')}[/dim]"
                     )
                 )
             else:
@@ -1427,11 +1487,11 @@ async def handle_slash_command(app: BombeTuiApp, raw_text: str) -> bool:
                 )
                 await chat.mount(
                     Static(
-                        f"[{TOKENS['warning']} bold]❓ DÚVIDA DE NEGÓCIO — intervenção humana solicitada (último recurso).[/{TOKENS['warning']} bold]\n"
-                        f"[{TOKENS['warning']}]O ciclo autônomo de retrabalho foi esgotado e a decisão excede a autonomia dos agentes.[/{TOKENS['warning']}]\n"
-                        f"[dim]Responsável técnico sugerido: {escalation.get('suggested_owner', '@turing')}[/dim]\n"
+                        f"[{TOKENS['laranja']} bold]🟠 ESCALAÇÃO — impedimento em aberto após esforço autônomo completo.[/{TOKENS['laranja']} bold]\n"
+                        f"[{TOKENS['laranja']}]O ciclo autônomo de correção foi esgotado — status técnico honesto abaixo.[/{TOKENS['laranja']}]\n"
+                        f"[dim]Responsável sugerido: {escalation.get('suggested_owner', '@turing')}[/dim]\n"
                         f"{linhas_bloqueios}\n"
-                        f"[dim]Resolva e reexecute: /wave validate[/dim]"
+                        f"[dim]Dê resume para um novo ciclo de correção focado.[/dim]"
                     )
                 )
             else:

@@ -130,7 +130,12 @@ class PartWidget(Static):
 
 
 class ChatView(VerticalScroll):
-    """Contêiner do histórico de chat com rolagem e ancoragem automática ao final."""
+    """Contêiner do histórico de chat com rolagem e auto-follow inteligente.
+
+    O usuário PODE rolar (roda do mouse, scrollbar, PageUp/PageDown): enquanto
+    ele estiver longe do fim, o texto novo NÃO arrasta a tela. Ao voltar para
+    o fim, o acompanhamento automático religa sozinho.
+    """
 
     DEFAULT_CSS = f"""
     ChatView {{
@@ -142,7 +147,7 @@ class ChatView(VerticalScroll):
     """
 
     def on_mount(self) -> None:
-        self.anchor()
+        self._seguir = True
 
     def mount(
         self,
@@ -151,12 +156,50 @@ class ChatView(VerticalScroll):
         after: int | str | Widget | None = None,
     ) -> AwaitMount:
         res = super().mount(*widgets, before=before, after=after)
-        self.scroll_to_latest()
+        self.seguir()
         return res
 
     def scroll_to_latest(self) -> None:
-        """Rola imediatamente para o final e reativa a ancoragem automática."""
+        """Acompanha o texto novo — só cola no fim se o usuário está no fim."""
+        self.seguir()
+
+    def seguir(self) -> None:
         if not self.is_attached:
             return
-        self.anchor()
-        self.scroll_end(animate=False)
+        if getattr(self, "_seguir", True):
+            self.anchor()
+            self.scroll_end(animate=False)
+        else:
+            self.anchor(False)
+
+    # ── Controle do usuário: roda, scrollbar, teclado ──
+    def pagina(self, direcao: str) -> None:
+        if direcao == "up":
+            self._seguir = False
+            self.anchor(False)
+            self.scroll_page_up(animate=False)
+        elif direcao == "down":
+            self.scroll_page_down(animate=False)
+            self.call_after_refresh(self._atualizar_seguir)
+        elif direcao == "top":
+            self._seguir = False
+            self.anchor(False)
+            self.scroll_home(animate=False)
+        else:
+            # Usuário pediu o fim: auto-follow religa POR SEMÂNTICA (sem
+            # depender da leitura de posição, que é assíncrona).
+            self._seguir = True
+            self.anchor()
+            self.scroll_end(animate=False)
+
+    def _atualizar_seguir(self) -> None:
+        try:
+            self._seguir = self.scroll_offset.y >= self.max_scroll_y - 2
+        except Exception:  # noqa: BLE001 — layout pode não estar pronto
+            self._seguir = True
+
+    def on_scroll_up(self) -> None:
+        self._seguir = False
+
+    def on_scroll_down(self) -> None:
+        self.call_after_refresh(self._atualizar_seguir)
