@@ -29,8 +29,8 @@ Bem-vindo ao **Bombe Code**, o ambiente autônomo de engenharia de software com 
 ## 🌟 Visão Geral & Filosofia
 
 O Bombe Code opera como uma esteira de engenharia completa e local-first dentro do diretório do seu projeto. Ele une o melhor de dois mundos:
-* **Modo Estruturado (Metodologia ONDA):** Rigor arquitetural, planejamento Upstream (PRD, jornadas, modelo de dados), testes antes do código com QA (`@aniche`), revisão técnica independente por Tech Lead (`@unclebob`), homologação por `@edith` e fiscalização determinística por quality gates em código Python imperativo.
-* **Modo Ágil (Vibe Code):** Liberdade criativa imediata para prototipagem rápida, experimentação, automação e alterações diretas sem cerimônias formais.
+* **Modo VIBE FLOW (Metodologia ONDA / Governança Estruturada):** Rigor arquitetural, planejamento Upstream (PRD, jornadas, modelo de dados), testes antes do código com QA (`@aniche`), revisão técnica independente por Tech Lead (`@unclebob`), homologação por `@edith` e fiscalização determinística por quality gates em código Python imperativo.
+* **Modo VIBE CODE (Prototipagem Ágil & Iteração Livre):** Liberdade criativa imediata para experimentação rápida, automação, protótipos e alterações diretas sem cerimônias de pipeline.
 
 ### ⚠️ Copiloto Humano-no-Loop: MVP vs. Enterprise Grade
 * **Construção de MVPs:** Uma pessoa com conhecimento introdutório de produto e lógica de programação consegue evoluir ideias e levar projetos funcionais até o nível de **MVP**, contando com a orquestração dos 25 agentes especializados.
@@ -206,7 +206,7 @@ O Bombe Code conta com 25 agentes de elite (13 pioneiros brasileiros e 12 refer�
 |---|---|
 | **`Enter`** | **Envia a mensagem ou prompt digitado** |
 | **`Shift + Enter`** | **Insere uma quebra de linha (modo multilinha)** |
-| **`Shift + Tab`** | **Comuta entre Modo Estruturado (ONDA) e Modo Ágil (VIBE)** |
+| **`Shift + Tab`** | **Comuta entre Modo VIBE FLOW (Estruturado ONDA) e Modo VIBE CODE (Livre)** |
 | **`Tab`** | **Alterna ciclicamente as etapas da ONDA** (contextual: Upstream na Onda 0, Downstream nas demais) |
 | **`Tab` (em `/` ou `@`)** | Autocompleta comandos de barra ou arquivos do projeto |
 | **`F2`** | **Copia toda a transcrição da tela** (texto puro, sem poluição de tags Rich/ANSI) |

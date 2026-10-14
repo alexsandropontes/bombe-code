@@ -24,10 +24,10 @@ No Bombe Code, nenhuma linha de código de produção é gerada ao acaso. O dese
 
 O Bombe Code oferece **dois caminhos operacionais complementares**, ajustados ao objetivo e ao momento do projeto:
 
-1. **Modo Estruturado (Metodologia ONDA / Governança Rigorosa):**
+1. **Modo VIBE FLOW (Metodologia ONDA / Governança Rigorosa):**
    - Esteira completa de engenharia guiada por etapas (`DISCOVERY`, `INCEPTION`, `PLAN`, `REFINEMENT`, `EXECUTE`, `VALIDATE`).
    - Planejamento Upstream determinístico, decomposição atômica PBB, TDD estrito e auditoria contínua de qualidade e conformidade.
-2. **Modo Ágil / Vibe Code (Prototipagem Rápida & Iteração Livre):**
+2. **Modo VIBE CODE (Prototipagem Rápida & Iteração Livre):**
    - Liberdade criativa imediata para experimentações, scripts avulsos, refatorações pontuais e protótipos ágeis sem cerimônias de pipeline.
 
 ### ⚠️ Nível de Maturidade: De MVPs a Produtos Enterprise
@@ -222,20 +222,20 @@ Dentro da etapa `EXECUTE`, cada história de usuário atravessa um ciclo determi
 
 O Bombe Code equilibra disciplina industrial com agilidade imediata:
 
-### Modos de Engenharia
-* **`tdd-code` (Padrão — Engenharia Formal):**
-  * Rigor determinístico máximo.
+### Modos de Engenharia: VIBE FLOW vs VIBE CODE
+* **VIBE FLOW (`tdd-code` — Padrão / Engenharia Estruturada):**
+  * Rigor determinístico máximo guiado pela Metodologia ONDA.
   * Travas rígidas por etapa via `StageGuard`: código de produção em `src/` é bloqueado em `DISCUSS`, `DISCOVERY`, `PLAN`, `INCEPTION` e `REFINEMENT`.
   * Ciclo atômico `RED` ➔ `GREEN` ➔ `REFACTOR` ➔ `REVIEW`.
   * **Navegação Contextual com `Tab`:** A tecla `Tab` cicla as etapas válidas para o tipo de onda ativa:
     * Na Onda 0: cicla entre `DISCOVERY` e `INCEPTION`.
     * Nas Ondas de Entrega: cicla entre `PLAN`, `REFINEMENT`, `EXECUTE` e `VALIDATE`.
-* **`vibe-code` (Chave Mestra `Shift + Tab` — Prototipagem Livre):**
+* **VIBE CODE (`vibe-code` — Prototipagem Livre & Iteração Ágil):**
   * Alternado instantaneamente com **`Shift + Tab`** (ou comando `/mode vibe`).
   * Liberdade total: sem etapas, sem travas de arquivo e sem cerimônias. A LLM executa diretamente qualquer script, código ou refatoração solicitada.
   * Indicador em **VERMELHO VIVO** na status bar (`Modo: [VIBE]`).
-  * No modo `vibe-code`, a tecla **`Tab` NÃO cicla etapas** (fica reservada para autocompletar `/comandos` ou `@arquivos`).
-  * Pressionar `Shift + Tab` novamente restaura com precisão o modo `tdd-code` e a última etapa ativa.
+  * No modo VIBE CODE, a tecla **`Tab` NÃO cicla etapas** (fica reservada para autocompletar `/comandos` ou `@arquivos`).
+  * Pressionar `Shift + Tab` novamente restaura com precisão o modo VIBE FLOW (`tdd-code`) e a última etapa ativa.
 
 ### Níveis de Autonomia
 * **`AUTO`:** A ONDA progride autonomamente através das stories enquanto os gates forem aprovados.
