@@ -61,9 +61,24 @@ class RoundExecutionEngine:
         if not missions_dir.exists():
             raise FileNotFoundError(f"Diretório de missões não encontrado em {missions_dir}")
 
-        candidates = sorted(missions_dir.glob("*/mission.md"))
+        candidates = sorted(missions_dir.glob("*/mission.md"), reverse=True)
         if not candidates:
             raise FileNotFoundError("Nenhum arquivo mission.md encontrado.")
+
+        # Prioriza missão em estado ativo (open, active, in_progress)
+        open_statuses = {"open", "active", "in_progress"}
+        for cand in candidates:
+            try:
+                text = cand.read_text(encoding="utf-8")
+                match = re.match(r"^---\n(.*?)\n---", text, re.DOTALL)
+                if match:
+                    data = yaml.safe_load(match.group(1)) or {}
+                    if str(data.get("status", "")).lower() in open_statuses:
+                        return cand
+            except (OSError, yaml.YAMLError):
+                continue
+
+        # Fallback para a missão mais recente
         return candidates[0]
 
     def _get_round_goal_path(self, round_num: int) -> Path | None:
