@@ -133,10 +133,17 @@ class RoundExecutionEngine:
     def sync_mission_kanban(self, round_num: int, status: str) -> None:
         """Update round status in mission.md."""
         data, body, path = self._read_mission_data()
-        rounds = data.get("rounds", {})
+        rounds = data.get("rounds")
+        if rounds is None or not isinstance(rounds, dict):
+            rounds = {}
         round_key = f"ROUND-{round_num}"
-        if round_key in rounds:
+        if round_key in rounds and isinstance(rounds[round_key], dict):
             rounds[round_key]["status"] = status
+        else:
+            rounds[round_key] = {
+                "status": status,
+                "story_id": f"STORY-{round_num:03d}",
+            }
         data["rounds"] = rounds
         self._write_mission_data(data, body, path)
 
