@@ -176,3 +176,19 @@ def test_hybrid_router_integration_with_quota_manager(tmp_path: Path):
     assert decision.model_name == "gemma-26b-awq"
     assert decision.is_fallback is True
     assert "quota" in decision.reason.lower()
+
+
+def test_quota_manager_parses_cst_reset_time_from_error_message(tmp_path: Path):
+    """Verify QuotaManager extracts UTC+8 / Beijing CST reset time from 429 message."""
+    state_file = tmp_path / "quota_state.json"
+    manager = QuotaManager(state_path=state_file)
+
+    msg = "Weekly/Monthly Limit Exhausted. Your limit will reset at 2026-11-03 19:26:53"
+    manager.record_exhausted("zai", error_message=msg)
+
+    status = manager.get_provider_status("zai")
+    assert status.status == "exhausted"
+    assert status.locked_until is not None
+    assert status.locked_until == datetime(2026, 11, 3, 11, 26, 53, tzinfo=UTC)
+    assert manager.is_available("zai") is False
+

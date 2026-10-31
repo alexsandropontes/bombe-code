@@ -12,6 +12,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from bombe_code.llm.quota_detector import parse_quota_reset_info
+
 logger = logging.getLogger(__name__)
 
 
@@ -107,11 +109,21 @@ class QuotaManager:
         lock_duration_seconds: int = 10800,
         error_code: int = 429,
         error_message: str = "Rate limit or quota exhausted",
+        locked_until: datetime | None = None,
     ) -> None:
         """Mark provider as exhausted and lock for lock_duration_seconds (default 3 hours)."""
         current = self.get_provider_status(provider)
         now = datetime.now(UTC)
-        locked_until = now + timedelta(seconds=lock_duration_seconds)
+
+        if locked_until is None:
+            if error_message:
+                info = parse_quota_reset_info(error_message, provider_hint=provider)
+                if info.reset_at_utc and info.reset_at_utc > now:
+                    locked_until = info.reset_at_utc
+                else:
+                    locked_until = now + timedelta(seconds=lock_duration_seconds)
+            else:
+                locked_until = now + timedelta(seconds=lock_duration_seconds)
 
         new_status = ProviderQuotaStatus(
             status="exhausted",
