@@ -2,7 +2,7 @@
 round: 4
 story_id: STORY-018
 epic_id: EP-09
-status: in_progress
+status: validated
 started_at: "2026-10-31T21:52:00"
 maturity_level: mvp
 layer: backend
@@ -25,10 +25,10 @@ Integrar o `LocalModelManager` ao `HybridRouter` para inicialização sob demand
 - **Fronteira Negativa:** Não alterar endpoints externos de nuvem nem lógica já validada de VRAMGate ou perfis de hardware.
 
 ## 3. Checklist de Definition of Done (DoD) do Round
-- [ ] Implementação de `TokenBucketRateLimiter` em `src/bombe_code/features/rate_limiter.py`.
-- [ ] Testes unitários do rate limiter em `tests/unit/test_rate_limiter.py` com 100% de aprovação.
-- [ ] Atualização do `HybridRouter` em `src/bombe_code/routing/router.py` com `ensure_local_model_ready`.
-- [ ] Testes unitários do `HybridRouter` com `LocalModelManager` em `tests/unit/test_hybrid_router_local.py`.
-- [ ] Teste de integração E2E em `tests/integration/test_rate_limiter_e2e.py` validando flags MTP e interceptação do rate limiter.
-- [ ] Suíte completa do repositório (`pytest`) e linter (`ruff`) verdes sem regressões.
-- [ ] Métodos com SRF (< 30 linhas), type hints estritos e zero mocks em código de produção (`src/`).
+- [x] Implementação de `TokenBucketRateLimiter` em `src/bombe_code/features/rate_limiter.py`.
+- [x] Testes unitários do rate limiter em `tests/unit/test_rate_limiter.py` com 100% de aprovação.
+- [x] Atualização do `HybridRouter` em `src/bombe_code/routing/router.py` com `ensure_local_model_ready`.
+- [x] Testes unitários do `HybridRouter` com `LocalModelManager` em `tests/unit/test_hybrid_router_local.py`.
+- [x] Teste de integração E2E em `tests/integration/test_rate_limiter_e2e.py` validando flags MTP e interceptação do rate limiter.
+- [x] Suíte completa do repositório (`pytest`) e linter (`ruff`) verdes sem regressões.
+- [x] Métodos com SRF (< 30 linhas), type hints estritos e zero mocks em código de produção (`src/`).

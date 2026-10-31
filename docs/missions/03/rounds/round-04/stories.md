@@ -3,18 +3,18 @@ version: "1.0.0"
 round:
   number: 4
   goal: "Integração com HybridRouter e Execução E2E do Rate Limiter"
-  status: "in_progress"
+  status: "validated"
   started_at: "2026-10-31T21:52:00"
   capacity: 3.5
-  used: 0.0
-  remaining: 3.5
+  used: 3.5
+  remaining: 0.0
 
 stories:
   story_018:
     id: "STORY-018"
     title: "Integração com HybridRouter e Execução E2E do Rate Limiter"
     order: 1
-    status: "in_progress"
+    status: "done"
     assigned_to: "@barbara"
     points: 3
     priority: 1
@@ -25,9 +25,9 @@ stories:
       process: "approved"
       dev: "approved"
     review:
-      code_review: "pending"
-      architecture: "pending"
-    committed: false
+      code_review: "approved"
+      architecture: "approved"
+    committed: true
 ---
 
 # Estado das Stories — ROUND-4 (Cadência 1 Round = 1 Story)
@@ -36,7 +36,7 @@ stories:
 
 | Ordem | Story ID | Título | Complexidade | Pts | Status | Responsável | DoR | DoD |
 | :---: | :---: | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
-| 1 | `STORY-018` | Integração com HybridRouter e Execução E2E do Rate Limiter | Nível 2 (Pleno) | 3 | 🟡 in_progress | @barbara | ✅ Approved | 🟡 in_progress |
+| 1 | `STORY-018` | Integração com HybridRouter e Execução E2E do Rate Limiter | Nível 2 (Pleno) | 3 | ✅ done | @barbara | ✅ Approved | ✅ validated |
 
 ## 2. Detalhamento & Rastreabilidade — STORY-018
 
