@@ -32,10 +32,12 @@ rounds:
     completed_at: "2026-10-31T16:31:00"
     commit: "c504b83"
   ROUND-4:
-    status: pending
+    status: validated
     story_id: STORY-004
     epic_id: EP-02
     title: "Classificador de Complexidade de Slice e Roteador Híbrido Dinâmico"
+    completed_at: "2026-10-31T16:41:00"
+    commit: "b573f7a"
   ROUND-5:
     status: pending
     story_id: STORY-005
@@ -94,8 +96,8 @@ rounds:
 | **R-1** | `STORY-001` | `EP-01` | Migração de Configuração e Runtime Slice-Code | Nível 1 | **VALIDATED** ✅ |
 | **R-2** | `STORY-002` | `EP-01` | Atualização dos Dossiês dos Agentes para PDW 4.0 Preservando Nomes | Nível 1 | **VALIDATED** ✅ |
 | **R-3** | `STORY-003` | `EP-02` | Contrato LLMProviderProtocol e Adapter Local vLLM (Porta 18096, Fila Indiana) | Nível 2 | **VALIDATED** ✅ |
-| **R-4** | `STORY-004` | `EP-02` | Classificador de Complexidade de Slice e Roteador Híbrido Dinâmico | Nível 2 | **READY** ⏳ |
-| **R-5** | `STORY-005` | `EP-02` | QuotaManager com Detecção de 429 e Failover Transparente Cloud -> Local | Nível 3 | **BACKLOG** 📋 |
+| **R-4** | `STORY-004` | `EP-02` | Classificador de Complexidade de Slice e Roteador Híbrido Dinâmico | Nível 2 | **VALIDATED** ✅ |
+| **R-5** | `STORY-005` | `EP-02` | QuotaManager com Detecção de 429 e Failover Transparente Cloud -> Local | Nível 3 | **READY** ⏳ |
 | **R-6** | `STORY-006` | `EP-02` | FallbackToolParser para Extração Resiliente de Chamadas em Markdown JSON | Nível 2 | **BACKLOG** 📋 |
 | **R-7** | `STORY-007` | `EP-03` | Motor de Execução Kanban (1 Round = 1 Story) e Tríade CLI | Nível 3 | **BACKLOG** 📋 |
 | **R-8** | `STORY-008` | `EP-04` | Teste E2E de Contingência Real com Cota Z.ai Esgotada e Queima Local | Nível 2 | **BACKLOG** 📋 |
