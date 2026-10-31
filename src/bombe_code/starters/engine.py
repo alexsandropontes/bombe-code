@@ -107,7 +107,7 @@ uv run pytest
             "root_src": "src/",
             "backend_path": "src/",
             "frontend_path": "",
-            "mode": "tdd-code",
+            "mode": "slice-code",
             "autonomy": "auto",
         },
     },
@@ -191,7 +191,7 @@ go run main.go
             "root_src": "./",
             "backend_path": "./",
             "frontend_path": "",
-            "mode": "tdd-code",
+            "mode": "slice-code",
             "autonomy": "auto",
         },
     },
@@ -279,7 +279,7 @@ dist/
             "root_src": "src/",
             "backend_path": "src/",
             "frontend_path": "",
-            "mode": "tdd-code",
+            "mode": "slice-code",
             "autonomy": "auto",
         },
     },
@@ -379,7 +379,7 @@ dist/
             "root_src": "src/",
             "backend_path": "",
             "frontend_path": "src/",
-            "mode": "tdd-code",
+            "mode": "slice-code",
             "autonomy": "auto",
         },
     },
@@ -487,7 +487,7 @@ class StarterEngine:
                         "frontend_path": "src/frontend/"
                         if stype in ("fullstack", "frontend")
                         else "",
-                        "mode": "tdd-code",
+                        "mode": "slice-code",
                         "autonomy": "auto",
                     },
                 }
@@ -578,7 +578,9 @@ class StarterEngine:
             root_src=cfg_data.get("root_src", "src/"),
             backend_path=cfg_data.get("backend_path", "src/backend/"),
             frontend_path=cfg_data.get("frontend_path", "src/frontend/"),
-            mode=cfg_data.get("mode", "tdd-code"),
+            mode="slice-code"
+            if cfg_data.get("mode") in ("tdd-code", "spec-code", None)
+            else cfg_data.get("mode", "slice-code"),
             autonomy=cfg_data.get("autonomy", "auto"),
         )
         cfg_mgr = ProjectConfigManager(str(dest))

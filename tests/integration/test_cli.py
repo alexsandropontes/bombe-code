@@ -29,6 +29,14 @@ def test_cli_run_prompt(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
     monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
 
+    def fake_run_prompt(**kwargs):
+        on_event = kwargs.get("on_event")
+        if on_event:
+            on_event({"type": "text-delta", "text": "Olá mundo"})
+        return "Olá mundo"
+
+    monkeypatch.setattr("bombe_code.cli.main.run_prompt", fake_run_prompt)
+
     # Test run subcommand
     result = runner.invoke(app, ["run", "Diga olá mundo", "--project-dir", str(tmp_path)])
     assert result.exit_code == 0
