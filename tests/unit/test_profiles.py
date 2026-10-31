@@ -76,7 +76,7 @@ class TestSlice2HardwareProfilesCatalog:
         profile = get_hardware_profile(ModelKey.GEMMA_4_E4B)
         assert profile.model_key == ModelKey.GEMMA_4_E4B
         assert profile.context_size == 131072
-        assert profile.flash_attention is False
+        assert profile.flash_attention is True
         assert profile.kv_cache_type == "q8_0"
         assert profile.n_cpu_moe is None
 
@@ -130,7 +130,7 @@ class TestSlice3FactoryAndCommandLineIntegration:
         assert profile.port == 19000
         assert profile.host == "0.0.0.0"
         assert profile.context_size == 131072
-        assert profile.flash_attention is False
+        assert profile.flash_attention is True
 
     def test_ac1_context_window_128k_for_gemma_e4b_and_lfm3(self) -> None:
         cmd_gemma_e4b = self.manager.build_cli_command(build_model_profile("gemma-4-e4b"))
@@ -172,9 +172,9 @@ class TestSlice3FactoryAndCommandLineIntegration:
         assert "-fa" in cmd
         assert cmd[cmd.index("-fa") + 1] == "on"
 
-    def test_ac5_gemma_e4b_flash_attention_off(self) -> None:
+    def test_ac5_gemma_e4b_flash_attention_on(self) -> None:
         profile = build_model_profile("gemma-4-e4b")
         cmd = self.manager.build_cli_command(profile)
 
         assert "-fa" in cmd
-        assert cmd[cmd.index("-fa") + 1] == "off"
+        assert cmd[cmd.index("-fa") + 1] == "on"

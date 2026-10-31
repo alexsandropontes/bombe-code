@@ -44,6 +44,7 @@ def test_create_agent_defaults_to_string_result(monkeypatch):
 
 def test_create_agent_injects_thinking_disabled_for_zai_glm(monkeypatch):
     monkeypatch.setenv("BOMBE_TEST_REAL_LLM", "1")
+    monkeypatch.setattr("bombe_code.routing.quota_manager.QuotaManager.is_available", lambda self, p: True)
     factory = PydanticAiFactory()
     agent = factory.create_agent(model_name="glm-5.3-flash")
     assert isinstance(agent, Agent)
@@ -51,7 +52,8 @@ def test_create_agent_injects_thinking_disabled_for_zai_glm(monkeypatch):
     assert agent.model_settings.get("extra_body", {}).get("thinking") == {"type": "disabled"}
 
 
-def test_resolve_zai_model_uses_fail_fast_timeout():
+def test_resolve_zai_model_uses_fail_fast_timeout(monkeypatch):
+    monkeypatch.setattr("bombe_code.routing.quota_manager.QuotaManager.is_available", lambda self, p: True)
     factory = PydanticAiFactory()
     model = factory.resolve_model("zai-coding-plan/glm-5.3-flash")
     cli = getattr(model.provider, "client", None)
@@ -59,6 +61,23 @@ def test_resolve_zai_model_uses_fail_fast_timeout():
     assert getattr(cli.timeout, "read", None) == 240.0
     assert getattr(cli.timeout, "connect", None) == 20.0
     assert cli.max_retries == 2
+
+
+def test_resolve_zai_model_failover_to_local_when_quota_exhausted(monkeypatch):
+    monkeypatch.setattr("bombe_code.routing.quota_manager.QuotaManager.is_available", lambda self, p: False)
+    factory = PydanticAiFactory()
+    model = factory.resolve_model("zai-coding-plan/glm-5.3-flash")
+    assert model.model_name == "gemma-4-e4b"
+    assert "18094" in str(model.provider.base_url)
+
+
+def test_resolve_default_model_failover_to_local_when_zai_exhausted(monkeypatch):
+    monkeypatch.setenv("ZAI_API_KEY", "mock-zai-key")
+    monkeypatch.setattr("bombe_code.routing.quota_manager.QuotaManager.is_available", lambda self, p: False)
+    factory = PydanticAiFactory()
+    model = factory.resolve_model(None)
+    assert model.model_name == "gemma-4-e4b"
+    assert "18094" in str(model.provider.base_url)
 
 
 def test_resolve_model_raises_when_no_provider_configured(monkeypatch):

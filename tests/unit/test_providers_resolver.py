@@ -35,7 +35,7 @@ def test_resolver_with_anthropic_env(monkeypatch: pytest.MonkeyPatch):
 def test_resolver_llama_cpp_explicit():
     adapter = resolve_provider_adapter("llama.cpp/default")
     assert adapter.provider == "openai"
-    assert "8080" in adapter.base_url
+    assert "18094" in adapter.base_url
 
 
 def test_resolver_unconfigured_fallback(monkeypatch: pytest.MonkeyPatch):

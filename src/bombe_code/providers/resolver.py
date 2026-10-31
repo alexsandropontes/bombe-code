@@ -147,7 +147,7 @@ def resolve_provider_adapter(model_ref: str | None = None) -> Any:
             base_url = (
                 os.environ.get("LLAMA_CPP_BASE_URL")
                 or auth_data.get("llama.cpp", {}).get("base_url")
-                or "http://127.0.0.1:8080/v1"
+                or "http://127.0.0.1:18094/v1"
             )
             return OpenAICompatAdapter(
                 api_key="local", model=model_name or "local", base_url=base_url
@@ -190,7 +190,7 @@ def resolve_provider_adapter(model_ref: str | None = None) -> Any:
             llama_url = (
                 os.environ.get("LLAMA_CPP_BASE_URL")
                 or auth_data.get("llama.cpp", {}).get("base_url")
-                or "http://127.0.0.1:8080/v1"
+                or "http://127.0.0.1:18094/v1"
             )
             return OpenAICompatAdapter(api_key="local", model="local", base_url=llama_url)
 
@@ -243,7 +243,7 @@ def resolve_provider_adapter(model_ref: str | None = None) -> Any:
     # F) Provedores locais: llama.cpp (apenas se explicitamente configurado no ambiente ou auth.json)
     if "LLAMA_CPP_BASE_URL" in os.environ or "llama.cpp" in auth_data:
         llama_url = os.environ.get("LLAMA_CPP_BASE_URL") or auth_data.get("llama.cpp", {}).get(
-            "base_url", "http://127.0.0.1:8080/v1"
+            "base_url", "http://127.0.0.1:18094/v1"
         )
         return OpenAICompatAdapter(api_key="local", model="local", base_url=llama_url)
 
@@ -259,7 +259,7 @@ def resolve_provider_adapter(model_ref: str | None = None) -> Any:
         "Nenhum provedor de IA configurado.\n"
         "Execute /connect no terminal para conectar um provedor:\n"
         "  • Remoto: export OPENAI_API_KEY='sk-...' ou export ANTHROPIC_API_KEY='...'\n"
-        "  • Local (llama.cpp): export LLAMA_CPP_BASE_URL='http://127.0.0.1:8080/v1'\n"
+        "  • Local (llama.cpp): export LLAMA_CPP_BASE_URL='http://127.0.0.1:18094/v1'\n"
         "  • Local (Ollama): export OLLAMA_BASE_URL='http://127.0.0.1:11434/v1'\n"
         "  • Ou configure via '/connect' dentro da TUI."
     )

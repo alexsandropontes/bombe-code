@@ -96,7 +96,7 @@ class TestMTPCommandLineGeneration:
         assert cmd[draft_n_idx + 1] == "3"
 
         fa_idx = cmd.index("-fa")
-        assert cmd[fa_idx + 1] == "off"
+        assert cmd[fa_idx + 1] == "on"
 
     def test_ac2_gemma_4_26b_a4b_mtp_command(self, manager: LocalModelManager) -> None:
         profile = build_model_profile(ModelKey.GEMMA_4_26B_A4B, enable_mtp=True)
