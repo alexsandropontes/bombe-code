@@ -6,7 +6,7 @@ type: backend
 agent: "@barbara"
 estimation: "3h"
 depends_on: []
-status: ready
+status: in_progress
 ---
 
 # STORY-015: Implementação do LocalModelManager e VRAMGate
