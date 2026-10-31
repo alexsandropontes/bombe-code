@@ -94,13 +94,15 @@ app = typer.Typer(
     no_args_is_help=False,
 )
 
-from .commands.round import (  # noqa: E402
+from .commands.mission import mission_app
+from .commands.round import (
     round_all_cmd,
     round_app,
     round_full_cmd,
     round_start_cmd,
 )
 
+app.add_typer(mission_app, name="mission")
 app.add_typer(round_app, name="round")
 app.command("round-start")(round_start_cmd)
 app.command("round-full")(round_full_cmd)
