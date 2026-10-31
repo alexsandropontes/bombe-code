@@ -6,7 +6,7 @@ type: backend
 agent: "@barbara"
 estimation: "3h"
 depends_on: []
-status: in_progress
+status: done
 ---
 
 # STORY-015: Implementação do LocalModelManager e VRAMGate
@@ -22,15 +22,15 @@ status: in_progress
 Como engenheiro e orquestrador do Bombe Code, eu quero um gestor de processos local (`LocalModelManager`) que suba instâncias do `llama-server` em Fila Indiana e impeça alocações concorrentes através de um gate de VRAM, para que a GPU nunca sofra crash de memória (OOM).
 
 ## Acceptance Criteria
-- [ ] **AC-1:** O `LocalModelManager` deve manter no máximo uma instância ativa de `llama-server`.
-- [ ] **AC-2:** Antes de executar qualquer subprocesso, a classe `VRAMGate` deve invocar `nvidia-smi` e certificar que a VRAM ocupada está abaixo de 300MiB.
-- [ ] **AC-3:** O encerramento de um modelo ativo deve emitir `SIGTERM`, aguardar até 15 segundos e, se o processo persistir, emitir `SIGKILL`.
-- [ ] **AC-4:** O método `start_model(profile)` deve realizar polling no endpoint `http://127.0.0.1:8080/health` e só retornar sucesso quando receber HTTP 200 dentro do timeout de 120s.
+- [x] **AC-1:** O `LocalModelManager` deve manter no máximo uma instância ativa de `llama-server`.
+- [x] **AC-2:** Antes de executar qualquer subprocesso, a classe `VRAMGate` deve invocar `nvidia-smi` e certificar que a VRAM ocupada está abaixo de 300MiB.
+- [x] **AC-3:** O encerramento de um modelo ativo deve emitir `SIGTERM`, aguardar até 15 segundos e, se o processo persistir, emitir `SIGKILL`.
+- [x] **AC-4:** O método `start_model(profile)` deve realizar polling no endpoint `http://127.0.0.1:8080/health` e só retornar sucesso quando receber HTTP 200 dentro do timeout de 120s.
 
 ## Definition of Done (DoD)
-- [ ] Módulo `src/bombe_code/engine/local_manager.py` implementado.
-- [ ] Testes de unidade em `tests/unit/test_local_manager.py` com 100% de cobertura nos métodos de lifecycle e parsing de VRAM.
-- [ ] Teste de integração validando o comportamento de shutdown gracioso e falha de VRAM ocupada.
+- [x] Módulo `src/bombe_code/engine/local_manager.py` implementado.
+- [x] Testes de unidade em `tests/unit/test_local_manager.py` com 100% de cobertura nos métodos de lifecycle e parsing de VRAM.
+- [x] Teste de integração validando o comportamento de shutdown gracioso e falha de VRAM ocupada.
 
 ## Dependências
 - Binário do `llama-server` (`b11985` com CUDA 13.2) disponível no path do sistema ou diretório binário configurado.
