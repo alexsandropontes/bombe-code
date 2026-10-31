@@ -6,7 +6,7 @@ type: backend
 agent: "@barbara"
 estimation: "2h30m"
 depends_on: ["STORY-015"]
-status: ready
+status: in_progress
 ---
 
 # STORY-016: Implementação dos Perfis de Hardware e Tetos de Contexto
@@ -17,6 +17,12 @@ status: ready
 - [x] Acceptance Criteria definidos (visão de negócio/sistema)
 - [x] DoD definido
 - [x] Critérios INVEST atendidos
+
+## ✅ VALIDAÇÃO DEV (DOR)
+- [x] Slicing técnico validado em 3 slices atômicos (@unclebob)
+- [x] Estratégia TDD estrita (Red -> Green -> Refactor)
+- [x] Contratos e enums definidos (`ModelKey`, `HardwareProfile`, `HARDWARE_PROFILES`)
+- [x] Dependência STORY-015 concluída e validada
 
 ## Contexto & Visão do Usuário
 Como desenvolvedor, eu quero que o launcher aplique os parâmetros exatos de balanceamento de VRAM, RAM e SSD para cada modelo, limitando o contexto a 128K ou 64K conforme a capacidade, para maximizar o desempenho sem incorrer em swap de memória.
@@ -29,7 +35,7 @@ Como desenvolvedor, eu quero que o launcher aplique os parâmetros exatos de bal
 - [ ] **AC-5:** Para Gemma 4 E4B, a flag `-fa off` deve ser configurada obrigatoriamente.
 
 ## Definition of Done (DoD)
-- [ ] Módulo `src/bombe_code/engine/profiles.py` implementado com as dataclasses de perfil.
+- [ ] Módulo `src/bombe_code/local/profiles.py` implementado com as dataclasses de perfil.
 - [ ] Testes de unidade em `tests/unit/test_profiles.py` cobrindo a montagem dos argumentos de linha de comando para cada um dos 4 modelos.
 
 ## Dependências
