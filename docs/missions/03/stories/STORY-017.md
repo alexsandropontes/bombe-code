@@ -6,7 +6,7 @@ type: backend
 agent: "@barbara"
 estimation: "3h"
 depends_on: ["STORY-016"]
-status: in_progress
+status: done
 ---
 
 # STORY-017: Suporte e Parametrização de MTP (Multi-Token Prediction)
@@ -28,17 +28,17 @@ status: in_progress
 Como engenheiro de sistemas, eu quero que o `LocalModelManager` configure o suporte a MTP no `llama-server`, baixando e apontando os drafts adicionais do Gemma e ativando o draft nativo no Qwen, para acelerar a taxa de geração de tokens.
 
 ## Acceptance Criteria
-- [ ] **AC-1:** Se o modelo for Gemma 4 E4B com MTP ativo, a linha de comando deve conter:
+- [x] **AC-1:** Se o modelo for Gemma 4 E4B com MTP ativo, a linha de comando deve conter:
   `--model-draft <path>/mtp-gemma-4-E4B-it-Q8_0.gguf --spec-type draft-mtp --spec-draft-n-max 3 -fa off`.
-- [ ] **AC-2:** Se o modelo for Gemma 4 26B com MTP ativo, a linha de comando deve conter:
+- [x] **AC-2:** Se o modelo for Gemma 4 26B com MTP ativo, a linha de comando deve conter:
   `--model-draft <path>/mtp-gemma-4-26B-A4B-it-Q8_0.gguf --spec-type draft-mtp --spec-draft-n-max 3 -fa on --n-cpu-moe 999`.
-- [ ] **AC-3:** Se o modelo for Qwen 3.8-9B com MTP ativo, a linha de comando deve conter:
+- [x] **AC-3:** Se o modelo for Qwen 3.8-9B com MTP ativo, a linha de comando deve conter:
   `--spec-type draft-mtp --spec-draft-n-max 2 -fa on` (sem flag `--model-draft`).
-- [ ] **AC-4:** O sistema deve verificar a existência física do arquivo `.gguf` de draft antes de tentar iniciar o servidor, levantando erro explicativo se ausente.
+- [x] **AC-4:** O sistema deve verificar a existência física do arquivo `.gguf` de draft antes de tentar iniciar o servidor, levantando erro explicativo se ausente.
 
 ## Definition of Done (DoD)
-- [ ] Atualização em `src/bombe_code/engine/local_manager.py` e `src/bombe_code/engine/profiles.py` com validação de drafts MTP.
-- [ ] Testes de unidade em `tests/unit/test_mtp_launcher.py` validando os argumentos gerados com e sem MTP habilitado.
+- [x] Atualização em `src/bombe_code/engine/local_manager.py` e `src/bombe_code/engine/profiles.py` com validação de drafts MTP.
+- [x] Testes de unidade em `tests/unit/test_mtp_launcher.py` validando os argumentos gerados com e sem MTP habilitado.
 
 ## Dependências
 - `STORY-016`

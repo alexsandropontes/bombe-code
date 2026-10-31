@@ -3,18 +3,18 @@ version: "1.0.0"
 round:
   number: 3
   goal: "Suporte e Parametrização de MTP (Multi-Token Prediction)"
-  status: "in_progress"
+  status: "validated"
   started_at: "2026-10-31T21:38:00"
   capacity: 3.0
-  used: 0.0
-  remaining: 3.0
+  used: 3.0
+  remaining: 0.0
 
 stories:
   story_017:
     id: "STORY-017"
     title: "Suporte e Parametrização de MTP (Multi-Token Prediction)"
     order: 1
-    status: "in_progress"
+    status: "done"
     assigned_to: "@barbara"
     points: 3
     priority: 1
@@ -25,9 +25,9 @@ stories:
       process: "approved"
       dev: "approved"
     review:
-      code_review: "pending"
-      architecture: "pending"
-    committed: false
+      code_review: "approved"
+      architecture: "approved"
+    committed: true
 ---
 
 # Estado das Stories — ROUND-3 (Cadência 1 Round = 1 Story)
@@ -36,7 +36,7 @@ stories:
 
 | Ordem | Story ID | Título | Complexidade | Pts | Status | Responsável | DoR | DoD |
 | :---: | :---: | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
-| 1 | `STORY-017` | Suporte e Parametrização de MTP (Multi-Token Prediction) | Nível 2 (Pleno) | 3 | 🔄 in_progress | @barbara | ✅ Approved | ⏳ in_progress |
+| 1 | `STORY-017` | Suporte e Parametrização de MTP (Multi-Token Prediction) | Nível 2 (Pleno) | 3 | ✅ done | @barbara | ✅ Approved | ✅ validated |
 
 ## 2. Detalhamento & Rastreabilidade — STORY-017
 
