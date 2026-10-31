@@ -5,7 +5,7 @@ epic_id: EP-03
 round: ROUND-4
 agent: "@barbara"
 estimation: 3h
-status: ready
+status: done
 type: feature
 layer: backend
 complexity: 2
@@ -60,20 +60,20 @@ Cria o submódulo `src/bombe_code/cli/commands/wave_bridge.py` registrado como s
 ---
 
 ## 4. Acceptance Criteria (ACs Testáveis)
-- [ ] **AC-01 (Banner Educativo de Depreciação):** Toda invocação de `bombe wave <cmd>` renderiza um painel Rich informando que "ondas" foram substituídas por "rounds e slices" no Core v4.
-- [ ] **AC-02 (Redirecionamento 1:1 de `wave start`):** `bombe wave start [ID]` mapeia o ID para número de round e despacha para `bombe round start [N]`.
-- [ ] **AC-03 (Redirecionamento 1:1 de `wave run`):** `bombe wave run` despacha para `bombe round all`.
-- [ ] **AC-04 (Redirecionamento 1:1 de `wave cycle`):** `bombe wave cycle [ID]` despacha para `bombe round burn [N]`.
-- [ ] **AC-05 (Redirecionamento de `validate`, `status`, `promote`, `end`):** Mapeamento estrito para `round validate`, `round status`, `project ship` e `mission end`.
-- [ ] **AC-06 (Preservação de Exit Code):** O código de saída POSIX retornado pela bridge é idêntico ao comando canônico despachado.
+- [x] **AC-01 (Banner Educativo de Depreciação):** Toda invocação de `bombe wave <cmd>` renderiza um painel Rich informando que "ondas" foram substituídas por "rounds e slices" no Core v4.
+- [x] **AC-02 (Redirecionamento 1:1 de `wave start`):** `bombe wave start [ID]` mapeia o ID para número de round e despacha para `bombe round start [N]`.
+- [x] **AC-03 (Redirecionamento 1:1 de `wave run`):** `bombe wave run` despacha para `bombe round all`.
+- [x] **AC-04 (Redirecionamento 1:1 de `wave cycle`):** `bombe wave cycle [ID]` despacha para `bombe round burn [N]`.
+- [x] **AC-05 (Redirecionamento de `validate`, `status`, `promote`, `end`):** Mapeamento estrito para `round validate`, `round status`, `project ship` e `mission end`.
+- [x] **AC-06 (Preservação de Exit Code):** O código de saída POSIX retornado pela bridge é idêntico ao comando canônico despachado.
 
 ---
 
 ## 5. Definition of Done (DoD)
-- [ ] Sub-app `wave_app` registrado no entrypoint Typer `src/bombe_code/cli/main.py`.
-- [ ] Contratos `WaveBridgeRedirect` e `LegacyWaveCommand` em `src/bombe_code/domain/contracts/wave_bridge.py`.
-- [ ] Suíte `tests/unit/test_wave_bridge.py` testando o redirecionamento dos 7 comandos legados.
-- [ ] Código aprovado no Ruff e Mypy.
+- [x] Sub-app `wave_app` registrado no entrypoint Typer `src/bombe_code/cli/main.py`.
+- [x] Contratos `WaveBridgeRedirect` e `LegacyWaveCommand` em `src/bombe_code/domain/contracts/wave_bridge.py`.
+- [x] Suíte `tests/unit/test_wave_bridge.py` testando o redirecionamento dos 7 comandos legados.
+- [x] Código aprovado no Ruff e Mypy.
 
 ---
 
