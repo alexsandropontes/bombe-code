@@ -3,31 +3,33 @@ version: "1.0.0"
 round:
   number: 2
   goal: "Atualização dos Dossiês dos Agentes para PDW 4.0 com preservação absoluta dos nomes e validador determinístico"
-  status: "in_progress"
+  status: "completed"
   started_at: "2026-10-31T16:00:00"
+  completed_at: "2026-10-31T16:17:00"
   capacity: 3
-  used: 0
-  remaining: 3
+  used: 3
+  remaining: 0
 
 stories:
   story_002:
     id: "STORY-002"
     title: "Atualização dos Dossiês dos Agentes para PDW 4.0 Preservando Nomes"
     order: 1
-    status: "in_progress"
+    status: "done"
     assigned_to: "@andrej"
     points: 3
     priority: 1
     dependencies: ["STORY-001"]
     blocks: ["STORY-003"]
     started_at: "2026-10-31T16:00:00"
+    completed_at: "2026-10-31T16:17:00"
     dor:
       process: "approved"
       dev: "approved"
     review:
-      code_review: "pending"
-      architecture: "pending"
-    committed: false
+      code_review: "approved"
+      architecture: "approved"
+    committed: true
 ---
 
 # Estado das Stories — ROUND-2 (Cadência 1 Round = 1 Story)
@@ -36,7 +38,7 @@ stories:
 
 | Ordem | Story ID | Título | Complexidade | Pts | Status | Responsável | DoR | DoD |
 | :---: | :---: | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
-| 1 | `STORY-002` | Atualização dos Dossiês dos Agentes para PDW 4.0 Preservando Nomes | Nível 1 | 3 | ⏳ in_progress | @andrej | ✅ Approved | ⏳ pending |
+| 1 | `STORY-002` | Atualização dos Dossiês dos Agentes para PDW 4.0 Preservando Nomes | Nível 1 | 3 | ✅ done | @andrej | ✅ Approved | ✅ Approved |
 
 ## 2. Detalhamento & Rastreabilidade — STORY-002
 
@@ -44,6 +46,7 @@ stories:
 - **Épico Pai:** `EP-01` (`docs/missions/01/epics/epic-01.md`)
 - **Layer:** `backend`
 - **Especialista Designado:** @andrej (Prompt Architect & PDW 4.0) em conjunto com @fowler (Test Engineering)
+- **Commit:** `f4af816`
 - **Critérios de Aceite:**
   - **AC-01 (Conformidade PDW 4.0):** 100% dos dossiês em `src/bombe_code/agents/definitions/*.md` devem conter as 6 seções obrigatórias e o frontmatter estruturado.
   - **AC-02 (Preservação de Nomes):** Nenhum arquivo de agente histórico deve ser renomeado ou excluído; os handles permanecem idênticos aos originais.

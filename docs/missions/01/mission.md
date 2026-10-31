@@ -18,10 +18,12 @@ rounds:
     completed_at: "2026-10-31T15:58:00"
     commit: "a4e50cb"
   ROUND-2:
-    status: pending
+    status: validated
     story_id: STORY-002
     epic_id: EP-01
     title: "Atualização dos Dossiês dos Agentes para PDW 4.0 Preservando Nomes"
+    completed_at: "2026-10-31T16:17:00"
+    commit: "f4af816"
   ROUND-3:
     status: pending
     story_id: STORY-003
@@ -88,8 +90,8 @@ rounds:
 | :---: | :---: | :---: | :--- | :---: | :---: |
 | **R-0** | — | — | Upstream Macro (Inception, PRD, Arquitetura, Sequenciador) | — | **VALIDATED** ✅ |
 | **R-1** | `STORY-001` | `EP-01` | Migração de Configuração e Runtime Slice-Code | Nível 1 | **VALIDATED** ✅ |
-| **R-2** | `STORY-002` | `EP-01` | Atualização dos Dossiês dos Agentes para PDW 4.0 Preservando Nomes | Nível 1 | **READY** ⏳ |
-| **R-3** | `STORY-003` | `EP-02` | Contrato LLMProviderProtocol e Adapter Local vLLM (Porta 18096, Fila Indiana) | Nível 2 | **BACKLOG** 📋 |
+| **R-2** | `STORY-002` | `EP-01` | Atualização dos Dossiês dos Agentes para PDW 4.0 Preservando Nomes | Nível 1 | **VALIDATED** ✅ |
+| **R-3** | `STORY-003` | `EP-02` | Contrato LLMProviderProtocol e Adapter Local vLLM (Porta 18096, Fila Indiana) | Nível 2 | **READY** ⏳ |
 | **R-4** | `STORY-004` | `EP-02` | Classificador de Complexidade de Slice e Roteador Híbrido Dinâmico | Nível 2 | **BACKLOG** 📋 |
 | **R-5** | `STORY-005` | `EP-02` | QuotaManager com Detecção de 429 e Failover Transparente Cloud -> Local | Nível 3 | **BACKLOG** 📋 |
 | **R-6** | `STORY-006` | `EP-02` | FallbackToolParser para Extração Resiliente de Chamadas em Markdown JSON | Nível 2 | **BACKLOG** 📋 |
