@@ -18,9 +18,14 @@ from .round import (
     SliceState,
     SliceType,
 )
+from .wave_bridge import (
+    LegacyWaveCommand,
+    WaveBridgeRedirect,
+)
 
 __all__ = [
     "InvalidRoundStateError",
+    "LegacyWaveCommand",
     "MissionMetadata",
     "MissionPendingDoDError",
     "MissionState",
@@ -32,4 +37,5 @@ __all__ = [
     "RoundStatus",
     "SliceState",
     "SliceType",
+    "WaveBridgeRedirect",
 ]
