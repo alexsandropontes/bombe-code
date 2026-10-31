@@ -53,10 +53,12 @@ rounds:
     completed_at: "2026-10-31T17:01:00"
     commit: "2ae3bf5"
   ROUND-7:
-    status: pending
+    status: validated
     story_id: STORY-007
     epic_id: EP-03
     title: "Motor de Execução Kanban (1 Round = 1 Story) e Tríade CLI"
+    completed_at: "2026-10-31T17:13:00"
+    commit: "40e5094"
   ROUND-8:
     status: pending
     story_id: STORY-008
@@ -103,5 +105,5 @@ rounds:
 | **R-4** | `STORY-004` | `EP-02` | Classificador de Complexidade de Slice e Roteador Híbrido Dinâmico | Nível 2 | **VALIDATED** ✅ |
 | **R-5** | `STORY-005` | `EP-02` | QuotaManager com Detecção de 429 e Failover Transparente Cloud -> Local | Nível 3 | **VALIDATED** ✅ |
 | **R-6** | `STORY-006` | `EP-02` | FallbackToolParser para Extração Resiliente de Chamadas em Markdown JSON | Nível 2 | **VALIDATED** ✅ |
-| **R-7** | `STORY-007` | `EP-03` | Motor de Execução Kanban (1 Round = 1 Story) e Tríade CLI | Nível 3 | **READY** ⏳ |
-| **R-8** | `STORY-008` | `EP-04` | Teste E2E de Contingência Real com Cota Z.ai Esgotada e Queima Local | Nível 2 | **BACKLOG** 📋 |
+| **R-7** | `STORY-007` | `EP-03` | Motor de Execução Kanban (1 Round = 1 Story) e Tríade CLI | Nível 3 | **VALIDATED** ✅ |
+| **R-8** | `STORY-008` | `EP-04` | Teste E2E de Contingência Real com Cota Z.ai Esgotada e Queima Local | Nível 2 | **READY** ⏳ |
