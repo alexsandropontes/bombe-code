@@ -19,7 +19,7 @@ rounds:
     stories: ["STORY-015"]
   - id: round-02
     name: "Hardware Tuning & Tetos de Contexto (VRAM/RAM/SSD)"
-    status: in_progress
+    status: done
     epics: ["EP-07"]
     stories: ["STORY-016"]
   - id: round-03
@@ -51,6 +51,6 @@ O objetivo central da MISSION-03 é consolidar uma camada de infraestrutura de i
 |---|---|---|---|---|---|
 | **Round 0** | - | - | @david / @unclebob | Inception Macro, PRD, Arquitetura, Sequenciador | **DONE** |
 | **Round 1** | EP-06 | STORY-015 | @barbara | LocalModelManager, Process Launcher, VRAM Gate (< 300MiB) | **DONE** |
-| **Round 2** | EP-07 | STORY-016 | @barbara | Hardware Profiles (MoE 999, KV Q8_0, Tetos 128K/64K) | IN_PROGRESS |
+| **Round 2** | EP-07 | STORY-016 | @barbara | Hardware Profiles (MoE 999, KV Q8_0, Tetos 128K/64K) | **DONE** |
 | **Round 3** | EP-08 | STORY-017 | @barbara | Suporte a MTP (Gemma drafts + Qwen nativo) | PENDING |
 | **Round 4** | EP-09 | STORY-018 | @barbara / @hoare | HybridRouter & Benchmark E2E Token Bucket | PENDING |

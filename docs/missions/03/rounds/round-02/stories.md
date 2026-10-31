@@ -3,7 +3,7 @@ version: "1.0.0"
 round:
   number: 2
   goal: "Implementação dos Perfis de Hardware e Tetos de Contexto"
-  status: "in_progress"
+  status: "validated"
   started_at: "2026-10-31T21:20:00"
   capacity: 2.5
   used: 2.5
@@ -14,7 +14,7 @@ stories:
     id: "STORY-016"
     title: "Implementação dos Perfis de Hardware e Tetos de Contexto"
     order: 1
-    status: "in_progress"
+    status: "done"
     assigned_to: "@barbara"
     points: 2
     priority: 1
@@ -25,9 +25,9 @@ stories:
       process: "approved"
       dev: "approved"
     review:
-      code_review: "pending"
-      architecture: "pending"
-    committed: false
+      code_review: "approved"
+      architecture: "approved"
+    committed: true
 ---
 
 # Estado das Stories — ROUND-2 (Cadência 1 Round = 1 Story)
@@ -36,7 +36,7 @@ stories:
 
 | Ordem | Story ID | Título | Complexidade | Pts | Status | Responsável | DoR | DoD |
 | :---: | :---: | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
-| 1 | `STORY-016` | Implementação dos Perfis de Hardware e Tetos de Contexto | Nível 2 (Pleno) | 2 | 🟡 in_progress | @barbara | ✅ Approved | 🟡 in_progress |
+| 1 | `STORY-016` | Implementação dos Perfis de Hardware e Tetos de Contexto | Nível 2 (Pleno) | 2 | ✅ done | @barbara | ✅ Approved | ✅ validated |
 
 ## 2. Detalhamento & Rastreabilidade — STORY-016
 

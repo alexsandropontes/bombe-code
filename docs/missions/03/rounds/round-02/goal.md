@@ -2,7 +2,7 @@
 round: 2
 story_id: STORY-016
 epic_id: EP-07
-status: in_progress
+status: validated
 started_at: "2026-10-31T21:20:00"
 maturity_level: mvp
 layer: backend
@@ -26,12 +26,12 @@ Implementar o catálogo de perfis de hardware (`HardwareProfile`) e normalizaç�
 - **Fronteira Negativa:** Não implementar orquestração de download/integração de drafts de aceleração MTP (Round 3) ou integração ao HybridRouter e benchmark E2E (Round 4).
 
 ## 3. Checklist de Definition of Done (DoD) do Round
-- [ ] Enum `ModelKey` criado cobrindo Gemma 4 E4B, Gemma 4 26B-A4B, Qwen 3.8-9B e LFM3.
-- [ ] Dataclass `HardwareProfile` implementada com método `.to_model_profile()`.
-- [ ] Catálogo `HARDWARE_PROFILES` configurado com tetos de contexto (128K / 64K), KV cache `q8_0`, MoE e Flash Attention corretos.
-- [ ] Exceção `UnknownModelProfileError` implementada e testada.
-- [ ] Funções `normalize_model_key`, `get_hardware_profile` e `build_model_profile` operacionais com type hints estritos.
-- [ ] Testes unitários em `tests/unit/test_profiles.py` cobrindo Slice 1, Slice 2 e Slice 3 com 100% de aprovação.
-- [ ] Integração com `LocalModelManager.build_cli_command` validando todos os ACs (AC-1 ao AC-5).
-- [ ] Zero ocorrências de `NotImplementedError`, `pass`, `// TODO` ou stubs em código de produção.
-- [ ] Conformidade de lint com Ruff e MyPy sem erros.
+- [x] Enum `ModelKey` criado cobrindo Gemma 4 E4B, Gemma 4 26B-A4B, Qwen 3.8-9B e LFM3.
+- [x] Dataclass `HardwareProfile` implementada com método `.to_model_profile()`.
+- [x] Catálogo `HARDWARE_PROFILES` configurado com tetos de contexto (128K / 64K), KV cache `q8_0`, MoE e Flash Attention corretos.
+- [x] Exceção `UnknownModelProfileError` implementada e testada.
+- [x] Funções `normalize_model_key`, `get_hardware_profile` e `build_model_profile` operacionais com type hints estritos.
+- [x] Testes unitários em `tests/unit/test_profiles.py` cobrindo Slice 1, Slice 2 e Slice 3 com 100% de aprovação.
+- [x] Integração com `LocalModelManager.build_cli_command` validando todos os ACs (AC-1 ao AC-5).
+- [x] Zero ocorrências de `NotImplementedError`, `pass`, `// TODO` ou stubs em código de produção.
+- [x] Conformidade de lint com Ruff e MyPy sem erros.
