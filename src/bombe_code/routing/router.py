@@ -6,8 +6,12 @@ import logging
 from collections.abc import Awaitable, Callable
 from typing import TypeVar
 
+import httpx
 from pydantic import BaseModel, ConfigDict
 
+from bombe_code.local.contracts import ModelStatus
+from bombe_code.local.local_manager import LocalModelManager
+from bombe_code.local.profiles import ModelKey, build_model_profile, normalize_model_key
 from bombe_code.routing.classifier import ComplexityAnalysis
 from bombe_code.routing.quota_manager import QuotaExhaustedError, QuotaManager
 
@@ -35,14 +39,69 @@ class HybridRouter:
         self,
         quota_checker: Callable[[str], bool] | None = None,
         quota_manager: QuotaManager | None = None,
+        local_manager: LocalModelManager | None = None,
+        http_get_fn: Callable[[str], int] | None = None,
     ) -> None:
         self._quota_manager = quota_manager
+        self._local_manager = local_manager
+        self._http_get_fn = http_get_fn or self._default_http_get
         if quota_checker is not None:
             self._quota_checker = quota_checker
         elif quota_manager is not None:
             self._quota_checker = quota_manager.is_available
         else:
             self._quota_checker = lambda _p: True
+
+    @staticmethod
+    def _default_http_get(url: str) -> int:
+        try:
+            response = httpx.get(url, timeout=1.0)
+            return response.status_code
+        except (httpx.HTTPError, OSError):
+            return 0
+
+    def _is_local_endpoint_ready(self, port: int, canonical_key: ModelKey) -> bool:
+        if self._local_manager is None:
+            return False
+        if self._local_manager.status != ModelStatus.READY:
+            return False
+        active = self._local_manager.active_profile
+        if active is None or active.name != canonical_key.value or active.port != port:
+            return False
+        health_url = f"http://{active.host}:{port}/health"
+        try:
+            return self._http_get_fn(health_url) == 200
+        except (httpx.HTTPError, OSError):
+            return False
+
+    def ensure_local_model_ready(
+        self,
+        model_name_or_key: str | ModelKey,
+        port: int = 18094,
+        timeout_seconds: float = 120.0,
+    ) -> None:
+        """Garante que o modelo local esteja ativo e pronto para inferência via LocalModelManager."""
+        if self._local_manager is None:
+            raise RuntimeError("LocalModelManager is not configured on this HybridRouter")
+
+        canonical_key = normalize_model_key(model_name_or_key)
+        if self._is_local_endpoint_ready(port, canonical_key):
+            logger.info("Modelo local '%s' já está pronto na porta %d.", canonical_key.value, port)
+            return
+
+        if self._local_manager.status != ModelStatus.STOPPED:
+            active_name = (
+                self._local_manager.active_profile.name
+                if self._local_manager.active_profile
+                else "desconhecido"
+            )
+            logger.info("Encerrando modelo local '%s' para alternar para '%s'.", active_name, canonical_key.value)
+            self._local_manager.stop_model()
+
+        logger.info("Inicializando modelo local '%s' com MTP na porta %d...", canonical_key.value, port)
+        profile = build_model_profile(canonical_key, port=port, enable_mtp=True)
+        self._local_manager.start_model(profile, timeout_seconds=timeout_seconds)
+        logger.info("Modelo local '%s' inicializado com sucesso.", canonical_key.value)
 
     def route(self, analysis: ComplexityAnalysis, force_local: bool = False) -> RoutingDecision:
         """Route slice to provider and model based on complexity tier and quota availability."""

@@ -29,7 +29,7 @@ rounds:
     stories: ["STORY-017"]
   - id: round-04
     name: "HybridRouter & Benchmark E2E (Token Bucket Rate Limiter)"
-    status: pending
+    status: in_progress
     epics: ["EP-09"]
     stories: ["STORY-018"]
 ---
@@ -53,4 +53,4 @@ O objetivo central da MISSION-03 é consolidar uma camada de infraestrutura de i
 | **Round 1** | EP-06 | STORY-015 | @barbara | LocalModelManager, Process Launcher, VRAM Gate (< 300MiB) | **DONE** |
 | **Round 2** | EP-07 | STORY-016 | @barbara | Hardware Profiles (MoE 999, KV Q8_0, Tetos 128K/64K) | **DONE** |
 | **Round 3** | EP-08 | STORY-017 | @barbara | Suporte a MTP (Gemma drafts + Qwen nativo) | **DONE** |
-| **Round 4** | EP-09 | STORY-018 | @barbara / @hoare | HybridRouter & Benchmark E2E Token Bucket | PENDING |
+| **Round 4** | EP-09 | STORY-018 | @barbara / @hoare | HybridRouter & Benchmark E2E Token Bucket | IN_PROGRESS |
