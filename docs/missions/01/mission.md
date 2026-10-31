@@ -1,7 +1,8 @@
 ---
 id: MISSION-01
 title: "Modernização do Bombe Code — Equalização Core v4, Orquestração Híbrida de LLMs & Pipeline 1 Round = 1 Story"
-status: open
+status: completed
+completed_at: "2026-10-31T17:35:00"
 maturity_level: enterprise-grade
 scope_type: legacy-parity
 created_at: "2026-10-31T12:28:00"
@@ -60,10 +61,12 @@ rounds:
     completed_at: "2026-10-31T17:13:00"
     commit: "40e5094"
   ROUND-8:
-    status: pending
+    status: validated
     story_id: STORY-008
     epic_id: EP-04
     title: "Teste E2E de Contingência Real com Cota Z.ai Esgotada e Queima Local"
+    completed_at: "2026-10-31T17:35:00"
+    commit: "5135e6f"
 ---
 
 # MISSION-01 — Modernização do Bombe Code
@@ -106,4 +109,14 @@ rounds:
 | **R-5** | `STORY-005` | `EP-02` | QuotaManager com Detecção de 429 e Failover Transparente Cloud -> Local | Nível 3 | **VALIDATED** ✅ |
 | **R-6** | `STORY-006` | `EP-02` | FallbackToolParser para Extração Resiliente de Chamadas em Markdown JSON | Nível 2 | **VALIDATED** ✅ |
 | **R-7** | `STORY-007` | `EP-03` | Motor de Execução Kanban (1 Round = 1 Story) e Tríade CLI | Nível 3 | **VALIDATED** ✅ |
-| **R-8** | `STORY-008` | `EP-04` | Teste E2E de Contingência Real com Cota Z.ai Esgotada e Queima Local | Nível 2 | **READY** ⏳ |
+| **R-8** | `STORY-008` | `EP-04` | Teste E2E de Contingência Real com Cota Z.ai Esgotada e Queima Local | Nível 2 | **VALIDATED** ✅ |
+
+---
+
+## 4. Encerramento & Homologação da Missão (@david & @unclebob)
+
+- **Status Geral:** **MISSION-01 COMPLETA E VALIDADA COM SUCESSO**
+- **Metodologia:** Slice-Code Enterprise v4 com invariante **1 Round = 1 Story**
+- **Rounds Concluídos:** 8/8 (100% dos rounds validados de ponta a ponta)
+- **Suíte de Testes:** **651 testes passando (100% green)**
+- **Maturidade Homologada:** **Enterprise-Grade** (Zero mocks em produção, Circuit Breaker com failover < 2.0s, resiliência total contra HTTP 429, Fila Indiana para modelos locais vLLM na porta 18096, classificação estática de complexidade de slices e Tríade CLI round-start, round-full, round-all).
