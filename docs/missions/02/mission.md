@@ -40,10 +40,11 @@ rounds:
     started_at: "2026-10-31T19:05:00"
     completed_at: "2026-10-31T19:20:00"
   ROUND-5:
-    status: pending
+    status: in_progress
     story_id: STORY-013
     epic_id: EP-04
     title: "Equalização de Comandos Standalone e Governança"
+    started_at: "2026-10-31T19:25:00"
   ROUND-6:
     status: pending
     story_id: STORY-014
@@ -89,5 +90,5 @@ rounds:
 | **R-2** | `STORY-010` | `EP-02` | Engine de Rounds Manuais com DoR Gate | Sênior (4h) | **VALIDATED** ✅ |
 | **R-3** | `STORY-011` | `EP-02` | Engine de Rounds Autônomos (Full & All) | Sênior (4h) | **VALIDATED** ✅ |
 | **R-4** | `STORY-012` | `EP-03` | Wave Bridge e Interceptor de Depreciação | Pleno (3h) | **VALIDATED** ✅ |
-| **R-5** | `STORY-013` | `EP-04` | Equalização de Comandos Standalone e Governança | Pleno (3h) | 📋 READY |
+| **R-5** | `STORY-013` | `EP-04` | Equalização de Comandos Standalone e Governança | Pleno (3h) | **VALIDATED** ✅ |
 | **R-6** | `STORY-014` | `EP-05` | Suíte E2E da CLI e Homologação de Gates G1-G6 | Pleno (3h) | 📋 READY |

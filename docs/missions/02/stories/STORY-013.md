@@ -5,7 +5,7 @@ epic_id: EP-04
 round: ROUND-5
 agent: "@barbara"
 estimation: 3h
-status: ready
+status: validated
 type: feature
 layer: backend
 complexity: 2
@@ -68,19 +68,19 @@ Implementa os submódulos Typer `src/bombe_code/cli/commands/project.py` e `src/
 ---
 
 ## 4. Acceptance Criteria (ACs Testáveis)
-- [ ] **AC-01 (Setup de Projeto):** `bombe project configure` valida e atualiza o `.bombeconfig` sem corromper chaves existentes.
-- [ ] **AC-02 (Promoção Protegida Git Ship):** `bombe project ship [env]` executa a suíte de testes antes do merge; se os testes falharem, a promoção é abortada com exit code 1.
-- [ ] **AC-03 (Comutação Auditada de Modo):** `bombe mode [modo]` comuta entre `slice-code` e `vibe-code` gravando `mode_origin` e `mode_migrated_at`.
-- [ ] **AC-04 (Despacho de Tasks Avulsas):** `bombe task '<desc>'` despacha para o subagente correto via Protocolo Garçom.
-- [ ] **AC-05 (Comandos de Qualidade Operacionais):** `bombe rca`, `bombe review`, `bombe simplify` e `bombe status-report` executam de forma standalone sem exigir missão ativa.
+- [x] **AC-01 (Setup de Projeto):** `bombe project configure` valida e atualiza o `.bombeconfig` sem corromper chaves existentes.
+- [x] **AC-02 (Promoção Protegida Git Ship):** `bombe project ship [env]` executa a suíte de testes antes do merge; se os testes falharem, a promoção é abortada com exit code 1.
+- [x] **AC-03 (Comutação Auditada de Modo):** `bombe mode [modo]` comuta entre `slice-code` e `vibe-code` gravando `mode_origin` e `mode_migrated_at`.
+- [x] **AC-04 (Despacho de Tasks Avulsas):** `bombe task '<desc>'` despacha para o subagente correto via Protocolo Garçom.
+- [x] **AC-05 (Comandos de Qualidade Operacionais):** `bombe rca`, `bombe review`, `bombe simplify` e `bombe status-report` executam de forma standalone sem exigir missão ativa.
 
 ---
 
 ## 5. Definition of Done (DoD)
-- [ ] Sub-apps `project_app` e `standalone_app` registrados no `main.py`.
-- [ ] Motor `ShipEngine` em `src/bombe_code/orchestration/ship_engine.py` com proteção de testes pré-flight.
-- [ ] Suíte de testes `tests/unit/test_standalone_commands.py` passando com 100% de sucesso.
-- [ ] Código aprovado no Ruff e Mypy.
+- [x] Sub-apps `project_app` e `standalone_app` registrados no `main.py`.
+- [x] Motor `ShipEngine` em `src/bombe_code/orchestration/ship_engine.py` com proteção de testes pré-flight.
+- [x] Suíte de testes `tests/unit/test_standalone_commands.py` passando com 100% de sucesso.
+- [x] Código aprovado no Ruff e Mypy.
 
 ---
 
