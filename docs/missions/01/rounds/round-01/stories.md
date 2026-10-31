@@ -3,33 +3,33 @@ version: "1.0.0"
 round:
   number: 1
   goal: "Migração de Configuração e Runtime Slice-Code com rastreabilidade histórica"
-  status: "active"
+  status: "completed"
   started_at: "2026-10-31T15:49:00"
-  completed_at: null
+  completed_at: "2026-10-31T15:58:00"
   capacity: 2
-  used: 0
-  remaining: 2
+  used: 2
+  remaining: 0
 
 stories:
   story_001:
     id: "STORY-001"
     title: "Migração de Configuração e Runtime Slice-Code"
     order: 1
-    status: "in_progress"
+    status: "done"
     assigned_to: "@fowler"
     points: 2
     priority: 1
     dependencies: []
     blocks: ["STORY-002"]
     started_at: "2026-10-31T15:49:00"
-    completed_at: null
+    completed_at: "2026-10-31T15:58:00"
     dor:
       process: "approved"
       dev: "approved"
     review:
-      code_review: null
-      architecture: null
-    committed: false
+      code_review: "approved"
+      architecture: "approved"
+    committed: true
 ---
 
 # Estado das Stories — ROUND-1 (Cadência 1 Round = 1 Story)
@@ -38,7 +38,7 @@ stories:
 
 | Ordem | Story ID | Título | Complexidade | Pts | Status | Responsável | DoR | DoD |
 | :---: | :---: | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
-| 1 | `STORY-001` | Migração de Configuração e Runtime Slice-Code | Nível 1 | 2 | ⏳ in_progress | @fowler | ✅ Approved | ⏳ Pending |
+| 1 | `STORY-001` | Migração de Configuração e Runtime Slice-Code | Nível 1 | 2 | ✅ done | @fowler | ✅ Approved | ✅ Approved |
 
 ## 2. Detalhamento & Rastreabilidade — STORY-001
 
@@ -46,6 +46,7 @@ stories:
 - **Épico Pai:** `EP-01` (`docs/missions/01/epics/epic-01.md`)
 - **Layer:** `backend`
 - **Especialista Designado:** @fowler (Engenharia de Testes e Refactoring Python)
+- **Commit:** `a4e50cb`
 - **Critérios de Aceite:**
   - **AC-01:** Carregamento de `.bombeconfig` com `mode: slice-code` passa sem erros no Pydantic.
   - **AC-02:** Rastreabilidade formal com chaves `mode: "slice-code"` e `mode_origin: "tdd-code"`.
