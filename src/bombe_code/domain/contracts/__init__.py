@@ -18,6 +18,10 @@ from .round import (
     SliceState,
     SliceType,
 )
+from .ship import (
+    PromotionResult,
+    ShipTarget,
+)
 from .wave_bridge import (
     LegacyWaveCommand,
     WaveBridgeRedirect,
@@ -32,9 +36,11 @@ __all__ = [
     "MissionStatus",
     "NoActiveMissionError",
     "OpenMissionBlockedError",
+    "PromotionResult",
     "RoundNotReadyError",
     "RoundState",
     "RoundStatus",
+    "ShipTarget",
     "SliceState",
     "SliceType",
     "WaveBridgeRedirect",

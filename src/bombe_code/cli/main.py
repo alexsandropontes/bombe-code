@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import os
-import subprocess
 import sys
 import threading
 import time
@@ -94,201 +93,42 @@ app = typer.Typer(
 )
 
 from .commands.mission import mission_app
+from .commands.project import project_app
 from .commands.round import (
     round_all_cmd,
     round_app,
     round_full_cmd,
     round_start_cmd,
 )
+from .commands.standalone import (
+    mode_cmd,
+    rca_cmd,
+    review_cmd,
+    simplify_cmd,
+    standalone_app,
+    status_report_cmd,
+    task_cmd,
+)
+from .commands.wave_bridge import wave_app
 
 app.add_typer(mission_app, name="mission")
+app.add_typer(project_app, name="project")
 app.add_typer(round_app, name="round")
+app.add_typer(wave_app, name="wave")
+app.add_typer(standalone_app, name="standalone")
+
 app.command("round-start")(round_start_cmd)
 app.command("round-full")(round_full_cmd)
 app.command("round-all")(round_all_cmd)
 
-from .commands.wave_bridge import wave_app
-
-app.add_typer(wave_app, name="wave")
-
-
-project_cli = typer.Typer(
-    name="project", help="Comandos de configuração do projeto (.bombeconfig)."
-)
-app.add_typer(project_cli, name="project")
-
-
-@project_cli.command("release")
-def project_release(
-    versao: Annotated[
-        str | None, typer.Argument(help="Versão explícita (ex: 0.3.0). Vazio = sugestão automática")
-    ] = None,
-    mensagem: Annotated[
-        str | None, typer.Option("--mensagem", "-m", help="Mensagem do commit de release")
-    ] = None,
-    project_dir: Annotated[str, typer.Option("--project-dir", help="Pasta do projeto")] = ".",
-) -> None:
-    """Empacota e TAGA a versão (feat → +0.1.0, correção → +0.0.1; você pode impor outra)."""
-    from bombe_code.turing.promocao import PromotorDeBranches
-
-    promotor = PromotorDeBranches(project_dir)
-    analise = promotor.analisar_release()
-    typer.echo(f"Última tag: {analise['ultima_tag']} | commits desde: {analise['total']}")
-    typer.echo(
-        f"Versão sugerida: {analise['versao_sugerida']}"
-        + (f" | imposta: {versao}" if versao else "")
-    )
-    res = promotor.gerar_release(mensagem=mensagem, versao=versao)
-    if res.success:
-        typer.echo(f"✅ {res.mensagem}")
-        for d in res.detalhes:
-            typer.echo(f"  • {d}")
-    else:
-        typer.echo(f"❌ {res.mensagem}", err=True)
-        raise typer.Exit(code=1)
-
-
-@project_cli.command("ship")
-def project_ship(
-    destino: Annotated[
-        str,
-        typer.Argument(help="Destino do ship: dev (padrão) | hml (pré-produção) | main (produção)"),
-    ] = "dev",
-    versao: Annotated[
-        str | None,
-        typer.Option("--versao", "-v", help="Versão do release (vazio = sugestão automática)"),
-    ] = None,
-    mensagem: Annotated[
-        str | None, typer.Option("--mensagem", "-m", help="Mensagem do release/squash")
-    ] = None,
-    project_dir: Annotated[str, typer.Option("--project-dir", help="Pasta do projeto")] = ".",
-) -> None:
-    """Release + promoção + push do destino (dev | hml | main)."""
-    from bombe_code.turing.promocao import PROXIMA_PROMOCAO, PromotorDeBranches
-
-    promotor = PromotorDeBranches(project_dir)
-    destino_norm = destino.strip().lower()
-    if destino_norm not in PROXIMA_PROMOCAO and destino_norm != "dev":
-        typer.echo(f"❌ Destino inválido: {destino}. Use dev, hml ou main.", err=True)
-        raise typer.Exit(code=1)
-
-    # 1. Release (versão + tag) — sempre antes do ship
-    res_rel = promotor.gerar_release(mensagem=mensagem, versao=versao)
-    if not res_rel.success:
-        typer.echo(f"❌ Release: {res_rel.mensagem}", err=True)
-        raise typer.Exit(code=1)
-    typer.echo(f"✅ {res_rel.mensagem}")
-
-    # 2. Promoção ao destino
-    if destino_norm == "dev":
-        res_promo = promotor.promover_para_dev(mensagem or f"feat: release v{versao or 'auto'}")
-    else:
-        res_promo = promotor.promover_fase(destino_norm)
-    if not res_promo.success:
-        typer.echo(f"❌ Promoção: {res_promo.mensagem}", err=True)
-        raise typer.Exit(code=1)
-    typer.echo(f"✅ {res_promo.mensagem}")
-
-    # 3. Push do destino + tag (humano no remoto: aqui é o ship explícito dele)
-    rc_push = subprocess.run(
-        ["git", "push", "--no-verify", "origin", destino_norm],
-        cwd=project_dir,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if rc_push.returncode == 0:
-        rc_tag = subprocess.run(
-            ["git", "push", "--no-verify", "origin", "--tags"],
-            cwd=project_dir,
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        typer.echo(
-            "🚀 Ship concluído — remoto atualizado."
-            if rc_tag.returncode == 0
-            else "🚀 Ship concluído (branch enviada; tags falharam)."
-        )
-    else:
-        typer.echo(f"⚠️ Promoção local concluída; o push falhou: {rc_push.stderr.strip()}", err=True)
-
-
-@project_cli.command("detect")
-def project_detect(
-    project_dir: Annotated[str, typer.Option("--project-dir", help="Pasta do projeto")] = ".",
-) -> None:
-    """Autodetecta a stack tecnológica e salva no .bombeconfig."""
-    from bombe_code.config.project_config import ProjectConfigManager
-
-    mgr = ProjectConfigManager(project_dir=project_dir)
-    cfg = mgr.detect_stack()
-    mgr.save(cfg)
-    typer.echo("Stack autodetectada e salva em .bombeconfig:")
-    typer.echo(f"- Backend: {cfg.backend_language} ({cfg.backend_path})")
-    typer.echo(f"- Frontend: {cfg.frontend_stack} ({cfg.frontend_path})")
-
-
-@project_cli.command("config")
-def project_config(
-    project_dir: Annotated[str, typer.Option("--project-dir", help="Pasta do projeto")] = ".",
-) -> None:
-    """Exibe a configuração ativa do projeto."""
-    from bombe_code.config.project_config import ProjectConfigManager
-
-    mgr = ProjectConfigManager(project_dir=project_dir)
-    cfg = mgr.load()
-    typer.echo(f"Configuração do Projeto ({cfg.name}):")
-    typer.echo(f"- Tipo: {cfg.type}")
-    typer.echo(f"- Backend: {cfg.backend_language}")
-    typer.echo(f"- Frontend: {cfg.frontend_stack}")
-    typer.echo(f"- Modo de Engenharia: {cfg.mode}")
-    typer.echo(f"- Autonomia: {cfg.autonomy}")
-
-
-starter_cli = typer.Typer(name="starter", help="Gerenciador de starters e scaffolds de projetos.")
-project_cli.add_typer(starter_cli, name="starter")
-
-
-@starter_cli.command("list")
-def starter_list() -> None:
-    """Lista todos os starters disponíveis no catálogo."""
-    from bombe_code.starters.engine import StarterEngine
-
-    engine = StarterEngine()
-    starters = engine.list_starters()
-    typer.echo("Starters Disponíveis no Bombe Code:")
-    for s in starters:
-        typer.echo(f"• {s['id']} [{s['stack']}] — {s['name']}: {s['description']}")
-
-
-@starter_cli.command("apply")
-def starter_apply(
-    starter_id: Annotated[str, typer.Argument(help="ID do starter a aplicar")],
-    target_dir: Annotated[
-        str, typer.Option("--target-dir", "-t", help="Diretório de destino")
-    ] = ".",
-    name: Annotated[str | None, typer.Option("--name", "-n", help="Nome do projeto")] = None,
-    force: Annotated[
-        bool, typer.Option("--force", "-f", help="Sobrescrever arquivos existentes")
-    ] = False,
-) -> None:
-    """Aplica o scaffolding do starter no diretório de destino."""
-    from bombe_code.starters.engine import StarterEngine
-
-    engine = StarterEngine()
-    res = engine.apply_starter(
-        starter_id=starter_id,
-        target_dir=target_dir,
-        project_name=name,
-        force=force,
-    )
-    if res.get("success"):
-        typer.echo(res.get("message", "Starter aplicado com sucesso."))
-        typer.echo(f"Arquivos gerados: {len(res.get('created_files', []))}")
-    else:
-        typer.echo(f"Erro ao aplicar starter: {res.get('error')}", err=True)
-        raise typer.Exit(code=1)
+# Standalone root commands
+app.command("mode")(mode_cmd)
+app.command("task")(task_cmd)
+app.command("rca")(rca_cmd)
+app.command("review")(review_cmd)
+app.command("simplify")(simplify_cmd)
+app.command("status-report")(status_report_cmd)
+app.command("report")(status_report_cmd)
 
 
 snippet_cli = typer.Typer(name="snippet", help="Gerencia snippets de código (Fábrica de LEGO).")
@@ -350,94 +190,6 @@ def snippet_install(
     else:
         typer.echo(f"Erro ao instalar snippet: {res.get('error')}", err=True)
         raise typer.Exit(code=1)
-
-
-@app.command("mode")
-def set_mode_cmd(
-    mode_str: Annotated[
-        str,
-        typer.Argument(
-            help="Modo de autonomia (auto, semi-auto, manual) ou engenharia (tdd, vibe)"
-        ),
-    ],
-    project_dir: Annotated[str, typer.Option("--project-dir", help="Pasta do projeto")] = ".",
-) -> None:
-    """Alterna modo de autonomia ou modo de engenharia."""
-    from bombe_code.turing.orchestrator import WaveOrchestrator
-
-    orch = WaveOrchestrator(project_dir=project_dir)
-    res = orch.set_mode(mode_str)
-    if res.get("success"):
-        typer.echo(res.get("message", "Modo atualizado com sucesso."))
-    else:
-        typer.echo(f"Erro: {res.get('error')}", err=True)
-
-
-@app.command("rca")
-def rca_cmd(
-    incident: Annotated[
-        str, typer.Argument(help="Descrição do incidente para análise de causa raiz")
-    ],
-    project_dir: Annotated[str, typer.Option("--project-dir", help="Pasta do projeto")] = ".",
-) -> None:
-    """Executa Análise de Causa Raiz determinística com @unclebob."""
-    from bombe_code.turing.orchestrator import WaveOrchestrator
-
-    orch = WaveOrchestrator(project_dir=project_dir)
-    res = orch.run_rca(incident)
-    typer.echo(f"RCA executada por {res.get('agent')}:")
-    typer.echo(res.get("report"))
-
-
-@app.command("simplify")
-def simplify_cmd(
-    target: Annotated[
-        str, typer.Argument(help="Caminho do arquivo ou módulo para auditoria de simplificação")
-    ],
-    project_dir: Annotated[str, typer.Option("--project-dir", help="Pasta do projeto")] = ".",
-) -> None:
-    """Executa auditoria de simplificação de código com @ieru e @unclebob."""
-    from bombe_code.turing.orchestrator import WaveOrchestrator
-
-    orch = WaveOrchestrator(project_dir=project_dir)
-    res = orch.run_simplify(target)
-    typer.echo(f"Simplificação executada por {res.get('agent')}:")
-    typer.echo(res.get("output"))
-
-
-@app.command("task")
-def task_cmd(
-    description: Annotated[str, typer.Argument(help="Descrição da tarefa avulsa")],
-    agent: Annotated[
-        str | None,
-        typer.Option("--agent", "-a", help="Especialista para despachar (ex: @unclebob)"),
-    ] = None,
-    project_dir: Annotated[str, typer.Option("--project-dir", help="Pasta do projeto")] = ".",
-) -> None:
-    """Executa uma tarefa técnica avulsa sem alterar o estágio da ONDA."""
-    from bombe_code.turing.orchestrator import WaveOrchestrator
-
-    orch = WaveOrchestrator(project_dir=project_dir)
-    res = orch.run_task(description, agent_handle=agent)
-    typer.echo(f"Task executada ({res.get('agent')}):")
-    typer.echo(res.get("output"))
-
-
-@app.command("report")
-def report_cmd(
-    project_dir: Annotated[str, typer.Option("--project-dir", help="Pasta do projeto")] = ".",
-) -> None:
-    """Gera um relatório consolidado do projeto e da ONDA ativa."""
-    from bombe_code.turing.orchestrator import WaveOrchestrator
-
-    orch = WaveOrchestrator(project_dir=project_dir)
-    rep = orch.generate_status_report()
-    typer.echo(f"Relatório Consolidado — ONDA {rep['wave_id']} (Estágio: {rep['stage']}):")
-    typer.echo(f"- Modo: Autonomia={rep['autonomy_mode']}, Engenharia={rep['engineering_mode']}")
-    typer.echo(
-        f"- Projeto: {rep['config']['name']} ({rep['config']['backend_language']}/{rep['config']['frontend_stack']})"
-    )
-    typer.echo(f"- Total de Tasks Registradas: {rep['tasks_summary']['total']}")
 
 
 @app.command("version")
