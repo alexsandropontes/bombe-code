@@ -1,7 +1,8 @@
 ---
 id: MISSION-02
 title: "Equalização de Comandos CLI e Transição Wave -> Slice/Round (Core v4 Parity)"
-status: open
+status: closed
+completed_at: "2026-10-31T20:05:00Z"
 maturity_level: enterprise-grade
 scope_type: legacy-parity
 created_at: "2026-10-31T17:48:00"
@@ -40,16 +41,19 @@ rounds:
     started_at: "2026-10-31T19:05:00"
     completed_at: "2026-10-31T19:20:00"
   ROUND-5:
-    status: in_progress
+    status: validated
     story_id: STORY-013
     epic_id: EP-04
     title: "Equalização de Comandos Standalone e Governança"
     started_at: "2026-10-31T19:25:00"
+    completed_at: "2026-10-31T19:40:00"
   ROUND-6:
-    status: pending
+    status: validated
     story_id: STORY-014
     epic_id: EP-05
     title: "Suíte E2E da CLI e Homologação de Gates G1-G6"
+    started_at: "2026-10-31T19:45:00"
+    completed_at: "2026-10-31T20:05:00Z"
 ---
 
 # MISSION-02 — Equalização de Comandos CLI e Transição Wave -> Slice/Round (Core v4 Parity)
@@ -91,4 +95,4 @@ rounds:
 | **R-3** | `STORY-011` | `EP-02` | Engine de Rounds Autônomos (Full & All) | Sênior (4h) | **VALIDATED** ✅ |
 | **R-4** | `STORY-012` | `EP-03` | Wave Bridge e Interceptor de Depreciação | Pleno (3h) | **VALIDATED** ✅ |
 | **R-5** | `STORY-013` | `EP-04` | Equalização de Comandos Standalone e Governança | Pleno (3h) | **VALIDATED** ✅ |
-| **R-6** | `STORY-014` | `EP-05` | Suíte E2E da CLI e Homologação de Gates G1-G6 | Pleno (3h) | 📋 READY |
+| **R-6** | `STORY-014` | `EP-05` | Suíte E2E da CLI e Homologação de Gates G1-G6 | Pleno (3h) | **VALIDATED** ✅ |

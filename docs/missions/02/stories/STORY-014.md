@@ -5,7 +5,8 @@ epic_id: EP-05
 round: ROUND-6
 agent: "@fowler"
 estimation: 3h
-status: ready
+status: validated
+completed_at: "2026-10-31T20:05:00Z"
 type: test
 layer: backend
 complexity: 2
@@ -66,19 +67,19 @@ Cria a suíte `tests/e2e/test_cli_parity.py` utilizando o `CliRunner` do Typer e
 ---
 
 ## 4. Acceptance Criteria (ACs Testáveis)
-- [ ] **AC-01 (Cobertura Integral dos 19 Entry Points):** Todos os 19 entry points (EP-01 a EP-19) possuem casos de teste automatizados em `tests/e2e/test_cli_parity.py`.
-- [ ] **AC-02 (Fluxo de Missão e Rounds E2E):** O ciclo `mission new` -> `round start` -> `round full` -> `round all` -> `mission end` executa com sucesso em diretório temporário.
-- [ ] **AC-03 (Validação da Wave Bridge):** Os 7 subcomandos legados `bombe wave ...` são validados comprovando que emitem o banner e executam a ação de destino.
-- [ ] **AC-04 (Auditoria Zero Mocks / Zero Stubs):** Teste de auditoria varre recursivamente `src/bombe_code/` e falha se encontrar `NotImplementedError`, corpos vazios `pass` ou tags `TODO`.
-- [ ] **AC-05 (Homologação Gates G1 a G6):** Suíte comprova que os gates G1 a G6 estabelecidos em `docs/projeto/mvp.md` estão 100% satisfeitos.
+- [x] **AC-01 (Cobertura Integral dos 19 Entry Points):** Todos os 19 entry points (EP-01 a EP-19) possuem casos de teste automatizados em `tests/e2e/test_cli_parity.py`.
+- [x] **AC-02 (Fluxo de Missão e Rounds E2E):** O ciclo `mission new` -> `round start` -> `round full` -> `round all` -> `mission end` executa com sucesso em diretório temporário.
+- [x] **AC-03 (Validação da Wave Bridge):** Os 7 subcomandos legados `bombe wave ...` são validados comprovando que emitem o banner e executam a ação de destino.
+- [x] **AC-04 (Auditoria Zero Mocks / Zero Stubs):** Teste de auditoria varre recursivamente `src/bombe_code/` e falha se encontrar `NotImplementedError`, corpos vazios `pass` ou tags `TODO`.
+- [x] **AC-05 (Homologação Gates G1 a G6):** Suíte comprova que os gates G1 a G6 estabelecidos em `docs/projeto/mvp.md` estão 100% satisfeitos.
 
 ---
 
 ## 5. Definition of Done (DoD)
-- [ ] Arquivo `tests/e2e/test_cli_parity.py` criado e executando com 100% de aprovação no pytest.
-- [ ] Varredura estrita de linter e typesafe sem warnings.
-- [ ] Relatório de conformidade E2E emitido para encerramento da missão.
-- [ ] Story aprovada por @hoare e @unclebob.
+- [x] Arquivo `tests/e2e/test_cli_parity.py` criado e executando com 100% de aprovação no pytest.
+- [x] Varredura estrita de linter e typesafe sem warnings.
+- [x] Relatório de conformidade E2E emitido para encerramento da missão.
+- [x] Story aprovada por @hoare e @unclebob.
 
 ---
 
