@@ -34,7 +34,7 @@ class FallbackToolParser:
                 return chunks
 
         # 2. Search for raw JSON candidates in text using balanced raw_decode
-        decoder = json.JSONDecoder()
+        decoder = json.JSONDecoder(strict=False)
         pos = 0
         while pos < len(text):
             brace_idx = text.find("{", pos)
@@ -76,7 +76,7 @@ class FallbackToolParser:
         """Parse and normalize candidate string to ToolCallChunk, returning None on error."""
         candidate_str = candidate_str.strip()
         try:
-            data = json.loads(candidate_str)
+            data = json.loads(candidate_str, strict=False)
         except (json.JSONDecodeError, ValueError):
             return None
 
