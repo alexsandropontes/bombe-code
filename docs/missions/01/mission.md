@@ -1,7 +1,7 @@
 ---
 id: MISSION-01
 title: "Modernização do Bombe Code — Equalização Core v4, Orquestração Híbrida de LLMs & Pipeline 1 Round = 1 Story"
-status: completed
+status: closed
 completed_at: "2026-10-31T17:35:00"
 maturity_level: enterprise-grade
 scope_type: legacy-parity
