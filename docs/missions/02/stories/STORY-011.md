@@ -5,7 +5,7 @@ epic_id: EP-02
 round: ROUND-3
 agent: "@barbara"
 estimation: 4h
-status: ready
+status: done
 type: feature
 layer: backend
 complexity: 3
@@ -60,19 +60,19 @@ Adiciona os comandos autônomos `bombe round full [N]` e `bombe round all` em `s
 ---
 
 ## 4. Acceptance Criteria (ACs Testáveis)
-- [ ] **AC-01 (Execução Semi-Automática `round full`):** `bombe round full [N]` executa sequencialmente Upstream -> Burn -> Review -> Validate para o round N e para ao final com relatório consolidado.
-- [ ] **AC-02 (Pipeline Contínuo `round all`):** `bombe round all` localiza todos os rounds pendentes da missão ativa e os executa ordenadamente do primeiro ao último.
-- [ ] **AC-03 (Zero Confirmações Vazias):** Durante a execução de `round all`, o sistema não solicita entrada no stdin e não emite prompts de confirmação de cortesia.
-- [ ] **AC-04 (Interrupção por Falha Real):** Se qualquer round falhar no teste TDD ou no review de arquitetura, o comando `round all` aborta imediatamente com exit code 1, preservando o estado do repositório para diagnóstico.
-- [ ] **AC-05 (Encerramento de Missão):** Ao concluir o último round em `round all`, exibe sumário de sucesso orientando o encerramento via `bombe mission end`.
+- [x] **AC-01 (Execução Semi-Automática `round full`):** `bombe round full [N]` executa sequencialmente Upstream -> Burn -> Review -> Validate para o round N e para ao final com relatório consolidado.
+- [x] **AC-02 (Pipeline Contínuo `round all`):** `bombe round all` localiza todos os rounds pendentes da missão ativa e os executa ordenadamente do primeiro ao último.
+- [x] **AC-03 (Zero Confirmações Vazias):** Durante a execução de `round all`, o sistema não solicita entrada no stdin e não emite prompts de confirmação de cortesia.
+- [x] **AC-04 (Interrupção por Falha Real):** Se qualquer round falhar no teste TDD ou no review de arquitetura, o comando `round all` aborta imediatamente com exit code 1, preservando o estado do repositório para diagnóstico.
+- [x] **AC-05 (Encerramento de Missão):** Ao concluir o último round em `round all`, exibe sumário de sucesso orientando o encerramento via `bombe mission end`.
 
 ---
 
 ## 5. Definition of Done (DoD)
-- [ ] Comandos `full` e `all` registrados no `round_app` e despachados pelo `RoundExecutionEngine`.
-- [ ] Tratamento de timeout global e captura de sinais de interrupção (SIGINT / Ctrl+C).
-- [ ] Testes em `tests/unit/test_round_autonomous_engine.py` cobrindo cenários de sucesso e falha no meio da esteira.
-- [ ] Código aprovado no Ruff e Mypy.
+- [x] Comandos `full` e `all` registrados no `round_app` e despachados pelo `RoundExecutionEngine`.
+- [x] Tratamento de timeout global e captura de sinais de interrupção (SIGINT / Ctrl+C).
+- [x] Testes em `tests/unit/test_round_autonomous_engine.py` cobrindo cenários de sucesso e falha no meio da esteira.
+- [x] Código aprovado no Ruff e Mypy.
 
 ---
 
