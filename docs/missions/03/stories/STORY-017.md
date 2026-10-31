@@ -6,7 +6,7 @@ type: backend
 agent: "@barbara"
 estimation: "3h"
 depends_on: ["STORY-016"]
-status: ready
+status: in_progress
 ---
 
 # STORY-017: Suporte e Parametrização de MTP (Multi-Token Prediction)
@@ -17,6 +17,12 @@ status: ready
 - [x] Acceptance Criteria definidos (visão de negócio/sistema)
 - [x] DoD definido
 - [x] Critérios INVEST atendidos
+
+## ✅ VALIDAÇÃO DEV (DOR)
+- [x] Slicing técnico validado em 4 slices atômicos (@unclebob)
+- [x] Estratégia TDD estrita (Red -> Green -> Refactor)
+- [x] Contratos e exceções definidos (`DraftModelNotFoundError`, campos MTP em `ModelProfile`)
+- [x] Dependência STORY-016 concluída e validada
 
 ## Contexto & Visão do Usuário
 Como engenheiro de sistemas, eu quero que o `LocalModelManager` configure o suporte a MTP no `llama-server`, baixando e apontando os drafts adicionais do Gemma e ativando o draft nativo no Qwen, para acelerar a taxa de geração de tokens.

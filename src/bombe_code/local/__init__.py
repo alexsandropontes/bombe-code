@@ -1,6 +1,7 @@
 """Subpacote para gerenciamento de modelos e servidores de inferência locais."""
 
 from .contracts import (
+    DraftModelNotFoundError,
     LocalModelError,
     ModelConcurrencyError,
     ModelProfile,
@@ -23,6 +24,7 @@ from .vram_gate import VRAMGate
 
 __all__ = [
     "HARDWARE_PROFILES",
+    "DraftModelNotFoundError",
     "HardwareProfile",
     "LocalModelError",
     "LocalModelManager",

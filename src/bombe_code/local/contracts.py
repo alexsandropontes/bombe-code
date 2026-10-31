@@ -33,6 +33,10 @@ class NvidiaSmiNotFoundError(LocalModelError):
     """Lançada quando o utilitário nvidia-smi não é encontrado e o modo estrito está ativo."""
 
 
+class DraftModelNotFoundError(LocalModelError):
+    """Lançada quando o artefato do modelo draft especificado não existe fisicamente."""
+
+
 @dataclass(frozen=True)
 class ModelProfile:
     """Perfil declarativo de execução de modelo no llama-server."""
@@ -45,5 +49,8 @@ class ModelProfile:
     n_gpu_layers: int = 999
     flash_attention: bool = True
     kv_cache_type: str = "q8_0"
+    draft_model_path: Path | None = None
+    spec_type: str | None = None
+    spec_draft_n_max: int | None = None
     extra_args: tuple[str, ...] = field(default_factory=tuple)
     env_vars: tuple[tuple[str, str], ...] = field(default_factory=tuple)

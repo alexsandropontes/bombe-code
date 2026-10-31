@@ -43,6 +43,8 @@ class HardwareProfile:
         port: int = 18094,
         host: str = "127.0.0.1",
         extra_args: tuple[str, ...] = (),
+        enable_mtp: bool = True,
+        draft_model_path: Path | str | None = None,
     ) -> ModelProfile:
         """Converte as configurações de hardware em um ModelProfile para execução."""
         resolved_path = Path(model_path) if model_path is not None else self.default_model_path
@@ -54,6 +56,18 @@ class HardwareProfile:
         if extra_args:
             assembled_args.extend(list(extra_args))
 
+        resolved_draft_path: Path | None = None
+        resolved_spec_type: str | None = None
+        resolved_spec_draft_n_max: int | None = None
+
+        if enable_mtp:
+            if draft_model_path is not None:
+                resolved_draft_path = Path(draft_model_path)
+            else:
+                resolved_draft_path = self.draft_model_path
+            resolved_spec_type = self.spec_type
+            resolved_spec_draft_n_max = self.spec_draft_n_max
+
         return ModelProfile(
             name=self.model_key.value,
             model_path=resolved_path,
@@ -63,6 +77,9 @@ class HardwareProfile:
             n_gpu_layers=self.n_gpu_layers,
             flash_attention=self.flash_attention,
             kv_cache_type=self.kv_cache_type,
+            draft_model_path=resolved_draft_path,
+            spec_type=resolved_spec_type,
+            spec_draft_n_max=resolved_spec_draft_n_max,
             extra_args=tuple(assembled_args),
         )
 
@@ -76,6 +93,9 @@ HARDWARE_PROFILES: dict[ModelKey, HardwareProfile] = {
         flash_attention=False,
         kv_cache_type="q8_0",
         n_cpu_moe=None,
+        draft_model_path=Path("/home/lexpontes/modelos-llm/mtp-gemma-4-E4B-it-Q8_0.gguf"),
+        spec_type="draft-mtp",
+        spec_draft_n_max=3,
     ),
     ModelKey.GEMMA_4_26B_A4B: HardwareProfile(
         model_key=ModelKey.GEMMA_4_26B_A4B,
@@ -85,6 +105,9 @@ HARDWARE_PROFILES: dict[ModelKey, HardwareProfile] = {
         flash_attention=True,
         kv_cache_type="q8_0",
         n_cpu_moe=999,
+        draft_model_path=Path("/home/lexpontes/modelos-llm/mtp-gemma-4-26B-A4B-it-Q8_0.gguf"),
+        spec_type="draft-mtp",
+        spec_draft_n_max=3,
     ),
     ModelKey.QWEN_3_8_9B: HardwareProfile(
         model_key=ModelKey.QWEN_3_8_9B,
@@ -94,6 +117,9 @@ HARDWARE_PROFILES: dict[ModelKey, HardwareProfile] = {
         flash_attention=True,
         kv_cache_type="q8_0",
         n_cpu_moe=None,
+        draft_model_path=None,
+        spec_type="draft-mtp",
+        spec_draft_n_max=2,
     ),
     ModelKey.LFM3: HardwareProfile(
         model_key=ModelKey.LFM3,
@@ -103,6 +129,9 @@ HARDWARE_PROFILES: dict[ModelKey, HardwareProfile] = {
         flash_attention=True,
         kv_cache_type="q8_0",
         n_cpu_moe=None,
+        draft_model_path=None,
+        spec_type=None,
+        spec_draft_n_max=None,
     ),
 }
 
@@ -175,6 +204,8 @@ def build_model_profile(
     port: int = 18094,
     host: str = "127.0.0.1",
     extra_args: tuple[str, ...] = (),
+    enable_mtp: bool = True,
+    draft_model_path: Path | str | None = None,
 ) -> ModelProfile:
     """Constrói um ModelProfile operacional a partir da chave de modelo e overrides."""
     hardware_profile = get_hardware_profile(key)
@@ -183,4 +214,6 @@ def build_model_profile(
         port=port,
         host=host,
         extra_args=extra_args,
+        enable_mtp=enable_mtp,
+        draft_model_path=draft_model_path,
     )

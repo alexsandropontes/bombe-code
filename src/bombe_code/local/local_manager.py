@@ -10,6 +10,7 @@ from typing import Any
 import httpx
 
 from .contracts import (
+    DraftModelNotFoundError,
     LocalModelError,
     ModelConcurrencyError,
     ModelProfile,
@@ -76,6 +77,17 @@ class LocalModelManager:
             logger.debug("Tentativa de health check falhou em %s: %s", url, err)
             return 0
 
+    @staticmethod
+    def _extract_mtp_args(profile: ModelProfile) -> list[str]:
+        args: list[str] = []
+        if profile.draft_model_path is not None:
+            args.extend(["--model-draft", str(profile.draft_model_path)])
+        if profile.spec_type is not None:
+            args.extend(["--spec-type", profile.spec_type])
+        if profile.spec_draft_n_max is not None:
+            args.extend(["--spec-draft-n-max", str(profile.spec_draft_n_max)])
+        return args
+
     def build_cli_command(self, profile: ModelProfile) -> list[str]:
         """Monta a lista de argumentos de linha de comando para o llama-server."""
         cmd = [
@@ -92,6 +104,8 @@ class LocalModelManager:
             str(profile.n_gpu_layers),
         ]
 
+        cmd.extend(self._extract_mtp_args(profile))
+
         if profile.flash_attention:
             cmd.extend(["-fa", "on"])
         else:
@@ -102,6 +116,13 @@ class LocalModelManager:
 
         cmd.extend(list(profile.extra_args))
         return cmd
+
+    def validate_profile(self, profile: ModelProfile) -> None:
+        """Valida pré-requisitos físicos e integridade do perfil do modelo."""
+        if profile.draft_model_path is not None and not profile.draft_model_path.is_file():
+            raise DraftModelNotFoundError(
+                f"Arquivo de draft especificado para MTP não foi encontrado: {profile.draft_model_path}"
+            )
 
     def build_environment(self, profile: ModelProfile) -> dict[str, str]:
         """Configura o ambiente de execução injetando paths de CUDA e variáveis do perfil."""
@@ -121,6 +142,8 @@ class LocalModelManager:
 
     def start_model(self, profile: ModelProfile, timeout_seconds: float = 120.0) -> None:
         """Inicializa uma instância de modelo no llama-server sob Fila Indiana estrita."""
+        self.validate_profile(profile)
+
         if self._active_process is not None or self._status in (
             ModelStatus.STARTING,
             ModelStatus.READY,
