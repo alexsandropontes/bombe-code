@@ -94,6 +94,18 @@ app = typer.Typer(
     no_args_is_help=False,
 )
 
+from .commands.round import (  # noqa: E402
+    round_all_cmd,
+    round_app,
+    round_full_cmd,
+    round_start_cmd,
+)
+
+app.add_typer(round_app, name="round")
+app.command("round-start")(round_start_cmd)
+app.command("round-full")(round_full_cmd)
+app.command("round-all")(round_all_cmd)
+
 wave_cli = typer.Typer(name="wave", help="Comandos de orquestração do ciclo da ONDA.")
 app.add_typer(wave_cli, name="wave")
 
