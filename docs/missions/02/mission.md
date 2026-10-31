@@ -12,10 +12,12 @@ rounds:
     started_at: "2026-10-31T17:48:00"
     completed_at: "2026-10-31T18:07:00"
   ROUND-1:
-    status: pending
+    status: validated
     story_id: STORY-009
     epic_id: EP-01
     title: "Porteiro Atômico e Lifecycle de Missões"
+    started_at: "2026-10-31T18:10:00"
+    completed_at: "2026-10-31T18:25:00"
   ROUND-2:
     status: pending
     story_id: STORY-010
@@ -77,7 +79,7 @@ rounds:
 | Round | Story | Épico | Título | Complexidade | Status |
 | :---: | :---: | :---: | :--- | :---: | :---: |
 | **R-0** | — | — | Upstream Macro (Inception, PRD, Arquitetura, Sequenciador, Stories BASE) | — | **VALIDATED** ✅ |
-| **R-1** | `STORY-009` | `EP-01` | Porteiro Atômico e Lifecycle de Missões | Pleno (3h) | 📋 READY |
+| **R-1** | `STORY-009` | `EP-01` | Porteiro Atômico e Lifecycle de Missões | Pleno (3h) | **VALIDATED** ✅ |
 | **R-2** | `STORY-010` | `EP-02` | Engine de Rounds Manuais com DoR Gate | Sênior (4h) | 📋 READY |
 | **R-3** | `STORY-011` | `EP-02` | Engine de Rounds Autônomos (Full & All) | Sênior (4h) | 📋 READY |
 | **R-4** | `STORY-012` | `EP-03` | Wave Bridge e Interceptor de Depreciação | Pleno (3h) | 📋 READY |

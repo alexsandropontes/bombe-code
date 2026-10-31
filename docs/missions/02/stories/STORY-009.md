@@ -5,7 +5,7 @@ epic_id: EP-01
 round: ROUND-1
 agent: "@barbara"
 estimation: 3h
-status: ready
+status: done
 type: feature
 layer: backend
 complexity: 2
@@ -61,19 +61,19 @@ Implementa o submódulo Typer `src/bombe_code/cli/commands/mission.py` e o motor
 ---
 
 ## 4. Acceptance Criteria (ACs Testáveis)
-- [ ] **AC-01 (Porteiro Atômico Bloqueante):** Invocação de `bombe mission new 'demanda'` com missão existente em status `open`, `active` ou `in_progress` aborta com exit code 1 e mensagem de erro informando a missão aberta.
-- [ ] **AC-02 (Scaffolding Físico Completo):** Em caminho feliz, `bombe mission new 'demanda'` determina o próximo ID sequencial (`01`, `02`, ...), cria `docs/missions/NN/mission.md` com frontmatter válido e subpastas estruturais (`prd/`, `architecture/`, `epics/`, `stories/`, `rounds/`).
-- [ ] **AC-03 (Inspeção de Status com Rich):** `bombe mission status` localiza a missão ativa no diretório e imprime tabela formatada contendo ID, título, status e quadro de rounds.
-- [ ] **AC-04 (Encerramento com Gate de DoD):** `bombe mission end` valida se todos os rounds estão concluídos; se houver pendência, aborta com erro. Em caso aprovado, atualiza status para `completed` e grava timestamp de término.
+- [x] **AC-01 (Porteiro Atômico Bloqueante):** Invocação de `bombe mission new 'demanda'` com missão existente em status `open`, `active` ou `in_progress` aborta com exit code 1 e mensagem de erro informando a missão aberta.
+- [x] **AC-02 (Scaffolding Físico Completo):** Em caminho feliz, `bombe mission new 'demanda'` determina o próximo ID sequencial (`01`, `02`, ...), cria `docs/missions/NN/mission.md` com frontmatter válido e subpastas estruturais (`prd/`, `architecture/`, `epics/`, `stories/`, `rounds/`).
+- [x] **AC-03 (Inspeção de Status com Rich):** `bombe mission status` localiza a missão ativa no diretório e imprime tabela formatada contendo ID, título, status e quadro de rounds.
+- [x] **AC-04 (Encerramento com Gate de DoD):** `bombe mission end` valida se todos os rounds estão concluídos; se houver pendência, aborta com erro. Em caso aprovado, atualiza status para `completed` e grava timestamp de término.
 
 ---
 
 ## 5. Definition of Done (DoD)
-- [ ] Módulos `src/bombe_code/cli/commands/mission.py` e `src/bombe_code/orchestration/mission_engine.py` criados e integrados à CLI raiz em `src/bombe_code/cli/main.py`.
-- [ ] Modelos Pydantic V2 `MissionState` e `MissionStatus` em `src/bombe_code/domain/contracts/mission.py`.
-- [ ] Suíte de testes `tests/unit/test_mission_lifecycle.py` passando com 100% de sucesso usando `tmp_path`.
-- [ ] Zero ocorrências de `NotImplementedError`, `pass` ou stubs em código de produção.
-- [ ] Conformidade de linter com Ruff e tipagem com Mypy.
+- [x] Módulos `src/bombe_code/cli/commands/mission.py` e `src/bombe_code/orchestration/mission_engine.py` criados e integrados à CLI raiz em `src/bombe_code/cli/main.py`.
+- [x] Modelos Pydantic V2 `MissionState` e `MissionStatus` em `src/bombe_code/domain/contracts/mission.py`.
+- [x] Suíte de testes `tests/unit/test_mission_lifecycle.py` passando com 100% de sucesso usando `tmp_path`.
+- [x] Zero ocorrências de `NotImplementedError`, `pass` ou stubs em código de produção.
+- [x] Conformidade de linter com Ruff e tipagem com Mypy.
 
 ---
 
