@@ -5,7 +5,7 @@ epic_id: EP-02
 round: ROUND-2
 agent: "@barbara"
 estimation: 4h
-status: ready
+status: done
 type: feature
 layer: backend
 complexity: 3
@@ -60,19 +60,19 @@ Implementa o submódulo Typer `src/bombe_code/cli/commands/round.py` e expande o
 ---
 
 ## 4. Acceptance Criteria (ACs Testáveis)
-- [ ] **AC-01 (Parada Determinística na DoR):** `bombe round start [N]` valida o DoD do round N-1, cria o scaffold do round (`goal.md`, `stories.md`), fatia a story em slices verticais e PARA deterministicamente com exit code 0 e status `dor_ready`.
-- [ ] **AC-02 (Gate Bloqueante de Queima):** `bombe round burn [N]` verifica se o round atingiu `dor_ready`; caso contrário, aborta com erro orientando a execução de `round start`.
-- [ ] **AC-03 (Queima TDD por Slice):** `bombe round burn [N]` executa o ciclo TDD (Slice Backend Red/Green/Refactor + Slice Frontend Construction) atualizando o estado dos slices.
-- [ ] **AC-04 (Review & Validate Gates):** `bombe round review [N]` audita compliance técnica (@hoare) e `bombe round validate [N]` valida critérios de aceite e DoD (@david), transicionando o round para `validated`.
-- [ ] **AC-05 (Inspeção Visual):** `bombe round status` exibe kanban detalhado com status de slices e quality gates.
+- [x] **AC-01 (Parada Determinística na DoR):** `bombe round start [N]` valida o DoD do round N-1, cria o scaffold do round (`goal.md`, `stories.md`), fatia a story em slices verticais e PARA deterministicamente com exit code 0 e status `dor_ready`.
+- [x] **AC-02 (Gate Bloqueante de Queima):** `bombe round burn [N]` verifica se o round atingiu `dor_ready`; caso contrário, aborta com erro orientando a execução de `round start`.
+- [x] **AC-03 (Queima TDD por Slice):** `bombe round burn [N]` executa o ciclo TDD (Slice Backend Red/Green/Refactor + Slice Frontend Construction) atualizando o estado dos slices.
+- [x] **AC-04 (Review & Validate Gates):** `bombe round review [N]` audita compliance técnica (@hoare) e `bombe round validate [N]` valida critérios de aceite e DoD (@david), transicionando o round para `validated`.
+- [x] **AC-05 (Inspeção Visual):** `bombe round status` exibe kanban detalhado com status de slices e quality gates.
 
 ---
 
 ## 5. Definition of Done (DoD)
-- [ ] Sub-app `round_app` criado em `src/bombe_code/cli/commands/round.py` com subcomandos manuais.
-- [ ] Contratos `RoundState`, `SliceState` e `RoundStatus` em `src/bombe_code/domain/contracts/round.py`.
-- [ ] Suíte `tests/unit/test_round_manual_engine.py` cobrindo os gates de entrada e saída.
-- [ ] Código aprovado no Ruff e Mypy sem warnings.
+- [x] Sub-app `round_app` criado em `src/bombe_code/cli/commands/round.py` com subcomandos manuais.
+- [x] Contratos `RoundState`, `SliceState` e `RoundStatus` em `src/bombe_code/domain/contracts/round.py`.
+- [x] Suíte `tests/unit/test_round_manual_engine.py` cobrindo os gates de entrada e saída.
+- [x] Código aprovado no Ruff e Mypy sem warnings.
 
 ---
 
@@ -89,7 +89,7 @@ bombe round status [--project-dir PATH]
 
 ### 6.2 Estrutura de Código & SRF Check
 | Função / Método | Assinatura | Responsabilidade | Limite |
-|---|---|---|---|\
+|---|---|---|---|
 | `RoundExecutionEngine.start_round` | `(round_num: int, project_dir: Path) -> RoundState` | Upstream, valida DoR e para | < 30 linhas |
 | `RoundExecutionEngine.burn_round` | `(round_num: int, project_dir: Path) -> RoundState` | Queima TDD atômica dos slices | < 30 linhas |
 | `RoundExecutionEngine.review_round` | `(round_num: int, project_dir: Path) -> RoundState` | Auditoria formal de conformidade | < 25 linhas |
@@ -108,5 +108,5 @@ bombe round status [--project-dir PATH]
 ---
 
 ## 7. Dependências
-- **Blocked by:** `STORY-009` (Lifecycle de Missões).
-- **Required by:** `STORY-011` (Rounds Autônomos) e `STORY-012` (Wave Bridge).
+- **Blocked by:** `STORY-009` (Round 1 da MISSION-02 aprovado).
+- **Required by:** `STORY-011` (Rounds Autônomos).
