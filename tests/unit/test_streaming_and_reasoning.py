@@ -26,6 +26,25 @@ def test_openai_compat_emits_reasoning_and_text_deltas():
     assert events[4] == {"type": "finish", "reason": "stop"}
 
 
+def test_openai_compat_fallback_tool_parser_integration():
+    """Garante que OpenAICompatAdapter extrai tool calls embutidos no texto quando o modelo não usa function calling nativo."""
+    lines = [
+        'data: {"choices":[{"index":0,"delta":{"content":"Vou criar o arquivo solicitado:\\n\\n```json\\n{\\"tool\\": \\"write_file\\", \\"arguments\\": {\\"path\\": \\"docs/prd.md\\", \\"content\\": \\"# PRD\\"}}"}}]}',
+        'data: {"choices":[{"index":0,"delta":{"content":"\\n```\\nPronto."}}]}',
+        'data: {"choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}',
+        "data: [DONE]",
+    ]
+
+    events = list(parse_sse(lines))
+    tool_calls = [e for e in events if e.get("type") == "tool-call"]
+    finish = [e for e in events if e.get("type") == "finish"]
+
+    assert len(tool_calls) == 1
+    assert tool_calls[0]["name"] == "write_file"
+    assert tool_calls[0]["arguments"] == {"path": "docs/prd.md", "content": "# PRD"}
+    assert finish[0]["reason"] == "tool-calls"
+
+
 def test_anthropic_emits_reasoning_and_text_deltas():
     """Garante que AnthropicAdapter emite reasoning-delta para thinking_delta e text-delta para text_delta."""
     lines = [

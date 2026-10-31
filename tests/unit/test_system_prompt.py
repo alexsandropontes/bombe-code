@@ -7,6 +7,13 @@ def test_prompt_inclui_base_e_nome_do_agente():
     prompt = build_system_prompt(agent="build")
     assert "Bombe Code" in prompt
     assert "build" in prompt
+    assert "write_file" in prompt
+    assert "json" in prompt
+
+
+def test_prompt_permite_documentacao_em_discuss():
+    prompt = build_system_prompt(agent="plan", stage="DISCUSS")
+    assert "solicitadas explicitamente pelo usuário é permitida" in prompt
 
 
 def test_prompt_inclui_instrucoes_do_projeto_quando_presentes():
