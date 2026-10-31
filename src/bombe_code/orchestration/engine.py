@@ -80,12 +80,31 @@ class RoundExecutionEngine:
             return goal_fallback
         return None
 
+    def _get_previous_round_num(self, round_num: int) -> int | None:
+        """Find immediate predecessor round in mission sequence."""
+        try:
+            data, _, _ = self._read_mission_data()
+            rounds = data.get("rounds", {})
+            numbers: list[int] = []
+            for k in rounds:
+                if k.startswith("ROUND-"):
+                    parsed = self._parse_round_number(k)
+                    if parsed is not None:
+                        numbers.append(parsed)
+            numbers.sort()
+            lower = [n for n in numbers if n < round_num]
+            if lower:
+                return lower[-1]
+            return None
+        except (FileNotFoundError, yaml.YAMLError, KeyError):
+            return round_num - 1 if round_num > 1 else None
+
     def assert_no_dod_pendencies(self, round_num: int) -> None:
         """Verify previous round has no unchecked '- [ ]' DoD items."""
-        if round_num <= 1:
-            return  # Round 1 is preceded by Round 0 Inception Macro, which is validated
+        prev_round = self._get_previous_round_num(round_num)
+        if prev_round is None:
+            return  # First round in sequence, no predecessor DoD check
 
-        prev_round = round_num - 1
         goal_file = self._get_round_goal_path(prev_round)
         if goal_file is None or not goal_file.exists():
             raise PendingDoDError(f"Round anterior {prev_round} não possui arquivo goal.md.")
@@ -354,28 +373,48 @@ class RoundExecutionEngine:
 
         return states
 
-    def full_round(self, round_num: int) -> RoundState:
+    def execute_round_full(self, round_num: int) -> RoundState:
         """Execute round from upstream to validation and stop without auto-advancing."""
         self.start_round(round_num)
         self.burn_round(round_num)
         self.review_round(round_num)
         return self.validate_round(round_num)
 
-    def all_rounds(self) -> list[dict[str, Any]]:
-        """Iterate through all non-validated rounds sequentially."""
+    full_round = execute_round_full
+
+    def _assert_no_test_failures(self, state: RoundState) -> None:
+        """Assert that round completed with full validation and without test failures."""
+        if state.status != RoundStatus.VALIDATED or not state.dod_validated:
+            raise RuntimeError(f"Round {state.round_number} falhou na validação: {state.message}")
+
+    def _parse_round_number(self, round_key: str) -> int | None:
+        """Extract numeric round number from round key (e.g. ROUND-01 -> 1)."""
+        match = re.search(r"\d+", round_key)
+        return int(match.group()) if match else None
+
+    def execute_round_all(self, timeout: int | None = None) -> list[RoundState]:
+        """Iterate through all non-validated rounds sequentially with fail-fast enforcement."""
         data, _, _ = self._read_mission_data()
         rounds = data.get("rounds", {})
-        results: list[dict[str, Any]] = []
 
-        for key, val in rounds.items():
-            if not key.startswith("ROUND-"):
+        round_keys = [k for k in rounds if k.startswith("ROUND-")]
+        sorted_keys = sorted(
+            round_keys,
+            key=lambda k: self._parse_round_number(k) or 0,
+        )
+
+        results: list[RoundState] = []
+        for key in sorted_keys:
+            round_num = self._parse_round_number(key)
+            if round_num is None:
                 continue
-            round_str = key.replace("ROUND-", "")
-            if not round_str.isdigit():
-                continue
-            round_num = int(round_str)
-            if val.get("status") != "validated":
-                res = self.full_round(round_num)
-                results.append(res)
+            val = rounds[key]
+            if val.get("status") != RoundStatus.VALIDATED.value:
+                state = self.execute_round_full(round_num)
+                self._assert_no_test_failures(state)
+                results.append(state)
 
         return results
+
+    all_rounds = execute_round_all
+

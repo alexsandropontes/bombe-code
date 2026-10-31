@@ -178,12 +178,16 @@ def round_full_cmd(
     """Modo SEMI-AUTO: Executa Upstream, Queima TDD dos slices, validação e para no final do round."""
     engine = RoundExecutionEngine(project_dir=project_dir)
     try:
-        res = engine.full_round(round_num)
-        console.print(
-            f"[bold green]✓[/bold green] [cyan]Round {round_num}[/cyan] ({res['story_id']}) validado com sucesso."
+        res = engine.execute_round_full(round_num)
+        panel_content = (
+            f"[bold green]✓ Round {round_num}[/bold green] ([cyan]{res.story_id}[/cyan]) [bold green]VALIDADO[/bold green].\n"
+            f"[bold green]DoD Gate:[/bold green] [green]VALIDATED[/green]\n"
+            f"[bold yellow]PARADA DETERMINÍSTICA:[/bold yellow] Round concluído sem auto-avanço para o próximo round."
         )
-        console.print(f"[bold green]CONCLUÍDO:[/bold green] {res['message']}")
-    except (InvalidRoundScopeError, PendingDoDError, FileNotFoundError) as exc:
+        console.print(
+            Panel.fit(panel_content, title="[bold]Round Full (Semi-Auto Concluído)[/bold]", border_style="green")
+        )
+    except (InvalidRoundScopeError, PendingDoDError, FileNotFoundError, RuntimeError) as exc:
         console.print(f"[bold red]ERRO BLOQUEANTE:[/bold red] {exc}")
         raise typer.Exit(code=1) from exc
 
@@ -192,20 +196,35 @@ def round_full_cmd(
 @round_app.command("all")
 def round_all_cmd(
     project_dir: str = typer.Option(".", "--project-dir", "-p", help="Diretório raiz do projeto"),
+    timeout: Annotated[int | None, typer.Option("--timeout", "-t", help="Timeout máximo em segundos")] = None,
 ) -> None:
     """Modo PIPELINE CONTÍNUO: Itera sequencialmente por todos os rounds pendentes da missão."""
     engine = RoundExecutionEngine(project_dir=project_dir)
     try:
-        results = engine.all_rounds()
+        results = engine.execute_round_all(timeout=timeout)
         if not results:
             console.print("[bold yellow]Nenhum round pendente encontrado na missão.[/bold yellow]")
             return
 
-        console.print(
-            f"[bold green]✓ Pipeline concluído:[/bold green] {len(results)} rounds executados com sucesso."
-        )
+        table = Table(title="Pipeline de Rounds Concluído", header_style="bold green")
+        table.add_column("Round", style="cyan", justify="center")
+        table.add_column("Story", style="bold")
+        table.add_column("Status", justify="center")
+        table.add_column("DoD Gate", justify="center")
+
         for r in results:
-            console.print(f"  - Round {r['round']} ({r['story_id']}): [green]{r['status']}[/green]")
-    except (InvalidRoundScopeError, PendingDoDError, FileNotFoundError) as exc:
+            table.add_row(
+                f"Round {r.round_number}",
+                r.story_id,
+                f"[green]{r.status.value}[/green]",
+                "[green]✓ VALIDATED[/green]" if r.dod_validated else "[yellow]PENDING[/yellow]",
+            )
+
+        console.print(table)
+        console.print(
+            f"\n[bold green]✓ Pipeline concluído:[/bold green] {len(results)} rounds executados com sucesso.\n"
+            "[bold cyan]Próximo passo:[/bold cyan] Encerre a missão executando [bold yellow]bombe mission end[/bold yellow]."
+        )
+    except (InvalidRoundScopeError, PendingDoDError, FileNotFoundError, RuntimeError) as exc:
         console.print(f"[bold red]ERRO BLOQUEANTE NO PIPELINE:[/bold red] {exc}")
         raise typer.Exit(code=1) from exc
