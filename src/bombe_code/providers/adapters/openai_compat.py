@@ -132,5 +132,11 @@ class OpenAICompatAdapter:
                 headers=headers,
             ) as response,
         ):
+            if response.status_code == 429:
+                err_text = response.read().decode("utf-8", errors="replace")
+                from bombe_code.routing.quota_manager import QuotaExhaustedError, QuotaManager
+
+                QuotaManager().record_exhausted("zai", error_message=err_text)
+                raise QuotaExhaustedError(f"HTTP 429: {err_text}")
             response.raise_for_status()
             yield from parse_sse(response.iter_lines())

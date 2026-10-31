@@ -175,6 +175,25 @@ def resolve_provider_adapter(model_ref: str | None = None) -> Any:
         or auth_data.get("zai", {}).get("api_key")
     )
     if zai_key:
+        from bombe_code.routing.quota_manager import QuotaManager
+
+        if not QuotaManager().is_available("zai"):
+            logger.warning(
+                "Provedor Z.ai em cooldown de cota até %s. Roteando para local.",
+                QuotaManager().get_provider_status("zai").locked_until,
+            )
+            if "OLLAMA_BASE_URL" in os.environ or "ollama" in auth_data:
+                ollama_url = os.environ.get("OLLAMA_BASE_URL") or auth_data.get("ollama", {}).get(
+                    "base_url", "http://127.0.0.1:11434/v1"
+                )
+                return OpenAICompatAdapter(api_key="ollama", model="llama3", base_url=ollama_url)
+            llama_url = (
+                os.environ.get("LLAMA_CPP_BASE_URL")
+                or auth_data.get("llama.cpp", {}).get("base_url")
+                or "http://127.0.0.1:8080/v1"
+            )
+            return OpenAICompatAdapter(api_key="local", model="local", base_url=llama_url)
+
         zai_url = (
             os.environ.get("ZAI_BASE_URL")
             or auth_data.get("zai-coding-plan", {}).get("base_url")
