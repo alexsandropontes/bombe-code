@@ -240,37 +240,97 @@ class AutonomousRunner:
                 "messages": messages,
                 "temperature": temperature,
                 "max_tokens": 8192,
-                "stream": False,
+                "stream": True,
             }
             if tools_schema:
                 payload["tools"] = tools_schema
                 payload["tool_choice"] = "auto"
 
             t0 = time.time()
-            with httpx.Client(timeout=180.0) as client:
-                resp = client.post(url, json=payload, headers=headers)
-                if resp.status_code == 429 or "exhausted" in resp.text.lower() or "limit" in resp.text.lower():
-                    logger.warning(
-                        "Z.ai retornou limite de cota/429: %s. Registrando cooldown e caindo para local...",
-                        resp.text,
-                    )
-                    QuotaManager().record_exhausted("zai", error_message=resp.text)
-                    return self._chat_completion(
-                        messages, tools_schema, temperature, model_name="local"
-                    )
-                resp.raise_for_status()
-                data = resp.json()
+            full_content: list[str] = []
+            full_reasoning: list[str] = []
+            tool_calls_dict: dict[int, dict[str, Any]] = {}
+            finish_reason = "stop"
+            usage: dict[str, Any] = {}
+
+            try:
+                with httpx.Client(timeout=180.0) as client:
+                    with client.stream("POST", url, json=payload, headers=headers) as response:
+                        if response.status_code == 429 or response.status_code >= 400:
+                            err_body = response.read().decode("utf-8", errors="replace")
+                            if response.status_code == 429 or "exhausted" in err_body.lower() or "limit" in err_body.lower():
+                                logger.warning(
+                                    "Z.ai retornou limite de cota/429: %s. Registrando cooldown e caindo para local...",
+                                    err_body,
+                                )
+                                QuotaManager().record_exhausted("zai", error_message=err_body)
+                                return self._chat_completion(
+                                    messages, tools_schema, temperature, model_name="local"
+                                )
+                            response.raise_for_status()
+
+                        for line in response.iter_lines():
+                            if not line or not line.startswith("data:"):
+                                continue
+                            data_str = line[len("data:"):].strip()
+                            if data_str == "[DONE]":
+                                break
+                            try:
+                                chunk = json.loads(data_str)
+                            except Exception:
+                                continue
+
+                            if "usage" in chunk and chunk["usage"]:
+                                usage = chunk["usage"]
+
+                            choices = chunk.get("choices") or []
+                            if not choices:
+                                continue
+                            c0 = choices[0]
+                            if c0.get("finish_reason"):
+                                finish_reason = c0["finish_reason"]
+
+                            delta = c0.get("delta") or {}
+                            if delta.get("content"):
+                                full_content.append(delta["content"])
+                            if delta.get("reasoning_content"):
+                                full_reasoning.append(delta["reasoning_content"])
+                            if delta.get("tool_calls"):
+                                for tc in delta["tool_calls"]:
+                                    idx = tc.get("index", 0)
+                                    if idx not in tool_calls_dict:
+                                        tool_calls_dict[idx] = {
+                                            "id": tc.get("id", ""),
+                                            "type": "function",
+                                            "function": {"name": "", "arguments": ""},
+                                        }
+                                    if tc.get("id"):
+                                        tool_calls_dict[idx]["id"] = tc["id"]
+                                    fn = tc.get("function") or {}
+                                    if fn.get("name"):
+                                        tool_calls_dict[idx]["function"]["name"] += fn["name"]
+                                    if fn.get("arguments"):
+                                        tool_calls_dict[idx]["function"]["arguments"] += fn["arguments"]
+
+            except (httpx.TimeoutException, httpx.NetworkError) as net_err:
+                logger.warning("Erro de rede com Z.ai (%s). Caindo para local...", net_err)
+                return self._chat_completion(
+                    messages, tools_schema, temperature, model_name="local"
+                )
 
             wall_s = max(0.001, round(time.time() - t0, 3))
-            usage = data.get("usage", {})
             prompt_tokens = usage.get("prompt_tokens", 0)
             completion_tokens = usage.get("completion_tokens", 0)
             pp_tok_s = round(prompt_tokens / wall_s, 1) if prompt_tokens else 0.0
             tg_tok_s = round(completion_tokens / wall_s, 1) if completion_tokens else 0.0
 
-            choice = (data.get("choices") or [{}])[0]
-            message = choice.get("message") or {}
-            finish_reason = choice.get("finish_reason", "stop")
+            assembled_tool_calls = [tool_calls_dict[i] for i in sorted(tool_calls_dict.keys())]
+            message: dict[str, Any] = {
+                "role": "assistant",
+                "content": "".join(full_content),
+            }
+            if assembled_tool_calls:
+                message["tool_calls"] = assembled_tool_calls
 
             return {
                 "message": message,
