@@ -131,8 +131,19 @@ class AutonomousRunner:
                 if not target.is_file():
                     return f"Arquivo '{rel_path}' não encontrado.", False
                 content = target.read_text(encoding="utf-8")
+                if rel_path.endswith(".py"):
+                    target_str = target_str.replace("\t", "    ")
+                    replacement = replacement.replace("\t", "    ")
                 if target_str not in content:
-                    return f"Erro: texto alvo não encontrado em '{rel_path}'.", False
+                    # Fallback com normalização de whitespace
+                    clean_pattern = re.escape(target_str.strip())
+                    clean_pattern = re.sub(r"[ \t]+", r"[ \\t]+", clean_pattern)
+                    match = re.search(clean_pattern, content)
+                    if match:
+                        updated = content[:match.start()] + replacement + content[match.end():]
+                        target.write_text(updated, encoding="utf-8")
+                        return f"Arquivo '{rel_path}' editado com sucesso via pattern match.", True
+                    return f"Erro: texto alvo não encontrado em '{rel_path}'. Dica: use write_file para gravar o arquivo completo com precisão.", False
                 updated = content.replace(target_str, replacement)
                 target.write_text(updated, encoding="utf-8")
                 return f"Arquivo '{rel_path}' editado com sucesso.", True
@@ -232,7 +243,7 @@ class AutonomousRunner:
         round_num: int,
         story_id: str,
         story_path: Path,
-        max_turns: int = 50,
+        max_turns: int = 60,
     ) -> StationResult:
         """Executes full autonomous TDD burn for a given story using local LLMs with failover."""
         story_text = story_path.read_text(encoding="utf-8")
@@ -272,22 +283,32 @@ class AutonomousRunner:
         user_prompt = (
             f"ESTAÇÃO DE QUEIMA TDD — ROUND {round_num}: `{story_id}` ({agent_handle})\n\n"
             f"Você deve implementar esta story respeitando TDD estrito e zero mocks em código de produção:\n"
-            f"1. VETO ABSOLUTO a simular banco com mocks ou listas em memória em `src/`. Utilize SQLite3 real com `sqlite3.connect`, `PRAGMA foreign_keys = ON` e `ON DELETE CASCADE`.\n"
-            f"2. Em testes com FastAPI TestClient: NUNCA passe APIRouter diretamente para TestClient. Crie um app FastAPI:\n"
-            f"   ```python\n"
-            f"   from fastapi import FastAPI\n"
-            f"   from fastapi.testclient import TestClient\n"
-            f"   from src.backend.routes import router\n"
-            f"   app = FastAPI()\n"
-            f"   app.include_router(router)\n"
-            f"   client = TestClient(app)\n"
-            f"   ```\n"
-            f"3. Ao verificar datas retornadas pelo TestClient: campos de data em JSON vêm como string ISO. Converta com `datetime.fromisoformat(data['sla_due_at'])` antes de fazer comparações de tempo.\n"
-            f"4. Schemas Pydantic: Garanta que todas as propriedades obrigatórias de `TicketResponse` (incluindo `email`, `created_at`, `sla_due_at`, etc.) sejam fornecidas pelo repositório ao instanciar o modelo.\n"
-            f"5. Convenções de Banco de Dados: Em SQLite, a tabela `tickets` contém as colunas `id`, `title`, `description`, `email`, `severity`, `created_at`, `sla_due_at`. A tabela `events` contém as colunas `id`, `ticket_id`, `event_type`, `event_details`, `timestamp` com chave estrangeira `FOREIGN KEY (ticket_id) REFERENCES tickets(id) ON DELETE CASCADE`. Mantenha consistência estrita entre o schema SQLite, os testes e os models Pydantic.\n"
-            f"6. Crie ou ajuste os arquivos de teste em `tests/` e a implementação real em `src/`.\n"
-            f"7. Após cada gravação de arquivo, o sistema valida automaticamente o `pytest` e devolve o status.\n"
-            f"8. Quando todos os testes estiverem 100% verdes e todos os slices da story existirem em `tests/`, finalize.\n\n"
+            f"1. TABELA CANÔNICA DE SLA (SEVERIDADE):\n"
+            f"   - P1: 1 hora (+1h)\n"
+            f"   - P2: 4 horas (+4h)\n"
+            f"   - P3: 24 horas (+24h = +1 dia)\n"
+            f"   - P4: 72 horas (+72h = +3 dias)\n"
+            f"   Toda a aplicação e testes DEVEM usar estritamente essa matriz (ex: P1=1h, P2=4h, P3=24h, P4=72h).\n"
+            f"2. PERSISTÊNCIA REAL COM SQLITE3:\n"
+            f"   - VETO ABSOLUTO a simular banco com mocks ou listas em memória em `src/`. Utilize SQLite3 real com `sqlite3.connect`, `PRAGMA foreign_keys = ON` e `ON DELETE CASCADE`.\n"
+            f"   - Tabela `tickets`: `id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, description TEXT, email TEXT NOT NULL, severity TEXT NOT NULL, created_at TEXT NOT NULL, sla_due_at TEXT NOT NULL, status TEXT DEFAULT 'OPEN', resolution_note TEXT, resolved_at TEXT`.\n"
+            f"   - Tabela `events`: `id INTEGER PRIMARY KEY AUTOINCREMENT, ticket_id INTEGER NOT NULL, event_type TEXT NOT NULL, event_details TEXT, timestamp TEXT NOT NULL, FOREIGN KEY (ticket_id) REFERENCES tickets(id) ON DELETE CASCADE`.\n"
+            f"   - Ao criar um ticket no repositório, insira automaticamente o primeiro evento com `event_type='created'` e `timestamp=created_at`.\n"
+            f"3. FASTAPI TESTCLIENT:\n"
+            f"   - NUNCA passe APIRouter diretamente para TestClient. Crie um app FastAPI:\n"
+            f"     ```python\n"
+            f"     from fastapi import FastAPI\n"
+            f"     from fastapi.testclient import TestClient\n"
+            f"     from src.backend.routes import router\n"
+            f"     app = FastAPI()\n"
+            f"     app.include_router(router)\n"
+            f"     client = TestClient(app)\n"
+            f"     ```\n"
+            f"   - Ao verificar datas retornadas pelo TestClient: campos de data em JSON vêm como string ISO. Converta com `datetime.fromisoformat(...)`.\n"
+            f"4. PREFERÊNCIA DE FERRAMENTAS: Prefira `write_file` para gravar arquivos inteiros com precisão e evitar desalinhamentos.\n"
+            f"5. Crie ou ajuste os arquivos de teste em `tests/` e a implementação real em `src/`.\n"
+            f"6. Após cada gravação de arquivo, o sistema valida automaticamente o `pytest` e devolve o status.\n"
+            f"7. Quando todos os testes estiverem 100% verdes e todos os slices da story existirem em `tests/`, finalize.\n\n"
             f"Arquivos já existentes no workspace:\n{existing_files_str}\n\n"
             f"CONTEÚDO DA STORY:\n{story_text}\n"
         )
