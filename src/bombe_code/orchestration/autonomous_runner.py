@@ -817,13 +817,29 @@ class AutonomousRunner:
         )
 
         created_files = []
+        code_snippets = []
         for p in (self.project_dir / "src").glob("**/*"):
-            if p.is_file() and not p.name.startswith("."):
-                created_files.append(str(p.relative_to(self.project_dir)))
+            if p.is_file() and not p.name.startswith(".") and p.suffix in (".py", ".js", ".html", ".css", ".sql"):
+                rel_path = str(p.relative_to(self.project_dir))
+                created_files.append(rel_path)
+                try:
+                    content_snip = p.read_text(encoding="utf-8", errors="replace")[:3000]
+                    code_snippets.append(f"=== Arquivo: {rel_path} ===\n{content_snip}")
+                except Exception:
+                    pass
+
         for p in (self.project_dir / "tests").glob("**/*"):
-            if p.is_file() and not p.name.startswith("."):
-                created_files.append(str(p.relative_to(self.project_dir)))
+            if p.is_file() and not p.name.startswith(".") and p.suffix == ".py":
+                rel_path = str(p.relative_to(self.project_dir))
+                created_files.append(rel_path)
+                try:
+                    content_snip = p.read_text(encoding="utf-8", errors="replace")[:3000]
+                    code_snippets.append(f"=== Arquivo: {rel_path} ===\n{content_snip}")
+                except Exception:
+                    pass
+
         files_str = "\n".join(f"- {f}" for f in sorted(created_files))
+        code_bundle_str = "\n\n".join(code_snippets)
 
         mission_dir = self._get_active_mission_dir()
         story_path = mission_dir / "stories" / f"{story_id}.md"
@@ -840,7 +856,8 @@ class AutonomousRunner:
             f"AUDITORIA DE CODE REVIEW — ROUND {round_num}: {story_id}\n\n"
             f"Resultado da execução de testes automatizados (exit={pytest_res.returncode}):\n"
             f"{pytest_res.stdout}\n{pytest_res.stderr}\n\n"
-            f"Arquivos produzidos no projeto:\n{files_str}\n\n"
+            f"Lista de Arquivos:\n{files_str}\n\n"
+            f"Conteúdo dos Arquivos Implementados e Testes:\n{code_bundle_str}\n\n"
             f"Story do Round:\n{story_content}\n\n"
             f"Realize a auditoria técnica de conformidade. Avalie se todos os ACs foram cumpridos, "
             f"se os testes cobrem a regra e se não há código mock/fake em src/.\n"
