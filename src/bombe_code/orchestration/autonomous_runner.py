@@ -245,6 +245,7 @@ class AutonomousRunner:
             if tools_schema:
                 payload["tools"] = tools_schema
                 payload["tool_choice"] = "auto"
+                payload["tool_stream"] = True
 
             t0 = time.time()
             full_content: list[str] = []
@@ -448,7 +449,14 @@ class AutonomousRunner:
             active_model = dev_profile
 
         agent_def = self.registry.get(clean_handle)
-        system_prompt = agent_def.system_prompt if agent_def else "Você é um engenheiro de software sênior aplicando TDD estrito."
+        base_prompt = agent_def.system_prompt if agent_def else "Você é um engenheiro de software sênior aplicando TDD estrito."
+        system_prompt = (
+            base_prompt
+            + "\n\nDIRETRIZ MANDATÓRIA DE EXECUÇÃO:\n"
+            "- Você opera como uma ferramenta autônoma CLI. É ESTRITAMENTE PROIBIDO responder com texto explicativo ou bate-papo sem executar chamadas de ferramentas.\n"
+            "- Toda interação sua DEVE conter chamadas de ferramenta ('write_file', 'edit_file' ou 'run_command') para escrever o código de teste ou a implementação.\n"
+            "- Se os testes falharem, chame IMEDIATAMENTE a ferramenta para corrigir os arquivos. Nunca apenas diga que vai corrigir."
+        )
 
         existing_files: list[str] = []
         for p in (self.project_dir / "src").glob("**/*"):
@@ -606,6 +614,7 @@ class AutonomousRunner:
                     })
                     continue
 
+                finish_reason = resp.get("finish_reason", "stop")
                 p_tok += resp["prompt_tokens"]
                 c_tok += resp["completion_tokens"]
                 if resp["pp_tok_s"]:
@@ -732,7 +741,8 @@ class AutonomousRunner:
                     ]
                     summary_err = "\n".join(err_lines[-15:]) if err_lines else pytest_res.stdout[-500:]
                     nudge = (
-                        f"ATENÇÃO: O `pytest` falhou (exit={pytest_res.returncode}). Corrija as falhas antes de encerrar:\n\n"
+                        f"COMANDO OBRIGATÓRIO: O `pytest` falhou (exit={pytest_res.returncode}).\n"
+                        f"É PROIBIDO responder com texto explicativo sem chamadas de ferramenta. Invoque `write_file` ou `edit_file` IMEDIATAMENTE para corrigir as falhas:\n\n"
                         f"{summary_err}"
                     )
                     messages.append({"role": "user", "content": nudge})
@@ -791,9 +801,11 @@ class AutonomousRunner:
         )
 
     def execute_review_station(self, round_num: int, story_id: str) -> StationResult:
-        """Audits DoD and tests compliance using Hoare (LFM3)."""
+        """Audits DoD and tests compliance using Hoare."""
         t0 = time.time()
-        self._ensure_model_server("lfm3")
+        zai_key, _ = self._get_zai_config()
+        active_model = "glm-5.3-flash" if (zai_key and QuotaManager().is_available("zai")) else "lfm3"
+        self._ensure_model_server(active_model)
 
         pytest_res = subprocess.run(
             f'{self.venv_python} -m pytest tests/ -v -o pythonpath=". src"',
@@ -838,7 +850,7 @@ class AutonomousRunner:
         resp = self._chat_completion([
             {"role": "system", "content": hoare_sys},
             {"role": "user", "content": hoare_prompt},
-        ])
+        ], model_name=active_model)
         review_text = resp["message"].get("content") or ""
         is_approved = ("STATUS: APROVADO" in review_text.upper()) or ("AUDITORIA: LIMPA" in review_text.upper())
         has_reprovado = ("STATUS: REPROVADO" in review_text.upper()) or ("NÃO APROVADO" in review_text.upper())
@@ -857,7 +869,7 @@ class AutonomousRunner:
             "round_number": round_num,
             "story_id": story_id,
             "agent": "@hoare",
-            "model_key": "lfm3",
+            "model_key": active_model,
             "success": passed,
             "wall_s": wall_s,
             "prompt_tokens": resp["prompt_tokens"],
@@ -870,7 +882,7 @@ class AutonomousRunner:
         return StationResult(
             station_id=f"REVIEW_{story_id}",
             agent="@hoare",
-            model_key="lfm3",
+            model_key=active_model,
             success=passed,
             wall_seconds=wall_s,
             turns=1,
@@ -979,9 +991,11 @@ class AutonomousRunner:
         )
 
     def execute_validate_station(self, round_num: int, story_id: str) -> StationResult:
-        """Validates DoD checklist with David (LFM3) and commits to git."""
+        """Validates DoD checklist with David and commits to git."""
         t0 = time.time()
-        self._ensure_model_server("lfm3")
+        zai_key, _ = self._get_zai_config()
+        active_model = "glm-5.3-flash" if (zai_key and QuotaManager().is_available("zai")) else "lfm3"
+        self._ensure_model_server(active_model)
 
         pytest_res = subprocess.run(
             f'{self.venv_python} -m pytest tests/ -v -o pythonpath=". src"',
@@ -1011,7 +1025,7 @@ class AutonomousRunner:
         resp = self._chat_completion([
             {"role": "system", "content": david_sys},
             {"role": "user", "content": david_prompt},
-        ])
+        ], model_name=active_model)
         val_text = resp["message"].get("content") or ""
         wall_s = round(time.time() - t0, 2)
 
@@ -1029,7 +1043,7 @@ class AutonomousRunner:
             "round_number": round_num,
             "story_id": story_id,
             "agent": "@david",
-            "model_key": "lfm3",
+            "model_key": active_model,
             "success": passed,
             "wall_s": wall_s,
             "prompt_tokens": resp["prompt_tokens"],
@@ -1042,7 +1056,7 @@ class AutonomousRunner:
         return StationResult(
             station_id=f"VALIDATE_{story_id}",
             agent="@david",
-            model_key="lfm3",
+            model_key=active_model,
             success=passed,
             wall_seconds=wall_s,
             turns=1,
