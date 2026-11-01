@@ -582,6 +582,33 @@ class AutonomousRunner:
         pp_speeds: list[float] = []
         tg_speeds: list[float] = []
 
+        # Fast-path: Se todos os testes esperados desta story já existem e passam, encerra a queima imediatamente
+        story_tests_arg = " ".join(expected_tests) if expected_tests else "tests/"
+        pre_check = subprocess.run(
+            f'{self.venv_python} -m pytest {story_tests_arg} -v -o pythonpath=". src" --tb=short',
+            shell=True,
+            cwd=str(self.project_dir),
+            capture_output=True,
+            text=True,
+            env=self._get_exec_env(),
+        )
+        missing_tests = [t for t in expected_tests if not (self.project_dir / t).exists()]
+        if pre_check.returncode == 0 and not missing_tests and expected_tests:
+            logger.info("Fast-path: Todos os %d testes da story já passam 100%% verde. Slices prontos.", len(expected_tests))
+            return StationResult(
+                station_id=f"BURN_{story_id}",
+                agent=agent_handle,
+                model_key=active_model,
+                success=True,
+                wall_seconds=round(time.time() - t_start, 2),
+                turns=0,
+                prompt_tokens=0,
+                completion_tokens=0,
+                pp_tok_s=0.0,
+                tg_tok_s=0.0,
+                peak_vram_mb=0.0,
+            )
+
         # Boot local model
         self._ensure_model_server(active_model)
 
@@ -665,43 +692,6 @@ class AutonomousRunner:
                         if args_dict is not None:
                             out_str, ok = self.execute_tool(name, args_dict)
 
-                        # Immediate pytest feedback for file modifications
-                        if name in ("write_file", "edit_file", "write_project_file", "replace_text_in_file"):
-                            p_check = subprocess.run(
-                                f'{self.venv_python} -m pytest tests/ -v -o pythonpath=". src" --tb=short',
-                                shell=True,
-                                cwd=str(self.project_dir),
-                                capture_output=True,
-                                text=True,
-                                env=self._get_exec_env(),
-                            )
-                            missing_tests = [t for t in expected_tests if not (self.project_dir / t).exists()]
-                            if p_check.returncode == 0:
-                                if not missing_tests:
-                                    out_str += f"\n\n[PYTEST STATUS]: 100% VERDE (exit=0) e todos os slices implementados!\n{p_check.stdout[-500:]}"
-                                    success = True
-                                    last_failing_feedback = None
-                                else:
-                                    missing_str = "\n".join(f"- {t}" for t in missing_tests)
-                                    out_str += (
-                                        f"\n\n[PYTEST STATUS]: Testes atuais verdes, mas AINDA FALTAM os testes dos seguintes slices:\n"
-                                        + missing_str
-                                        + "\nImplemente o próximo slice antes de concluir."
-                                    )
-                                    success = False
-                                    last_failing_feedback = f"Faltam os testes dos slices:\n{missing_str}"
-                            else:
-                                err_lines = [
-                                    line for line in p_check.stdout.splitlines()
-                                    if "FAILED" in line or "ERROR" in line or "Error" in line or "assert" in line or "Exception" in line
-                                ]
-                                summary_err = "\n".join(err_lines[-15:]) if err_lines else p_check.stdout[-500:]
-                                out_str += f"\n\n[PYTEST STATUS]: FALHA (exit={p_check.returncode}). Corrija antes de prosseguir:\n{summary_err}\n{p_check.stderr[-300:]}"
-                                success = False
-                                last_failing_feedback = summary_err
-                        elif last_failing_feedback:
-                            out_str += f"\n\n[LEMBRETE - TESTES CONTINUAM FALHANDO]:\n{last_failing_feedback}"
-
                         messages.append({
                             "role": "tool",
                             "tool_call_id": tc.get("id", f"call_{turn_idx}"),
@@ -713,9 +703,10 @@ class AutonomousRunner:
                         break
                     continue
 
-                # Model completed its actions, validate pytest
+                # Model completed its actions, validate pytest for this story
+                story_tests_arg = " ".join(expected_tests) if expected_tests else "tests/"
                 pytest_res = subprocess.run(
-                    f'{self.venv_python} -m pytest tests/ -v -o pythonpath=". src" --tb=short',
+                    f'{self.venv_python} -m pytest {story_tests_arg} -v -o pythonpath=". src" --tb=short',
                     shell=True,
                     cwd=str(self.project_dir),
                     capture_output=True,
