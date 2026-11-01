@@ -91,7 +91,12 @@ class MissionLifecycleEngine:
         self._write_mission_file(mission_file, manifest_data, body)
         return manifest_data, mission_file, created_at
 
-    def init_mission(self, demand: str, title: str | None = None) -> MissionState:
+    def init_mission(
+        self,
+        demand: str,
+        title: str | None = None,
+        generate_upstream: bool = False,
+    ) -> MissionState:
         """Atomically scaffolds a new mission if no open mission exists."""
         if not demand or not demand.strip():
             raise ValueError("Demand cannot be empty")
@@ -107,18 +112,19 @@ class MissionLifecycleEngine:
             mission_id, resolved_title, demand.strip(), mission_dir
         )
 
-        return MissionState(
-            id=mission_id,
-            title=resolved_title,
-            demand=demand.strip(),
-            status=MissionStatus.OPEN,
-            path=mission_file,
-            created_at=created_at,
-            completed_at=None,
-            rounds={},
-            current_round=None,
-            total_rounds=0,
-        )
+        if generate_upstream:
+            from .autonomous_runner import AutonomousRunner
+
+            runner = AutonomousRunner(project_dir=self.project_dir)
+            runner.execute_upstream_station(
+                mission_id=mission_id,
+                mission_dir=mission_dir,
+                demand=demand.strip(),
+                title=resolved_title,
+            )
+
+        data, _ = self._parse_mission_file(mission_file)
+        return self._build_state(mission_file, data)
 
     def _build_state(self, path: Path, data: dict[str, Any]) -> MissionState:
         raw_status = str(data.get("status", "open")).lower()

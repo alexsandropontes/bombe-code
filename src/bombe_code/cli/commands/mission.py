@@ -31,16 +31,20 @@ def mission_new_cmd(
     project_dir: Annotated[
         str, typer.Option("--project-dir", "-p", help="Diretório raiz do projeto")
     ] = ".",
+    upstream: Annotated[
+        bool, typer.Option("--upstream", "-u", help="Executa Upstream Round 0 autônomo com agentes")
+    ] = False,
 ) -> None:
     """Inicia uma nova missão com scaffolding físico após validar porteiro atômico."""
     engine = MissionLifecycleEngine(project_dir=project_dir)
     try:
-        state = engine.init_mission(demand=demand, title=title)
+        state = engine.init_mission(demand=demand, title=title, generate_upstream=upstream)
         panel = Panel.fit(
             f"[bold green]Missão {state.id} inicializada com sucesso![/bold green]\n\n"
             f"[bold]Título:[/bold] {state.title}\n"
             f"[bold]Status:[/bold] {state.status.value}\n"
             f"[bold]Demanda:[/bold] {state.demand}\n"
+            f"[bold]Total de Rounds:[/bold] {state.total_rounds}\n"
             f"[bold]Manifesto:[/bold] {state.path}",
             title="🎯 Nova Missão",
             border_style="green",

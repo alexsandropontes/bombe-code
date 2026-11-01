@@ -58,8 +58,20 @@ class VRAMGate:
 
         return total_vram
 
+    def wait_until_clean(self, max_used_mb: int = 300, timeout_seconds: float = 10.0) -> bool:
+        """Aguarda a desalocação assíncrona da VRAM pelo driver NVIDIA até o teto."""
+        import time
+        deadline = time.time() + timeout_seconds
+        while time.time() < deadline:
+            used = self.query_used_vram_mb()
+            if used <= max_used_mb:
+                return True
+            time.sleep(0.5)
+        return self.query_used_vram_mb() <= max_used_mb
+
     def assert_clean(self, max_used_mb: int = 300) -> None:
         """Verifica se a VRAM em uso está abaixo do limite aceitável de segurança."""
+        self.wait_until_clean(max_used_mb=max_used_mb, timeout_seconds=8.0)
         used = self.query_used_vram_mb()
         if used > max_used_mb:
             raise VRAMThresholdExceededError(

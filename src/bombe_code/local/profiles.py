@@ -119,10 +119,11 @@ HARDWARE_PROFILES: dict[ModelKey, HardwareProfile] = {
         flash_attention=True,
         kv_cache_type="q8_0",
         n_cpu_moe=None,
-        n_gpu_layers=28,
+        n_gpu_layers=18,
         draft_model_path=None,
         spec_type="draft-mtp",
         spec_draft_n_max=2,
+        extra_args=("-b", "1024", "-ub", "256", "--parallel", "1"),
     ),
     ModelKey.LFM3: HardwareProfile(
         model_key=ModelKey.LFM3,

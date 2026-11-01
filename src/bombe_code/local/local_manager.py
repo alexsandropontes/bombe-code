@@ -68,6 +68,13 @@ class LocalModelManager:
         """Status atual do servidor de modelo."""
         return self._status
 
+    def is_healthy(self) -> bool:
+        """Verifica se o servidor está no estado READY e respondendo HTTP 200 em /health."""
+        if self._status != ModelStatus.READY or self._active_profile is None:
+            return False
+        health_url = f"http://{self._active_profile.host}:{self._active_profile.port}/health"
+        return self.http_get_fn(health_url) == 200
+
     @staticmethod
     def _default_http_get(url: str) -> int:
         try:

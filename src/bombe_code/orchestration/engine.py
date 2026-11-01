@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import re
 from pathlib import Path
 from typing import Any
@@ -16,6 +17,7 @@ from bombe_code.domain.contracts.round import (
     SliceState,
     SliceType,
 )
+from bombe_code.orchestration.autonomous_runner import AutonomousRunner
 
 
 class InvalidRoundScopeError(ValueError):
@@ -29,8 +31,19 @@ class PendingDoDError(RuntimeError):
 class RoundExecutionEngine:
     """Manages round transitions, Kanban invariant enforcement, and mission synchronization."""
 
-    def __init__(self, project_dir: Path | str = ".") -> None:
+    def __init__(self, project_dir: Path | str = ".", autonomous: bool | None = None) -> None:
         self.project_dir = Path(project_dir).resolve()
+        if autonomous is None:
+            self.autonomous = "PYTEST_CURRENT_TEST" not in os.environ
+        else:
+            self.autonomous = autonomous
+        self._runner: AutonomousRunner | None = None
+
+    @property
+    def runner(self) -> AutonomousRunner:
+        if self._runner is None:
+            self._runner = AutonomousRunner(self.project_dir)
+        return self._runner
 
     def validate_round_scope(self, stories: list[str] | str) -> str:
         """Enforce strict 1 Round = 1 Story invariant."""
@@ -210,6 +223,35 @@ class RoundExecutionEngine:
             ),
         ]
 
+    def _get_story_slices(self, story_id: str, status: str = "pending") -> list[SliceState]:
+        """Extract slices from story markdown file, falling back to default slices."""
+        try:
+            mission_path = self._get_mission_path()
+            story_file = mission_path.parent / "stories" / f"{story_id}.md"
+            if story_file.is_file():
+                text = story_file.read_text(encoding="utf-8")
+                slice_matches = re.findall(r"^###\s+(SLICE-[A-Za-z0-9\-_]+)", text, re.MULTILINE)
+                if slice_matches:
+                    slices = []
+                    for s_id in slice_matches:
+                        slice_type = (
+                            SliceType.FRONTEND_CONSTRUCTION
+                            if "FRONT" in s_id.upper() or "UI" in s_id.upper()
+                            else SliceType.BACKEND_TDD
+                        )
+                        slices.append(
+                            SliceState(
+                                slice_id=s_id,
+                                name=f"Slice {s_id}",
+                                type=slice_type,
+                                status=status,
+                            )
+                        )
+                    return slices
+        except Exception:
+            pass
+        return self._build_default_slices(story_id, status=status)
+
     def start_round(self, round_num: int) -> RoundState:
         """Execute Upstream for round and stop deterministically at DoR."""
         self.assert_no_dod_pendencies(round_num)
@@ -220,7 +262,7 @@ class RoundExecutionEngine:
         self.validate_round_scope(story_id)
 
         self._create_round_scaffolds(round_num, story_id)
-        slices = self._build_default_slices(story_id, status="pending")
+        slices = self._get_story_slices(story_id, status="pending")
         self.sync_mission_kanban(round_num, RoundStatus.DOR_READY.value)
         return RoundState(
             round_number=round_num,
@@ -252,7 +294,19 @@ class RoundExecutionEngine:
             )
 
         story_id = round_info.get("story_id", f"STORY-{round_num:03d}")
-        slices = self._build_default_slices(story_id, status="done")
+        mission_path = self._get_mission_path()
+        story_file = mission_path.parent / "stories" / f"{story_id}.md"
+
+        # Execução autônoma real via local LLMs se configurado e story existir
+        if self.autonomous and story_file.is_file():
+            burn_result = self.runner.execute_burn_station(round_num, story_id, story_file)
+            if not burn_result.success:
+                raise RuntimeError(
+                    f"Falha na queima autônoma do Round {round_num} ({story_id}): "
+                    f"Testes não passaram após tentativas."
+                )
+
+        slices = self._get_story_slices(story_id, status="done")
         self.sync_mission_kanban(round_num, RoundStatus.BURNING.value)
         if goal_file and goal_file.exists():
             content = goal_file.read_text(encoding="utf-8")
@@ -282,7 +336,13 @@ class RoundExecutionEngine:
             )
 
         story_id = round_info.get("story_id", f"STORY-{round_num:03d}")
-        slices = self._build_default_slices(story_id, status="done")
+
+        if self.autonomous:
+            rev_res = self.runner.execute_review_station(round_num, story_id)
+            if not rev_res.success:
+                raise RuntimeError(f"Auditoria de code review reprovada no Round {round_num} ({story_id}).")
+
+        slices = self._get_story_slices(story_id, status="done")
         self.sync_mission_kanban(round_num, RoundStatus.REVIEWING.value)
         goal_file = self._get_round_goal_path(round_num)
         if goal_file and goal_file.exists():
@@ -307,6 +367,11 @@ class RoundExecutionEngine:
         round_info = rounds.get(f"ROUND-{round_num}", {})
         story_id = round_info.get("story_id", f"STORY-{round_num:03d}")
 
+        if self.autonomous:
+            val_res = self.runner.execute_validate_station(round_num, story_id)
+            if not val_res.success:
+                raise PendingDoDError(f"DoD Gate reprovado no Round {round_num} ({story_id}): testes falhando.")
+
         goal_file = self._get_round_goal_path(round_num)
         if goal_file is None:
             mission_path = self._get_mission_path()
@@ -328,7 +393,7 @@ class RoundExecutionEngine:
             goal_file.write_text(content, encoding="utf-8")
 
         self.sync_mission_kanban(round_num, RoundStatus.VALIDATED.value)
-        slices = self._build_default_slices(story_id, status="done")
+        slices = self._get_story_slices(story_id, status="done")
         return RoundState(
             round_number=round_num,
             story_id=story_id,
@@ -370,7 +435,7 @@ class RoundExecutionEngine:
             is_dod = status_enum == RoundStatus.VALIDATED
 
             slice_status = "done" if is_dod or status_enum in (RoundStatus.BURNING, RoundStatus.REVIEWING) else "pending"
-            slices = self._build_default_slices(story_id, status=slice_status)
+            slices = self._get_story_slices(story_id, status=slice_status)
 
             state = RoundState(
                 round_number=r_num,
