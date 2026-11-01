@@ -110,6 +110,8 @@ class AutonomousRunner:
                     return f"Erro de segurança: caminho fora da raiz {rel_path}", False
                 if target.is_dir():
                     return f"Erro: '{rel_path}' é um diretório existente. Especifique o caminho completo de um arquivo.", False
+                if rel_path.endswith(".py"):
+                    content = content.replace("\t", "    ")
                 target.parent.mkdir(parents=True, exist_ok=True)
                 target.write_text(content, encoding="utf-8")
                 return f"Arquivo '{rel_path}' gravado com sucesso ({len(content)} caracteres).", True
@@ -184,6 +186,7 @@ class AutonomousRunner:
             "model": "local",
             "messages": messages,
             "temperature": temperature,
+            "max_tokens": 2500,
             "stream": False,
         }
         if tools_schema:
@@ -382,7 +385,11 @@ class AutonomousRunner:
                     resp = self._chat_completion(messages, tools_schema=tools_schema)
                 except Exception as exc:
                     logger.warning("Falha na chamada ao modelo local: %s", exc)
-                    break
+                    messages.append({
+                        "role": "user",
+                        "content": f"Aviso do sistema: A chamada anterior falhou com '{exc}'. Por favor, continue o trabalho corrigindo os arquivos de forma concisa.",
+                    })
+                    continue
 
                 p_tok += resp["prompt_tokens"]
                 c_tok += resp["completion_tokens"]
