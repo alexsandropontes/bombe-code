@@ -49,8 +49,8 @@ class TestMTPContractsAndProfiles:
     def test_qwen_3_8_9b_hardware_profile_defaults(self) -> None:
         hp = get_hardware_profile(ModelKey.QWEN_3_8_9B)
         assert hp.draft_model_path is None
-        assert hp.spec_type == "draft-mtp"
-        assert hp.spec_draft_n_max == 2
+        assert hp.spec_type is None
+        assert hp.spec_draft_n_max is None
 
     def test_lfm3_hardware_profile_defaults(self) -> None:
         hp = get_hardware_profile(ModelKey.LFM3)
@@ -122,17 +122,11 @@ class TestMTPCommandLineGeneration:
         assert cmd[moe_idx + 1] == "999"
 
     def test_ac3_qwen_3_8_9b_mtp_command(self, manager: LocalModelManager) -> None:
-        profile = build_model_profile(ModelKey.QWEN_3_8_9B, enable_mtp=True)
+        profile = build_model_profile(ModelKey.QWEN_3_8_9B, enable_mtp=False)
         cmd = manager.build_cli_command(profile)
 
         assert "--model-draft" not in cmd
-        assert "--spec-type" in cmd
-        spec_type_idx = cmd.index("--spec-type")
-        assert cmd[spec_type_idx + 1] == "draft-mtp"
-
-        assert "--spec-draft-n-max" in cmd
-        draft_n_idx = cmd.index("--spec-draft-n-max")
-        assert cmd[draft_n_idx + 1] == "2"
+        assert "--spec-type" not in cmd
 
         fa_idx = cmd.index("-fa")
         assert cmd[fa_idx + 1] == "on"

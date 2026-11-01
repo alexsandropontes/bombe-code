@@ -27,6 +27,7 @@ from bombe_code.local.profiles import (
     ModelKey,
     build_model_profile,
 )
+from bombe_code.routing.classifier import ComplexityClassifier
 from bombe_code.tools.parser import FallbackToolParser
 
 logger = logging.getLogger(__name__)
@@ -197,7 +198,9 @@ class AutonomousRunner:
             "model": "local",
             "messages": messages,
             "temperature": temperature,
-            "max_tokens": 2500,
+            "max_tokens": 8192,
+            "repeat_penalty": 1.1,
+            "stop": ["<|im_end|>", "<|endoftext|>", "</tool_call>"],
             "stream": False,
         }
         if tools_schema:
@@ -252,8 +255,36 @@ class AutonomousRunner:
         agent_handle = str(meta.get("agent", "@barbara"))
         clean_handle = agent_handle.lstrip("@").lower()
 
-        # Selection of local model profile
-        dev_profile = "qwen-3.8-9b"
+        # Dynamic complexity classification (Jr / Pl / Sr)
+        affected_files: list[str] = []
+        for line in story_text.splitlines():
+            if "impl_targets:" in line or "red_test:" in line:
+                for token in line.split(":", 1)[1].split(","):
+                    cleaned = token.strip("` \t\r\n[];")
+                    if cleaned and cleaned not in affected_files:
+                        affected_files.append(cleaned)
+
+        slice_spec = {
+            "affected_files": affected_files,
+            "estimated_lines": len(story_text.splitlines()) * 5,
+            "scope": f"{story_id} {meta.get('title', '')} {clean_handle}",
+        }
+        classifier = ComplexityClassifier()
+        analysis = classifier.evaluate_slice(slice_spec)
+        logger.info(
+            "Classificação dinâmica de complexidade para %s: tier=%s (score=%s, razões=%s)",
+            story_id,
+            analysis.recommended_tier,
+            analysis.score,
+            analysis.reasons,
+        )
+
+        tier_to_model = {
+            "junior": "gemma-4-e4b",
+            "pleno": "qwen-3.8-9b",
+            "senior": "qwen-3.8-9b",
+        }
+        dev_profile = tier_to_model.get(analysis.recommended_tier, "qwen-3.8-9b")
         escalation_profile = "qwen-3.8-9b"
         active_model = dev_profile
 
@@ -450,12 +481,18 @@ class AutonomousRunner:
                         fn = tc.get("function") or {}
                         name = fn.get("name", "")
                         raw_args = fn.get("arguments", "{}")
+                        args_dict = None
                         try:
                             args_dict = json.loads(raw_args, strict=False) if isinstance(raw_args, str) else raw_args
-                        except json.JSONDecodeError:
-                            args_dict = {}
+                        except json.JSONDecodeError as decode_err:
+                            if finish_reason == "length":
+                                out_str = "Erro: A chamada da ferramenta foi truncada porque atingiu o limite de tokens. Por favor gere o arquivo ou comando em partes menores ou mais concisas."
+                            else:
+                                out_str = f"Erro de sintaxe JSON nos argumentos da ferramenta '{name}': {decode_err}."
+                            ok = False
 
-                        out_str, ok = self.execute_tool(name, args_dict)
+                        if args_dict is not None:
+                            out_str, ok = self.execute_tool(name, args_dict)
 
                         # Immediate pytest feedback for file modifications
                         if name in ("write_file", "edit_file", "write_project_file", "replace_text_in_file"):
