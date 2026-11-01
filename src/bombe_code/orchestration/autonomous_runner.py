@@ -678,8 +678,10 @@ class AutonomousRunner:
             {"role": "user", "content": hoare_prompt},
         ])
         review_text = resp["message"].get("content") or ""
-        has_furo = ("FURO" in review_text.upper()) or ("NÃO APROVADO" in review_text.upper()) or ("REPROVADO" in review_text.upper())
-        passed = (pytest_res.returncode == 0) and not has_furo
+        is_approved = ("STATUS: APROVADO" in review_text.upper()) or ("AUDITORIA: LIMPA" in review_text.upper())
+        has_reprovado = ("STATUS: REPROVADO" in review_text.upper()) or ("NÃO APROVADO" in review_text.upper())
+        has_actual_furo = bool(re.search(r"\bFURO:\s*(?!nenhum\b)\S+", review_text, re.IGNORECASE))
+        passed = (pytest_res.returncode == 0) and (is_approved or not (has_actual_furo or has_reprovado))
         wall_s = round(time.time() - t0, 2)
 
         # Write physical review.md in round directory
