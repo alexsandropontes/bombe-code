@@ -28,6 +28,7 @@ from bombe_code.local.profiles import (
     build_model_profile,
 )
 from bombe_code.routing.classifier import ComplexityClassifier
+from bombe_code.routing.quota_manager import QuotaManager
 from bombe_code.tools.parser import FallbackToolParser
 
 logger = logging.getLogger(__name__)
@@ -174,6 +175,8 @@ class AutonomousRunner:
 
     def _ensure_model_server(self, model_key: str | ModelKey) -> None:
         """Starts the specified model profile on llama-server if not already active."""
+        if str(model_key).startswith("glm-") or model_key in ("zai", "cloud_zai", "glm-5.3-flash"):
+            return
         profile = build_model_profile(model_key)
         if (
             self.local_manager._active_profile
@@ -186,15 +189,102 @@ class AutonomousRunner:
         time.sleep(1.0)
         self.local_manager.start_model(profile, timeout_seconds=self.timeout_seconds)
 
+    def _get_zai_config(self) -> tuple[str | None, str]:
+        auth_file = Path.home() / ".local" / "share" / "bombe-code" / "auth.json"
+        auth_data = {}
+        if auth_file.is_file():
+            try:
+                auth_data = json.loads(auth_file.read_text(encoding="utf-8"))
+            except Exception:
+                pass
+        key = (
+            os.environ.get("ZAI_API_KEY")
+            or os.environ.get("ZHIPU_API_KEY")
+            or auth_data.get("zai-coding-plan", {}).get("key")
+            or auth_data.get("zai-coding-plan", {}).get("api_key")
+            or auth_data.get("zai", {}).get("key")
+            or auth_data.get("zai", {}).get("api_key")
+        )
+        url = (
+            os.environ.get("ZAI_BASE_URL")
+            or auth_data.get("zai-coding-plan", {}).get("base_url")
+            or auth_data.get("zai-coding-plan", {}).get("url")
+            or auth_data.get("zai", {}).get("base_url")
+            or auth_data.get("zai", {}).get("url")
+            or "https://api.z.ai/api/coding/paas/v4"
+        )
+        return key, url.rstrip("/")
+
     def _chat_completion(
         self,
         messages: list[dict[str, Any]],
         tools_schema: list[dict[str, Any]] | None = None,
         temperature: float = 0.2,
+        model_name: str = "local",
     ) -> dict[str, Any]:
-        """Sends chat completion request to the active local model server with telemetry."""
+        """Sends chat completion request to Z.ai cloud or active local model server with telemetry."""
+        is_cloud_zai = (
+            model_name.startswith("glm-")
+            or model_name in ("zai", "cloud_zai", "glm-5.3-flash")
+        )
+        zai_key, zai_base_url = self._get_zai_config()
+
+        if is_cloud_zai and zai_key and QuotaManager().is_available("zai"):
+            url = f"{zai_base_url}/chat/completions"
+            headers = {
+                "Authorization": f"Bearer {zai_key}",
+                "Content-Type": "application/json",
+            }
+            payload: dict[str, Any] = {
+                "model": "glm-5.3-flash",
+                "messages": messages,
+                "temperature": temperature,
+                "max_tokens": 8192,
+                "stream": False,
+            }
+            if tools_schema:
+                payload["tools"] = tools_schema
+                payload["tool_choice"] = "auto"
+
+            t0 = time.time()
+            with httpx.Client(timeout=180.0) as client:
+                resp = client.post(url, json=payload, headers=headers)
+                if resp.status_code == 429 or "exhausted" in resp.text.lower() or "limit" in resp.text.lower():
+                    logger.warning(
+                        "Z.ai retornou limite de cota/429: %s. Registrando cooldown e caindo para local...",
+                        resp.text,
+                    )
+                    QuotaManager().record_exhausted("zai", error_message=resp.text)
+                    return self._chat_completion(
+                        messages, tools_schema, temperature, model_name="local"
+                    )
+                resp.raise_for_status()
+                data = resp.json()
+
+            wall_s = max(0.001, round(time.time() - t0, 3))
+            usage = data.get("usage", {})
+            prompt_tokens = usage.get("prompt_tokens", 0)
+            completion_tokens = usage.get("completion_tokens", 0)
+            pp_tok_s = round(prompt_tokens / wall_s, 1) if prompt_tokens else 0.0
+            tg_tok_s = round(completion_tokens / wall_s, 1) if completion_tokens else 0.0
+
+            choice = (data.get("choices") or [{}])[0]
+            message = choice.get("message") or {}
+            finish_reason = choice.get("finish_reason", "stop")
+
+            return {
+                "message": message,
+                "finish_reason": finish_reason,
+                "prompt_tokens": prompt_tokens,
+                "completion_tokens": completion_tokens,
+                "wall_s": wall_s,
+                "pp_tok_s": pp_tok_s,
+                "tg_tok_s": tg_tok_s,
+            }
+
+        # Execução local via llama-server
         url = "http://127.0.0.1:18094/v1/chat/completions"
-        payload: dict[str, Any] = {
+        payload = {
             "model": "local",
             "messages": messages,
             "temperature": temperature,
@@ -279,14 +369,23 @@ class AutonomousRunner:
             analysis.reasons,
         )
 
-        tier_to_model = {
-            "junior": "gemma-4-e4b",
-            "pleno": "qwen-3.8-9b",
-            "senior": "qwen-3.8-9b",
-        }
-        dev_profile = tier_to_model.get(analysis.recommended_tier, "qwen-3.8-9b")
-        escalation_profile = "qwen-3.8-9b"
-        active_model = dev_profile
+        # Check cloud quota for Z.ai (glm-5.3-flash)
+        quota_mgr = QuotaManager()
+        zai_key, _ = self._get_zai_config()
+        if zai_key and quota_mgr.is_available("zai"):
+            dev_profile = "glm-5.3-flash"
+            escalation_profile = "glm-5.3-flash"
+            active_model = dev_profile
+            logger.info("Cota Z.ai disponível! Roteando estação de queima para cloud glm-5.3-flash.")
+        else:
+            tier_to_model = {
+                "junior": "gemma-4-e4b",
+                "pleno": "qwen-3.8-9b",
+                "senior": "qwen-3.8-9b",
+            }
+            dev_profile = tier_to_model.get(analysis.recommended_tier, "qwen-3.8-9b")
+            escalation_profile = "qwen-3.8-9b"
+            active_model = dev_profile
 
         agent_def = self.registry.get(clean_handle)
         system_prompt = agent_def.system_prompt if agent_def else "Você é um engenheiro de software sênior aplicando TDD estrito."
@@ -337,10 +436,13 @@ class AutonomousRunner:
             f"     client = TestClient(app)\n"
             f"     ```\n"
             f"   - Ao verificar datas retornadas pelo TestClient: campos de data em JSON vêm como string ISO. Converta com `datetime.fromisoformat(...)`.\n"
-            f"4. PREFERÊNCIA DE FERRAMENTAS: Prefira `write_file` para gravar arquivos inteiros com precisão e evitar desalinhamentos.\n"
-            f"5. Crie ou ajuste os arquivos de teste em `tests/` e a implementação real em `src/`.\n"
-            f"6. Após cada gravação de arquivo, o sistema valida automaticamente o `pytest` e devolve o status.\n"
-            f"7. Quando todos os testes estiverem 100% verdes e todos os slices da story existirem em `tests/`, finalize.\n\n"
+            f"4. TESTES DE INTEGRAÇÃO END-TO-END AUTOMATIZADOS (CAMINHOS CRÍTICOS):\n"
+            f"   - Os arquivos em `tests/` DEVEM conter testes de integração automatizados cobrindo os caminhos críticos ponta a ponta (persistência física em SQLite3 real + transição de estados de SLA + métricas operacionais + endpoints HTTP via FastAPI TestClient).\n"
+            f"   - VETO a mocks nesses testes de integração. Tudo deve ser exercitado contra o banco e o app real.\n"
+            f"5. PREFERÊNCIA DE FERRAMENTAS: Prefira `write_file` para gravar arquivos inteiros com precisão e evitar desalinhamentos.\n"
+            f"6. Crie ou ajuste os arquivos de teste em `tests/` e a implementação real em `src/`.\n"
+            f"7. Após cada gravação de arquivo, o sistema valida automaticamente o `pytest` e devolve o status.\n"
+            f"8. Quando todos os testes estiverem 100% verdes e todos os slices da story existirem em `tests/`, finalize.\n\n"
             f"Arquivos já existentes no workspace:\n{existing_files_str}\n\n"
             f"CONTEÚDO DA STORY:\n{story_text}\n"
         )
@@ -435,7 +537,7 @@ class AutonomousRunner:
                     messages = [messages[0], messages[1]] + messages[-8:]
 
                 try:
-                    resp = self._chat_completion(messages, tools_schema=tools_schema)
+                    resp = self._chat_completion(messages, tools_schema=tools_schema, model_name=active_model)
                 except Exception as exc:
                     logger.warning("Falha na chamada ao modelo local: %s", exc)
                     messages.append({
@@ -709,6 +811,102 @@ class AutonomousRunner:
             station_id=f"REVIEW_{story_id}",
             agent="@hoare",
             model_key="lfm3",
+            success=passed,
+            wall_seconds=wall_s,
+            turns=1,
+            prompt_tokens=resp["prompt_tokens"],
+            completion_tokens=resp["completion_tokens"],
+            pp_tok_s=resp["pp_tok_s"],
+            tg_tok_s=resp["tg_tok_s"],
+            peak_vram_mb=0.0,
+            telemetry_path=telemetry_file,
+        )
+
+    def execute_arch_review_station(self, round_num: int, story_id: str) -> StationResult:
+        """Audits architecture, Clean Code, SOLID and authorizes Git commit using UncleBob."""
+        t0 = time.time()
+        zai_key, _ = self._get_zai_config()
+        active_model = "glm-5.3-flash" if (zai_key and QuotaManager().is_available("zai")) else "qwen-3.8-9b"
+        self._ensure_model_server(active_model)
+
+        pytest_res = subprocess.run(
+            f'{self.venv_python} -m pytest tests/ -v -o pythonpath=". src"',
+            shell=True,
+            cwd=str(self.project_dir),
+            capture_output=True,
+            text=True,
+            env=self._get_exec_env(),
+        )
+
+        created_files = []
+        for p in (self.project_dir / "src").glob("**/*"):
+            if p.is_file() and not p.name.startswith("."):
+                created_files.append(str(p.relative_to(self.project_dir)))
+        for p in (self.project_dir / "tests").glob("**/*"):
+            if p.is_file() and not p.name.startswith("."):
+                created_files.append(str(p.relative_to(self.project_dir)))
+        files_str = "\n".join(f"- {f}" for f in sorted(created_files))
+
+        mission_dir = self._get_active_mission_dir()
+        story_path = mission_dir / "stories" / f"{story_id}.md"
+        story_content = story_path.read_text(encoding="utf-8") if story_path.is_file() else ""
+
+        unclebob_agent = self.registry.get("unclebob")
+        unclebob_sys = (
+            unclebob_agent.system_prompt
+            if unclebob_agent
+            else "Você é @unclebob, Tech Lead e Guardião Arquitetural do Bombe Core."
+        )
+
+        unclebob_prompt = (
+            f"AUDITORIA ARQUITETURAL E CHANCELA DE COMMIT — ROUND {round_num}: {story_id}\n\n"
+            f"Testes Automatizados (exit={pytest_res.returncode}):\n"
+            f"{pytest_res.stdout}\n{pytest_res.stderr}\n\n"
+            f"Arquivos do projeto:\n{files_str}\n\n"
+            f"Story do Round:\n{story_content}\n\n"
+            f"Como @unclebob, audite a integridade arquitetural (SOLID, Clean Architecture, separação de camadas, "
+            f"persistência real sem mocks em src/, clareza e manutenibilidade).\n"
+            f"Verifique se os testes automatizados de integração cobrem os caminhos críticos da solução.\n"
+            f"Se a arquitetura estiver sólida e pronta para ir à produção, emita o parecer de chancela concluindo com: 'STATUS: APROVADO'."
+        )
+
+        resp = self._chat_completion([
+            {"role": "system", "content": unclebob_sys},
+            {"role": "user", "content": unclebob_prompt},
+        ], model_name=active_model)
+
+        review_text = resp["message"].get("content") or ""
+        is_approved = ("STATUS: APROVADO" in review_text.upper()) or ("ARQUITETURA APROVADA" in review_text.upper())
+        has_reprovado = ("STATUS: REPROVADO" in review_text.upper()) or ("NÃO APROVADO" in review_text.upper())
+        has_actual_furo = bool(re.search(r"\bVIOLAÇÃO:\s*(?!nenhuma\b)\S+", review_text, re.IGNORECASE))
+        passed = (pytest_res.returncode == 0) and (is_approved or not (has_actual_furo or has_reprovado))
+        wall_s = round(time.time() - t0, 2)
+
+        # Write physical arch-review.md in round directory
+        round_dir = mission_dir / "rounds" / f"round-{round_num:02d}"
+        if round_dir.exists():
+            (round_dir / "arch-review.md").write_text(review_text, encoding="utf-8")
+
+        telemetry_file = self.telemetry_dir / f"ARCH_REVIEW_{story_id}_{int(time.time())}.json"
+        rec = {
+            "station_id": f"ARCH_REVIEW_{story_id}",
+            "round_number": round_num,
+            "story_id": story_id,
+            "agent": "@unclebob",
+            "model_key": active_model,
+            "success": passed,
+            "wall_s": wall_s,
+            "prompt_tokens": resp["prompt_tokens"],
+            "completion_tokens": resp["completion_tokens"],
+            "pp_tok_s": resp["pp_tok_s"],
+            "tg_tok_s": resp["tg_tok_s"],
+        }
+        telemetry_file.write_text(json.dumps(rec, indent=2), encoding="utf-8")
+
+        return StationResult(
+            station_id=f"ARCH_REVIEW_{story_id}",
+            agent="@unclebob",
+            model_key=active_model,
             success=passed,
             wall_seconds=wall_s,
             turns=1,

@@ -360,6 +360,29 @@ class RoundExecutionEngine:
             message=f"Round {round_num} revisado com conformidade. Pronto para validação de DoD.",
         )
 
+    def arch_review_round(self, round_num: int) -> RoundState:
+        """Perform architectural review and commit authorization with @unclebob."""
+        data, _, _ = self._read_mission_data()
+        rounds = data.get("rounds", {})
+        round_info = rounds.get(f"ROUND-{round_num}", {})
+        story_id = round_info.get("story_id", f"STORY-{round_num:03d}")
+
+        if self.autonomous:
+            arch_res = self.runner.execute_arch_review_station(round_num, story_id)
+            if not arch_res.success:
+                raise RuntimeError(f"Auditoria arquitetural reprovada por @unclebob no Round {round_num} ({story_id}).")
+
+        slices = self._get_story_slices(story_id, status="done")
+        return RoundState(
+            round_number=round_num,
+            story_id=story_id,
+            status=RoundStatus.REVIEWING,
+            slices=slices,
+            dor_ready=True,
+            dod_validated=False,
+            message=f"Round {round_num} aprovado por @unclebob (Arquitetura & Clean Code).",
+        )
+
     def validate_round(self, round_num: int) -> RoundState:
         """Validate DoD items, update goal.md, and mark round validated."""
         data, _, _ = self._read_mission_data()
@@ -465,6 +488,7 @@ class RoundExecutionEngine:
         self.start_round(round_num)
         self.burn_round(round_num)
         self.review_round(round_num)
+        self.arch_review_round(round_num)
         return self.validate_round(round_num)
 
     full_round = execute_round_full
