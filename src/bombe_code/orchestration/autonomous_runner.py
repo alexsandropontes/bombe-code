@@ -919,13 +919,27 @@ class AutonomousRunner:
         )
 
         created_files = []
+        code_snippets = []
         for p in (self.project_dir / "src").glob("**/*"):
-            if p.is_file() and not p.name.startswith("."):
-                created_files.append(str(p.relative_to(self.project_dir)))
+            if p.is_file() and not p.name.startswith(".") and p.suffix in (".py", ".js", ".html", ".css", ".sql"):
+                rel_path = str(p.relative_to(self.project_dir))
+                created_files.append(rel_path)
+                try:
+                    content_snip = p.read_text(encoding="utf-8", errors="replace")[:3000]
+                    code_snippets.append(f"=== Arquivo: {rel_path} ===\n{content_snip}")
+                except Exception:
+                    pass
         for p in (self.project_dir / "tests").glob("**/*"):
-            if p.is_file() and not p.name.startswith("."):
-                created_files.append(str(p.relative_to(self.project_dir)))
+            if p.is_file() and not p.name.startswith(".") and p.suffix == ".py":
+                rel_path = str(p.relative_to(self.project_dir))
+                created_files.append(rel_path)
+                try:
+                    content_snip = p.read_text(encoding="utf-8", errors="replace")[:3000]
+                    code_snippets.append(f"=== Arquivo: {rel_path} ===\n{content_snip}")
+                except Exception:
+                    pass
         files_str = "\n".join(f"- {f}" for f in sorted(created_files))
+        code_bundle_str = "\n\n".join(code_snippets)
 
         mission_dir = self._get_active_mission_dir()
         story_path = mission_dir / "stories" / f"{story_id}.md"
@@ -943,11 +957,12 @@ class AutonomousRunner:
             f"Testes Automatizados (exit={pytest_res.returncode}):\n"
             f"{pytest_res.stdout}\n{pytest_res.stderr}\n\n"
             f"Arquivos do projeto:\n{files_str}\n\n"
+            f"Código-Fonte Submetido:\n{code_bundle_str}\n\n"
             f"Story do Round:\n{story_content}\n\n"
-            f"Como @unclebob, audite a integridade arquitetural (SOLID, Clean Architecture, separação de camadas, "
+            f"Como @unclebob (Tech Lead), audite a integridade arquitetural (SOLID, Clean Architecture, separação de camadas, "
             f"persistência real sem mocks em src/, clareza e manutenibilidade).\n"
             f"Verifique se os testes automatizados de integração cobrem os caminhos críticos da solução.\n"
-            f"Se a arquitetura estiver sólida e pronta para ir à produção, emita o parecer de chancela concluindo com: 'STATUS: APROVADO'."
+            f"Se a arquitetura estiver sólida e pronta para ir à produção, emita a chancela técnica do commit concluindo com: 'STATUS: APROVADO'."
         )
 
         resp = self._chat_completion([
@@ -966,6 +981,15 @@ class AutonomousRunner:
         round_dir = mission_dir / "rounds" / f"round-{round_num:02d}"
         if round_dir.exists():
             (round_dir / "arch-review.md").write_text(review_text, encoding="utf-8")
+
+        # Como Tech Lead, UncleBob realiza a chancela de commit técnico no repositório
+        if passed:
+            subprocess.run(["git", "add", "."], cwd=str(self.project_dir), check=False)
+            subprocess.run(
+                ["git", "commit", "-m", f"feat(round-{round_num}): {story_id} chancelada por @unclebob"],
+                cwd=str(self.project_dir),
+                check=False,
+            )
 
         telemetry_file = self.telemetry_dir / f"ARCH_REVIEW_{story_id}_{int(time.time())}.json"
         rec = {
@@ -1036,14 +1060,6 @@ class AutonomousRunner:
         ], model_name=active_model)
         val_text = resp["message"].get("content") or ""
         wall_s = round(time.time() - t0, 2)
-
-        if passed:
-            subprocess.run(["git", "add", "."], cwd=str(self.project_dir), check=False)
-            subprocess.run(
-                ["git", "commit", "-m", f"feat(round-{round_num}): {story_id} validada com sucesso"],
-                cwd=str(self.project_dir),
-                check=False,
-            )
 
         telemetry_file = self.telemetry_dir / f"VALIDATE_{story_id}_{int(time.time())}.json"
         rec = {
