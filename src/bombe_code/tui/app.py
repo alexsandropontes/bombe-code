@@ -453,6 +453,20 @@ class BombeTuiApp(App):
 
         await self._load_history()
         self._sse_task = asyncio.create_task(self._listen_sse())
+
+        # Aviso amigável em fresh install / sem LLM configurada
+        from bombe_code.routing.matrix import check_llm_ready
+        ready, _ = check_llm_ready()
+        if not ready:
+            chat = self.query_one("#chat-view", ChatView)
+            await chat.mount(
+                Static(
+                    f"[{TOKENS['warning']} bold]⚡ AVISO: Nenhuma LLM está configurada no Bombe Code.[/{TOKENS['warning']} bold]\n"
+                    f"[{TOKENS['text_muted']}]Comandos determinísticos funcionam normalmente.\n"
+                    f"Para habilitar comandos de IA, digite [bold cyan]/models[/bold cyan] ou execute no terminal:\n"
+                    f"  [bold green]bombe-code models setup[/bold green][/{TOKENS['text_muted']}]"
+                )
+            )
         try:
             self._processing_bar = self.query_one("#processing-status-bar", ThinkingWidget)
         except NoMatches:
@@ -577,6 +591,22 @@ class BombeTuiApp(App):
 
     @work(exclusive=True)
     async def _run_prompt_worker(self, text: str) -> None:
+        from bombe_code.routing.matrix import check_llm_ready
+        ready, _ = check_llm_ready()
+        if not ready:
+            chat = self.query_one("#chat-view", ChatView)
+            await chat.mount(
+                Static(
+                    f"[{TOKENS['error']} bold]⚠️ Não é possível processar requisições de IA sem modelos configurados.[/{TOKENS['error']} bold]\n"
+                    f"[{TOKENS['warning']}]Execute [bold cyan]/models[/bold cyan] ou execute no terminal:\n"
+                    f"  [bold green]bombe-code models setup[/bold green][/{TOKENS['warning']}]"
+                )
+            )
+            chat.scroll_to_latest()
+            self._is_active_turn = False
+            self.update_status()
+            return
+
         try:
             model_to_send = self.model_name if self.model_name != "padrão" else None
             await self.client.send_prompt(

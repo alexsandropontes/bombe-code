@@ -94,6 +94,7 @@ app = typer.Typer(
 
 from .commands.mission import mission_app
 from .commands.project import project_app
+from .commands.models import models_app
 from .commands.round import (
     round_all_cmd,
     round_app,
@@ -116,6 +117,7 @@ app.add_typer(project_app, name="project")
 app.add_typer(round_app, name="round")
 app.add_typer(wave_app, name="wave")
 app.add_typer(standalone_app, name="standalone")
+app.add_typer(models_app, name="models")
 
 app.command("round-start")(round_start_cmd)
 app.command("round-full")(round_full_cmd)
@@ -269,24 +271,6 @@ def upgrade_cmd(
     typer.echo(f"✅ {res.get('message')}")
     if res.get("remote_sha"):
         typer.echo(f"   Commit SHA: {res.get('remote_sha')[:10]}")
-
-
-@app.command("models")
-def models() -> None:
-    """Lista catálogo de modelos suportados."""
-    try:
-        catalog = get_models()
-        typer.echo("Catálogo de Modelos (models.dev):")
-        for prov, info in catalog.items():
-            if isinstance(info, dict) and "models" in info:
-                mod_names = ", ".join(list(info["models"].keys())[:5])
-                typer.echo(f"  • {prov}: {mod_names}...")
-    except (OSError, RuntimeError, httpx.HTTPError):
-        # Fallback offline
-        typer.echo("Catálogo de Modelos (offline):")
-        typer.echo("  • openai: gpt-4o, gpt-4o-mini, o1")
-        typer.echo("  • anthropic: claude-3-5-sonnet, claude-3-5-haiku")
-        typer.echo("  • google: gemini-1.5-pro, gemini-2.0-flash")
 
 
 @app.command("providers")

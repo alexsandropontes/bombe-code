@@ -28,7 +28,13 @@ from bombe_code.local.profiles import (
     build_model_profile,
 )
 from bombe_code.routing.classifier import ComplexityClassifier
-from bombe_code.routing.quota_manager import QuotaManager
+from bombe_code.routing.matrix import (
+    DemandSituation,
+    ModelNotConfiguredError,
+    load_matrix,
+)
+from bombe_code.routing.quota_manager import QuotaExhaustedError, QuotaManager
+from bombe_code.routing.router import HybridRouter, RoutingDecision
 from bombe_code.tools.parser import FallbackToolParser
 
 logger = logging.getLogger(__name__)
@@ -74,6 +80,8 @@ class AutonomousRunner:
         self.local_manager = LocalModelManager()
         self.fallback_parser = FallbackToolParser()
         self.registry = AgentRegistry.default()
+        self.quota_manager = QuotaManager()
+        self.router = HybridRouter(quota_manager=self.quota_manager, local_manager=self.local_manager)
         self.telemetry_dir = self.project_dir / "telemetry"
         self.telemetry_dir.mkdir(parents=True, exist_ok=True)
 
@@ -189,7 +197,7 @@ class AutonomousRunner:
         time.sleep(1.0)
         self.local_manager.start_model(profile, timeout_seconds=self.timeout_seconds)
 
-    def _get_zai_config(self) -> tuple[str | None, str]:
+    def _get_provider_config(self, provider_name: str) -> tuple[str | None, str]:
         auth_file = Path.home() / ".local" / "share" / "bombe-code" / "auth.json"
         auth_data = {}
         if auth_file.is_file():
@@ -197,23 +205,51 @@ class AutonomousRunner:
                 auth_data = json.loads(auth_file.read_text(encoding="utf-8"))
             except Exception:
                 pass
+
+        prov_clean = provider_name.strip().lower()
+        conf = auth_data.get(prov_clean, {}) if isinstance(auth_data, dict) else {}
+
+        if prov_clean in ("zai", "zai-coding-plan", "cloud_zai"):
+            key = (
+                os.environ.get("ZAI_API_KEY")
+                or os.environ.get("ZHIPU_API_KEY")
+                or conf.get("api_key")
+                or conf.get("key")
+                or auth_data.get("zai-coding-plan", {}).get("api_key")
+                or auth_data.get("zai", {}).get("api_key")
+            )
+            url = (
+                os.environ.get("ZAI_BASE_URL")
+                or conf.get("base_url")
+                or conf.get("url")
+                or auth_data.get("zai-coding-plan", {}).get("base_url")
+                or auth_data.get("zai", {}).get("base_url")
+                or "https://api.z.ai/api/coding/paas/v4"
+            )
+            return key, url.rstrip("/")
+
+        # Provedores gerais (OpenAI, Anthropic, Ollama, etc.)
         key = (
-            os.environ.get("ZAI_API_KEY")
-            or os.environ.get("ZHIPU_API_KEY")
-            or auth_data.get("zai-coding-plan", {}).get("key")
-            or auth_data.get("zai-coding-plan", {}).get("api_key")
-            or auth_data.get("zai", {}).get("key")
-            or auth_data.get("zai", {}).get("api_key")
+            os.environ.get(f"{prov_clean.upper()}_API_KEY")
+            or conf.get("api_key")
+            or conf.get("key")
         )
         url = (
-            os.environ.get("ZAI_BASE_URL")
-            or auth_data.get("zai-coding-plan", {}).get("base_url")
-            or auth_data.get("zai-coding-plan", {}).get("url")
-            or auth_data.get("zai", {}).get("base_url")
-            or auth_data.get("zai", {}).get("url")
-            or "https://api.z.ai/api/coding/paas/v4"
+            os.environ.get(f"{prov_clean.upper()}_BASE_URL")
+            or conf.get("base_url")
+            or conf.get("url")
         )
+        if not url:
+            if prov_clean == "openai":
+                url = "https://api.openai.com/v1"
+            elif prov_clean in ("ollama", "local"):
+                url = "http://127.0.0.1:11434/v1"
+            else:
+                url = "http://127.0.0.1:18094/v1"
         return key, url.rstrip("/")
+
+    def _get_zai_config(self) -> tuple[str | None, str]:
+        return self._get_provider_config("zai")
 
     def _chat_completion(
         self,
@@ -221,22 +257,28 @@ class AutonomousRunner:
         tools_schema: list[dict[str, Any]] | None = None,
         temperature: float = 0.2,
         model_name: str = "local",
+        provider_name: str | None = None,
     ) -> dict[str, Any]:
-        """Sends chat completion request to Z.ai cloud or active local model server with telemetry."""
-        is_cloud_zai = (
-            model_name.startswith("glm-")
-            or model_name in ("zai", "cloud_zai", "glm-5.3-flash")
-        )
-        zai_key, zai_base_url = self._get_zai_config()
+        """Sends chat completion request to cloud provider or active local model server with telemetry."""
+        prov = provider_name.strip().lower() if provider_name else ""
+        if not prov:
+            prov = "zai" if (model_name.startswith("glm-") or model_name in ("zai", "cloud_zai")) else "vllm-local"
 
-        if is_cloud_zai and zai_key and QuotaManager().is_available("zai"):
-            url = f"{zai_base_url}/chat/completions"
+        is_cloud = "local" not in prov
+        key, base_url = self._get_provider_config(prov)
+
+        if is_cloud and key:
+            if not self.quota_manager.is_available(prov):
+                raise QuotaExhaustedError(f"Provedor cloud '{prov}' está em cooldown de cota")
+
+            url = f"{base_url}/chat/completions"
             headers = {
-                "Authorization": f"Bearer {zai_key}",
+                "Authorization": f"Bearer {key}",
                 "Content-Type": "application/json",
             }
+            cloud_model = model_name if model_name not in ("local", "vllm-local") else "glm-5.3-flash"
             payload: dict[str, Any] = {
-                "model": "glm-5.3-flash",
+                "model": cloud_model,
                 "messages": messages,
                 "temperature": temperature,
                 "max_tokens": 8192,
@@ -430,23 +472,20 @@ class AutonomousRunner:
             analysis.reasons,
         )
 
-        # Check cloud quota for Z.ai (glm-5.3-flash)
-        quota_mgr = QuotaManager()
-        zai_key, _ = self._get_zai_config()
-        if zai_key and quota_mgr.is_available("zai"):
-            dev_profile = "glm-5.3-flash"
-            escalation_profile = "glm-5.3-flash"
-            active_model = dev_profile
-            logger.info("Cota Z.ai disponível! Roteando estação de queima para cloud glm-5.3-flash.")
-        else:
-            tier_to_model = {
-                "junior": "gemma-4-e4b",
-                "pleno": "qwen-3.8-9b",
-                "senior": "qwen-3.8-9b",
-            }
-            dev_profile = tier_to_model.get(analysis.recommended_tier, "qwen-3.8-9b")
-            escalation_profile = "qwen-3.8-9b"
-            active_model = dev_profile
+        # Roteamento cognitivo dinâmico governado pela Matriz (Jr, Pleno, Senior)
+        routing_decision = self.router.route(analysis)
+        active_provider = routing_decision.provider_name
+        active_model = routing_decision.model_name
+        logger.info(
+            "Roteamento de queima para %s (score=%s): tier=%s -> provider=%s, model=%s (fallback=%s, razão=%s)",
+            story_id,
+            analysis.score,
+            routing_decision.tier,
+            active_provider,
+            active_model,
+            routing_decision.is_fallback,
+            routing_decision.reason,
+        )
 
         agent_def = self.registry.get(clean_handle)
         base_prompt = agent_def.system_prompt if agent_def else "Você é um engenheiro de software sênior aplicando TDD estrito."
@@ -609,8 +648,9 @@ class AutonomousRunner:
                 peak_vram_mb=0.0,
             )
 
-        # Boot local model
-        self._ensure_model_server(active_model)
+        # Boot local model if provider is local
+        if "local" in active_provider.lower():
+            self._ensure_model_server(active_model)
 
         messages: list[dict[str, Any]] = [
             {"role": "system", "content": system_prompt},
@@ -632,9 +672,36 @@ class AutonomousRunner:
                     messages = [messages[0], messages[1]] + messages[-8:]
 
                 try:
-                    resp = self._chat_completion(messages, tools_schema=tools_schema, model_name=active_model)
+                    resp = self._chat_completion(
+                        messages,
+                        tools_schema=tools_schema,
+                        provider_name=active_provider,
+                        model_name=active_model,
+                    )
+                except QuotaExhaustedError as quota_err:
+                    route = self.router.matrix.get_route(analysis.recommended_tier)
+                    if route.fallback and route.fallback.provider != active_provider:
+                        logger.warning(
+                            "Failover ativado por cota/cooldown: mudando de %s/%s para fallback %s/%s",
+                            active_provider,
+                            active_model,
+                            route.fallback.provider,
+                            route.fallback.model,
+                        )
+                        active_provider = route.fallback.provider
+                        active_model = route.fallback.model
+                        if "local" in active_provider.lower():
+                            self._ensure_model_server(active_model)
+                        resp = self._chat_completion(
+                            messages,
+                            tools_schema=tools_schema,
+                            provider_name=active_provider,
+                            model_name=active_model,
+                        )
+                    else:
+                        raise
                 except Exception as exc:
-                    logger.warning("Falha na chamada ao modelo local: %s", exc)
+                    logger.warning("Falha na chamada ao modelo (%s/%s): %s", active_provider, active_model, exc)
                     messages.append({
                         "role": "user",
                         "content": f"Aviso do sistema: A chamada anterior falhou com '{exc}'. Por favor, continue o trabalho corrigindo os arquivos de forma concisa.",
@@ -794,9 +861,11 @@ class AutonomousRunner:
     def execute_review_station(self, round_num: int, story_id: str) -> StationResult:
         """Audits DoD and tests compliance using Hoare."""
         t0 = time.time()
-        zai_key, _ = self._get_zai_config()
-        active_model = "glm-5.3-flash" if (zai_key and QuotaManager().is_available("zai")) else "lfm3"
-        self._ensure_model_server(active_model)
+        decision = self.router.route_situation(DemandSituation.FINAL_REVIEW)
+        active_provider = decision.provider_name
+        active_model = decision.model_name
+        if "local" in active_provider.lower():
+            self._ensure_model_server(active_model)
 
         pytest_res = subprocess.run(
             f'{self.venv_python} -m pytest tests/ -v -o pythonpath=". src"',
@@ -858,7 +927,7 @@ class AutonomousRunner:
         resp = self._chat_completion([
             {"role": "system", "content": hoare_sys},
             {"role": "user", "content": hoare_prompt},
-        ], model_name=active_model)
+        ], provider_name=active_provider, model_name=active_model)
         review_text = resp["message"].get("content") or ""
         is_approved = ("STATUS: APROVADO" in review_text.upper()) or ("AUDITORIA: LIMPA" in review_text.upper())
         has_reprovado = ("STATUS: REPROVADO" in review_text.upper()) or ("NÃO APROVADO" in review_text.upper())
@@ -905,9 +974,11 @@ class AutonomousRunner:
     def execute_arch_review_station(self, round_num: int, story_id: str) -> StationResult:
         """Audits architecture, Clean Code, SOLID and authorizes Git commit using UncleBob."""
         t0 = time.time()
-        zai_key, _ = self._get_zai_config()
-        active_model = "glm-5.3-flash" if (zai_key and QuotaManager().is_available("zai")) else "qwen-3.8-9b"
-        self._ensure_model_server(active_model)
+        decision = self.router.route_situation(DemandSituation.FINAL_REVIEW)
+        active_provider = decision.provider_name
+        active_model = decision.model_name
+        if "local" in active_provider.lower():
+            self._ensure_model_server(active_model)
 
         pytest_res = subprocess.run(
             f'{self.venv_python} -m pytest tests/ -v -o pythonpath=". src"',
@@ -968,7 +1039,7 @@ class AutonomousRunner:
         resp = self._chat_completion([
             {"role": "system", "content": unclebob_sys},
             {"role": "user", "content": unclebob_prompt},
-        ], model_name=active_model)
+        ], provider_name=active_provider, model_name=active_model)
 
         review_text = resp["message"].get("content") or ""
         is_approved = ("STATUS: APROVADO" in review_text.upper()) or ("ARQUITETURA APROVADA" in review_text.upper())
@@ -1101,7 +1172,13 @@ class AutonomousRunner:
     ) -> StationResult:
         """Executes Round 0 Upstream macro: PRD (@grace), Architecture (@unclebob), Stories (@unclebob) and Rounds (@david)."""
         t0 = time.time()
-        self._ensure_model_server("lfm3")
+        is_dense = ("inception" in demand.lower() or "prd" in demand.lower() or len(demand) > 300)
+        sit = DemandSituation.UPSTREAM_CRITICAL if is_dense else DemandSituation.UPSTREAM_LIGHT
+        decision = self.router.route_situation(sit)
+        active_provider = decision.provider_name
+        active_model = decision.model_name
+        if "local" in active_provider.lower():
+            self._ensure_model_server(active_model)
 
         grace_agent = self.registry.get("grace")
         grace_sys = (
@@ -1119,7 +1196,7 @@ class AutonomousRunner:
         resp = self._chat_completion([
             {"role": "system", "content": grace_sys},
             {"role": "user", "content": user_prompt},
-        ])
+        ], provider_name=active_provider, model_name=active_model)
         wall_s = round(time.time() - t0, 2)
 
         # Scaffolding dos documentos canônicos de Upstream
