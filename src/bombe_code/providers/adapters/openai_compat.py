@@ -9,6 +9,7 @@ import httpx
 def parse_sse(lines) -> Iterator[dict]:
     tool_map: dict[int, dict] = {}
     finish_reason: str | None = None
+    full_content: list[str] = []
     for line in lines:
         if not line.startswith("data:"):
             continue
@@ -42,6 +43,7 @@ def parse_sse(lines) -> Iterator[dict]:
         # 2. Content delta
         content = delta.get("content")
         if content:
+            full_content.append(content)
             yield {"type": "text-delta", "text": content}
         for call in delta.get("tool_calls") or []:
             index = call.get("index", 0)
@@ -55,6 +57,19 @@ def parse_sse(lines) -> Iterator[dict]:
                 entry["arguments"] += function["arguments"]
         if choice.get("finish_reason"):
             finish_reason = choice["finish_reason"]
+
+    if not tool_map and full_content:
+        from bombe_code.tools.parser import FallbackToolParser
+
+        parsed_calls = FallbackToolParser().extract_tool_calls("".join(full_content))
+        for c in parsed_calls:
+            tool_map[c.index] = {
+                "id": c.call_id,
+                "name": c.name,
+                "arguments": c.arguments_delta,
+            }
+        if parsed_calls:
+            finish_reason = "tool_calls"
 
     for index in sorted(tool_map):
         entry = tool_map[index]
@@ -132,5 +147,11 @@ class OpenAICompatAdapter:
                 headers=headers,
             ) as response,
         ):
+            if response.status_code == 429:
+                err_text = response.read().decode("utf-8", errors="replace")
+                from bombe_code.routing.quota_manager import QuotaExhaustedError, QuotaManager
+
+                QuotaManager().record_exhausted("zai", error_message=err_text)
+                raise QuotaExhaustedError(f"HTTP 429: {err_text}")
             response.raise_for_status()
             yield from parse_sse(response.iter_lines())

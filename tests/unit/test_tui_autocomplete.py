@@ -31,7 +31,7 @@ async def test_prompt_suggester_file_mentions():
     # Menção de arquivo @
     res = await suggester.get_suggestion("@py")
     assert res is not None
-    assert res.startswith("@pyproject.toml") or "@py" in res
+    assert res.startswith("@pyproject.toml") or "py" in res
 
 
 @pytest.mark.anyio

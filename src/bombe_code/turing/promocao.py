@@ -69,6 +69,11 @@ class PromotorDeBranches:
         rc, saida = self._git("rev-parse", "--abbrev-ref", "HEAD")
         return saida.strip() if rc == 0 else ""
 
+    def commit_atual(self) -> str:
+        """Retorna o hash SHA do commit HEAD atual, ou string vazia se falhar."""
+        rc, saida = self._git("rev-parse", "HEAD")
+        return saida.strip() if rc == 0 else ""
+
     def tem_mudancas(self) -> bool:
         rc, saida = self._git("status", "--porcelain")
         return rc == 0 and bool(saida.strip())

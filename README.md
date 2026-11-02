@@ -1,41 +1,53 @@
 # ⚡ Bombe Code
 
-> **Harness determinístico, local-first e de engenharia de software enterprise com IA.**
+> **Estrutura e liberdade para criar software de verdade: da ideia ao produto pronto para clientes reais, com IA local e privacidade total.**
 
 [![Python Version](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Architecture](https://img.shields.io/badge/architecture-local--first-orange.svg)]()
-[![Methodology](https://img.shields.io/badge/methodology-ONDA%20%7C%20TDD-purple.svg)]()
-[![Gates](https://img.shields.io/badge/quality%20gates-100%25%20deterministic-red.svg)]()
+[![Methodology](https://img.shields.io/badge/flow-SLICE%20FLOW%20%7C%20VIBE%20FLOW-purple.svg)]()
+[![Quality](https://img.shields.io/badge/production--ready-MVP-green.svg)]()
 
 ---
 
 ## 🧭 O Que é o Bombe Code?
 
-O **Bombe Code** é uma plataforma e harness de desenvolvimento que transforma múltiplos agentes autônomos de IA em uma equipe de engenharia de software coesa, disciplinada e previsível.
+Criar software com inteligência artificial virou uma promessa comum, mas que frequentemente termina em frustração: prompts gigantescos que geram códigos incompletos, ferramentas que ignoram regras básicas de segurança e protótipos visuais frágeis que quebram assim que saem do seu computador.
 
-Inspirado no poder computacional e na precisão da máquina *Bombe* de Bletchley Park — projetada para decifrar problemas de altíssima complexidade combinatória através de especialização mecânica —, o Bombe Code elimina a fragilidade do chamado *"vibe coding"* desgovernado (código gerado sem planejamento, sem modelagem e sem testes reais).
+O **Bombe Code** nasceu para mudar essa realidade com **competência, método e privacidade**.
 
-No Bombe Code, nenhuma linha de código de produção é gerada ao acaso. O desenvolvimento segue a **Metodologia ONDA**, guiada por **25 Agentes Especialistas** e fiscalizada por **Gates Determinísticos do Turing Runtime**, onde a qualidade técnica é garantida por contratos de software em código Python imperativo, e não por promessas de modelos de linguagem.
+Ele não é um chat para você "bater papo" com uma IA esperando que ela adivinhe o que você precisa em um único prompt. O Bombe Code é uma **plataforma de construção direcionada**: ele organiza o processo criativo em etapas lógicas e naturais, garantindo que qualquer pessoa — desde quem nunca escreveu uma linha de código até engenheiros experientes — consiga transformar uma ideia em um **MVP (Mínimo Produto Viável) pronto para produção**, estável e seguro o suficiente para atender clientes reais no primeiro dia.
+
+Inspirado no rigor e na precisão da máquina *Bombe* de Alan Turing em Bletchley Park — projetada para decifrar problemas de altíssima complexidade através de especialização mecânica —, o Bombe Code substitui o caos do "vibe coding" sem rumo por um processo guiado por **Agentes Especialistas** e fiscalizado por **validações reais de código**.
 
 ---
 
-## 💡 Filosofia de Uso: Copiloto de Engenharia, Não Piloto Automático Cego
+## 👥 Para Quem é o Bombe Code?
 
-O Bombe Code oferece **dois caminhos operacionais complementares**, ajustados ao objetivo e ao momento do projeto:
+* **Pessoas Comuns & Profissionais de Negócio:** Se você sabe usar o básico do computador (como Word, Excel e navegação na internet), o Bombe Code te guia passo a passo, traduzindo suas ideias e regras de negócio em software funcional sem exigir jargões técnicos.
+* **Engenheiros de Software & Desenvolvedores:** Se você já programa, o Bombe Code elimina o trabalho braçal e repetitivo, aplicando boas práticas de arquitetura, testes automatizados (TDD) e commits organizados sob o seu controle técnico.
 
-1. **Modo Estruturado (Metodologia ONDA / Governança Rigorosa):**
-   - Esteira completa de engenharia guiada por etapas (`DISCOVERY`, `INCEPTION`, `PLAN`, `REFINEMENT`, `EXECUTE`, `VALIDATE`).
-   - Planejamento Upstream determinístico, decomposição atômica PBB, TDD estrito e auditoria contínua de qualidade e conformidade.
-2. **Modo Ágil / Vibe Code (Prototipagem Rápida & Iteração Livre):**
-   - Liberdade criativa imediata para experimentações, scripts avulsos, refatorações pontuais e protótipos ágeis sem cerimônias de pipeline.
+---
 
-### ⚠️ Nível de Maturidade: De MVPs a Produtos Enterprise
+## 🔒 Privacidade e Modelos Locais na Sua Própria Máquina
 
-* **Evolução até nível MVP por criadores com conhecimento básico:**
-  Usuários com conhecimentos introdutórios de lógica e produto conseguem estruturar ideias, planejar entregas e levar aplicações funcionais até o estágio de **MVP (Mínimo Produto Viável)**, aproveitando os agentes para modelar requisitos, arquitetar fluxos e gerar a base do código.
-* **Construção de Sistemas Enterprise Grade:**
-  Quando o objetivo é um **software em escala de produção enterprise**, a ferramenta **não substitui e não isenta a responsabilidade técnica e o julgamento crítico de um profissional de engenharia qualificado**. Sistemas corporativos exigem decisões arquiteturais profundas, validação de segurança, modelagem de concorrência e conformidade regulatória. O Bombe Code atua como um **Copiloto Potencializador**, que exige **atenção, acompanhamento e decisões humanas soberanas** em cada etapa do processo.
+Seus dados e a propriedade intelectual do seu negócio não precisam sair do seu computador. 
+O Bombe Code foi desenhado com foco em **IA Local-First**:
+* **Privacidade Absoluta:** Suporte nativo para rodar modelos de inteligência artificial diretamente no seu notebook ou desktop (via llama.cpp com aceleração de Multi-Token Prediction).
+* **Eficiência em Máquinas Modestas:** Otimizado com offload inteligente para funcionar com excelente velocidade mesmo em computadores convencionais (placas de vídeo de entrada de 6GB de VRAM e memória RAM padrão).
+* **Nuvem Opcional:** Conexão opcional com provedores de nuvem (Z.ai GLM, OpenAI, etc.) apenas quando você desejar. A escolha de onde processar é 100% sua.
+
+---
+
+## 🌊 Dois Caminhos de Construção: SLICE FLOW e VIBE FLOW
+
+O Bombe Code oferece dois fluxos de trabalho pensados para objetivos diferentes:
+
+1. **SLICE FLOW (Para Construir Produtos Sérios e Completos):**  
+   O fluxo estruturado e guiado. O sistema te acompanha desde a descoberta da ideia (Lean Inception) até o fatiamento em entregas pequenas e a validação de cada pedaço com testes automáticos. É o caminho para quem quer colocar um produto de pé para clientes reais sem surpresas.
+   
+2. **VIBE FLOW (Para Ideias Rápidas e Prototipagem):**  
+   O fluxo livre e ágil. Perfeito para quando você quer apenas experimentar uma ideia rápida, criar um script ou testar um conceito em poucos minutos, sem cerimônias de planejamento.
 
 ---
 
@@ -222,20 +234,20 @@ Dentro da etapa `EXECUTE`, cada história de usuário atravessa um ciclo determi
 
 O Bombe Code equilibra disciplina industrial com agilidade imediata:
 
-### Modos de Engenharia
-* **`tdd-code` (Padrão — Engenharia Formal):**
-  * Rigor determinístico máximo.
+### Modos de Engenharia: SLICE FLOW vs VIBE FLOW
+* **SLICE FLOW (`slice-flow` — Padrão / Engenharia Estruturada):**
+  * Rigor determinístico máximo guiado pela Metodologia ONDA.
   * Travas rígidas por etapa via `StageGuard`: código de produção em `src/` é bloqueado em `DISCUSS`, `DISCOVERY`, `PLAN`, `INCEPTION` e `REFINEMENT`.
   * Ciclo atômico `RED` ➔ `GREEN` ➔ `REFACTOR` ➔ `REVIEW`.
   * **Navegação Contextual com `Tab`:** A tecla `Tab` cicla as etapas válidas para o tipo de onda ativa:
     * Na Onda 0: cicla entre `DISCOVERY` e `INCEPTION`.
     * Nas Ondas de Entrega: cicla entre `PLAN`, `REFINEMENT`, `EXECUTE` e `VALIDATE`.
-* **`vibe-code` (Chave Mestra `Shift + Tab` — Prototipagem Livre):**
-  * Alternado instantaneamente com **`Shift + Tab`** (ou comando `/mode vibe`).
+* **VIBE FLOW (`vibe-flow` — Prototipagem Livre & Iteração Ágil):**
+  * Alternado instantaneamente com **`Shift + Tab`** (ou comando `/mode flow` ou `/mode vibe`).
   * Liberdade total: sem etapas, sem travas de arquivo e sem cerimônias. A LLM executa diretamente qualquer script, código ou refatoração solicitada.
-  * Indicador em **VERMELHO VIVO** na status bar (`Modo: [VIBE]`).
-  * No modo `vibe-code`, a tecla **`Tab` NÃO cicla etapas** (fica reservada para autocompletar `/comandos` ou `@arquivos`).
-  * Pressionar `Shift + Tab` novamente restaura com precisão o modo `tdd-code` e a última etapa ativa.
+  * Indicador em **VERMELHO VIVO** na status bar (`Modo: [VIBE FLOW]`).
+  * No modo VIBE FLOW, a tecla **`Tab` NÃO cicla etapas** (fica reservada para autocompletar `/comandos` ou `@arquivos`).
+  * Pressionar `Shift + Tab` novamente restaura com precisão o modo SLICE FLOW (`slice-flow`) e a última etapa ativa.
 
 ### Níveis de Autonomia
 * **`AUTO`:** A ONDA progride autonomamente através das stories enquanto os gates forem aprovados.

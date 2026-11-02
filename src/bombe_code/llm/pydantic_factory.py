@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 from typing import Any
 
@@ -11,15 +12,19 @@ from pydantic_ai.providers.openai import OpenAIProvider
 
 from bombe_code.providers.auth import load_auth
 
+logger = logging.getLogger(__name__)
+
 
 class PydanticAiFactory:
     """Fábrica central para criação de agentes tipados com Pydantic AI."""
 
-    DEFAULT_LOCAL_URL = "http://127.0.0.1:8080/v1"
+    DEFAULT_LOCAL_URL = os.environ.get("LLAMA_CPP_BASE_URL", "http://127.0.0.1:18094/v1")
     DEFAULT_ZAI_URL = "https://api.z.ai/api/coding/paas/v4"
 
     def resolve_model(self, model_name: str | None) -> Any:
         """Resolve uma string de modelo para o objeto de modelo do Pydantic AI."""
+        from bombe_code.routing.quota_manager import QuotaManager
+
         auth_data = load_auth()
 
         # Verifica se credenciais do Z.ai estão disponíveis
@@ -46,6 +51,13 @@ class PydanticAiFactory:
         if name in ("zai", "zhipu", "zai-coding-plan") or name.startswith(
             ("zai/", "zai-coding-plan/", "glm-")
         ):
+            if not QuotaManager().is_available("zai"):
+                logger.warning(
+                    "Provedor Z.ai indisponível/em cooldown de cota. Realizando failover para local gemma-4-e4b."
+                )
+                provider = OpenAIProvider(base_url=self.DEFAULT_LOCAL_URL, api_key="local")
+                return OpenAIChatModel("gemma-4-e4b", provider=provider)
+
             model_id = name
             if "/" in name:
                 model_id = name.split("/", 1)[1]
@@ -70,6 +82,13 @@ class PydanticAiFactory:
         # Se for default/vazio, resolve o provedor na ordem de prioridade
         if not name or name in ("padrão", "default"):
             if zai_key:
+                if not QuotaManager().is_available("zai"):
+                    logger.warning(
+                        "Provedor Z.ai em cooldown de cota. Realizando failover para local gemma-4-e4b."
+                    )
+                    provider = OpenAIProvider(base_url=self.DEFAULT_LOCAL_URL, api_key="local")
+                    return OpenAIChatModel("gemma-4-e4b", provider=provider)
+
                 import httpx
                 from openai import AsyncOpenAI
 

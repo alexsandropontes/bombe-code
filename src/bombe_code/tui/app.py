@@ -903,7 +903,7 @@ class BombeTuiApp(App):
         """MOUSE-UP PASSIVO: seleção livre e estável. Soltar o mouse NÃO copia
         nem limpa a seleção — o usuário seleciona normalmente o trecho desejado
         e pressiona F3 para copiar a seleção (ou F2 para copiar a transcrição inteira)."""
-        pass
+        return None
 
     def action_copiar_selecao(self) -> None:
         """F3: Copia EXCLUSIVAMENTE o texto selecionado na tela.

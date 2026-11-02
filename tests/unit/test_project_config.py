@@ -12,7 +12,7 @@ def test_project_config_defaults(tmp_path: Path):
     cfg = mgr.load()
 
     assert cfg.name == tmp_path.name or cfg.name == "bombe-project"
-    assert cfg.mode in ("tdd-code", "vibe-code")
+    assert cfg.mode in ("slice-flow", "vibe-flow", "slice-code", "vibe-code")
     assert cfg.autonomy in ("auto", "semi-auto", "manual")
 
 
@@ -28,7 +28,7 @@ def test_project_config_save_and_load(tmp_path: Path):
         frontend_path="src/ui/",
         docs_root="docs/",
         branch="dev-ia",
-        mode="tdd-code",
+        mode="slice-code",
         autonomy="manual",
     )
     mgr.save(cfg)

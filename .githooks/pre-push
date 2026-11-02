@@ -8,6 +8,13 @@ if [ -n "$_BOMBE_INTERNAL_PUSH" ]; then
     exit 0
 fi
 
+# Só executa versionamento se o push for explicitamente para a branch oficial dev
+CURRENT_BRANCH="$(git symbolic-ref --short HEAD 2>/dev/null || echo '')"
+if [ "$CURRENT_BRANCH" != "dev" ]; then
+    # Branches de trabalho locais (dev-working-ia, etc.) nunca devem rodar bump automático nem subir para o remoto
+    exit 0
+fi
+
 # Executa o bump de versão automático
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 if [ -f "$REPO_ROOT/scripts/bump_version.py" ]; then
@@ -18,7 +25,7 @@ if [ -f "$REPO_ROOT/scripts/bump_version.py" ]; then
     if echo "$OUTPUT" | grep -q "tagueada com sucesso"; then
         echo "🚀 Enviando commits e tags atualizados para o remoto..."
         REMOTE_NAME="${1:-origin}"
-        _BOMBE_INTERNAL_PUSH=1 git push --no-verify --follow-tags "$REMOTE_NAME" HEAD
+        _BOMBE_INTERNAL_PUSH=1 git push --no-verify "$REMOTE_NAME" dev --tags
         exit 1 # Aborta o push original não versionado, pois o push versionado já foi enviado!
     fi
 fi

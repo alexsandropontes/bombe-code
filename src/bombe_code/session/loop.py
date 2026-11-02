@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import time
 from collections.abc import Callable
 
@@ -10,6 +11,8 @@ from .models import Message, Session, TextPart
 from .processor import TurnProcessor
 from .system import build_system_prompt
 from .to_provider import to_provider_messages
+
+logger = logging.getLogger(__name__)
 
 _MAX_RETRIES = 3
 _RETRY_DELAY = 0.1
@@ -39,16 +42,57 @@ def _history(session_id: str):
     ]
 
 
+def _is_quota_error(exc: Exception) -> bool:
+    from bombe_code.routing.quota_manager import QuotaExhaustedError
+
+    if isinstance(exc, QuotaExhaustedError):
+        return True
+    msg = str(exc).lower()
+    if any(pattern in msg for pattern in ("429", "quota", "rate limit", "rate_limit", "too many requests")):
+        return True
+    status_code = getattr(exc, "status_code", None) or getattr(
+        getattr(exc, "response", None), "status_code", None
+    )
+    return status_code == 429
+
+
+def _wrap_stream_with_failover(stream, messages, tools, system):
+    from ..providers.resolver import resolve_provider_adapter
+
+    try:
+        yield from stream
+    except Exception as exc:
+        if _is_quota_error(exc):
+            logger.warning(
+                "Falha de cota detectada no stream (%s). Roteando para local.",
+                exc,
+            )
+            yield from resolve_provider_adapter("local").stream(messages, tools=tools, system=system)
+        else:
+            raise
+
+
 def _open_stream(adapter, messages, tools, system):
+    from ..providers.resolver import resolve_provider_adapter
+
     delay = _RETRY_DELAY
     for attempt in range(_MAX_RETRIES):
         try:
-            return adapter.stream(messages, tools=tools, system=system)
+            stream = adapter.stream(messages, tools=tools, system=system)
+            return _wrap_stream_with_failover(stream, messages, tools, system)
         except (ConnectionError, TimeoutError):
             if attempt == _MAX_RETRIES - 1:
                 raise
             time.sleep(delay)
             delay *= 2
+        except Exception as exc:
+            if _is_quota_error(exc):
+                logger.warning(
+                    "Falha de cota detectada no provedor (%s). Realizando failover para local.",
+                    exc,
+                )
+                return resolve_provider_adapter("local").stream(messages, tools=tools, system=system)
+            raise
 
 
 def _execute_tool(registry, event: dict, ctx) -> tuple[str, bool]:
