@@ -472,22 +472,80 @@ async def handle_slash_command(app: BombeTuiApp, raw_text: str) -> bool:
     # 2. /models (alias: /model)
     if cmd in ("models", "model"):
         from ..models.state import add_recent_model, get_recent_models
+        from bombe_code.routing.matrix import ModelSlot, load_matrix, save_matrix
+        from bombe_code.routing.quota_manager import QuotaManager
 
         if arg:
-            app.model_name = arg
-            add_recent_model(arg)
+            clean_arg = arg.strip()
+            if clean_arg.lower() in ("matrix", "status"):
+                matrix = load_matrix()
+                quota_mgr = QuotaManager()
+                from rich.table import Table
+                from bombe_code.routing.matrix import DemandSituation
+                t = Table(title="🤖 Matriz Cognitiva de Modelos", header_style="bold cyan")
+                t.add_column("Situação", style="bold yellow")
+                t.add_column("Primário", style="bold green")
+                t.add_column("Status Primário")
+                t.add_column("Fallback", style="bold magenta")
+                t.add_column("Status Fallback")
+                for sit in DemandSituation:
+                    r = matrix.get_route(sit.value)
+                    prim_str = f"{r.primary.provider}/{r.primary.model}" if r.primary else "[dim]não configurado[/dim]"
+                    fb_str = f"{r.fallback.provider}/{r.fallback.model}" if r.fallback else "[dim]nenhum[/dim]"
+                    t.add_row(sit.value, prim_str, "—", fb_str, "—")
+                await chat.mount(Static(t))
+                return True
+
+            # Quick setup via /models setup provider model [fb_provider] [fb_model]
+            if clean_arg.lower().startswith("setup"):
+                parts = clean_arg.split()
+                if len(parts) >= 3:
+                    prov = parts[1]
+                    mod = parts[2]
+                    fb_prov = parts[3] if len(parts) >= 5 else (parts[3] if len(parts) == 4 else None)
+                    fb_mod = parts[4] if len(parts) >= 5 else None
+                    matrix = load_matrix()
+                    matrix.quick_setup(
+                        primary=ModelSlot(provider=prov, model=mod),
+                        fallback=ModelSlot(provider=fb_prov, model=fb_mod) if fb_prov and fb_mod else None,
+                    )
+                    save_matrix(matrix)
+                    app.model_name = f"{prov}/{mod}"
+                    add_recent_model(app.model_name)
+                    app.update_status()
+                    await chat.mount(
+                        Static(
+                            f"[{TOKENS['success']}]✓ Modo Fácil configurado com sucesso!\n"
+                            f"  • Principal: {prov}/{mod}\n"
+                            f"  • Fallback: {fb_prov or 'nenhum'}/{fb_mod or 'nenhum'}[/{TOKENS['success']}]"
+                        )
+                    )
+                    return True
+
+            # /models provider/model
+            app.model_name = clean_arg
+            add_recent_model(clean_arg)
             app.update_status()
             if app.session_id and hasattr(app.client, "set_model"):
                 import asyncio
-
-                asyncio.create_task(_safe_set_model(app.client, app.session_id, arg))
+                asyncio.create_task(_safe_set_model(app.client, app.session_id, clean_arg))
             sidebar = app.query("#sidebar").first()
             if sidebar is not None:
-                sidebar.model_name = arg
+                sidebar.model_name = clean_arg
                 sidebar.refresh_view()
+
+            # Sincroniza matriz cognitiva
+            matrix = load_matrix()
+            prov, _, mod = clean_arg.partition("/")
+            if not mod:
+                mod = prov
+                prov = "vllm-local"
+            matrix.quick_setup(primary=ModelSlot(provider=prov, model=mod))
+            save_matrix(matrix)
+
             await chat.mount(
                 Static(
-                    f"[{TOKENS['success']}]✓ Modelo ativo alterado para: {arg}[/{TOKENS['success']}]"
+                    f"[{TOKENS['success']}]✓ Modelo ativo alterado e replicado para a matriz: {clean_arg}[/{TOKENS['success']}]"
                 )
             )
         else:
@@ -586,9 +644,20 @@ async def handle_slash_command(app: BombeTuiApp, raw_text: str) -> bool:
                     if sidebar is not None:
                         sidebar.model_name = selected_model
                         sidebar.refresh_view()
+
+                    # Sincroniza matriz cognitiva
+                    from bombe_code.routing.matrix import ModelSlot, load_matrix, save_matrix
+                    matrix = load_matrix()
+                    prov, _, mod = selected_model.partition("/")
+                    if not mod:
+                        mod = prov
+                        prov = "vllm-local"
+                    matrix.quick_setup(primary=ModelSlot(provider=prov, model=mod))
+                    save_matrix(matrix)
+
                     _mount_status(
                         chat,
-                        f"[{TOKENS['success']}]✓ Modelo ativo alterado para: {selected_model}[/{TOKENS['success']}]",
+                        f"[{TOKENS['success']}]✓ Modelo ativo alterado e replicado para a matriz: {selected_model}[/{TOKENS['success']}]",
                     )
 
             app.push_screen(ModelDialog(options, current_model=app.model_name), _on_model_selected)

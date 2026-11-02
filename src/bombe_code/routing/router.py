@@ -1,4 +1,4 @@
-"""Hybrid router directing slices to optimal provider based on complexity."""
+"""Hybrid router directing slices and demand situations to optimal provider based on complexity."""
 
 from __future__ import annotations
 
@@ -13,6 +13,11 @@ from bombe_code.local.contracts import ModelStatus
 from bombe_code.local.local_manager import LocalModelManager
 from bombe_code.local.profiles import ModelKey, build_model_profile, normalize_model_key
 from bombe_code.routing.classifier import ComplexityAnalysis
+from bombe_code.routing.matrix import (
+    DemandSituation,
+    RoutingMatrixConfig,
+    load_matrix,
+)
 from bombe_code.routing.quota_manager import QuotaExhaustedError, QuotaManager
 
 logger = logging.getLogger(__name__)
@@ -33,7 +38,7 @@ class RoutingDecision(BaseModel):
 
 
 class HybridRouter:
-    """Routes execution between local vLLM models and cloud providers."""
+    """Routes execution between local vLLM models and cloud providers based on the cognitive matrix."""
 
     def __init__(
         self,
@@ -41,10 +46,12 @@ class HybridRouter:
         quota_manager: QuotaManager | None = None,
         local_manager: LocalModelManager | None = None,
         http_get_fn: Callable[[str], int] | None = None,
+        matrix: RoutingMatrixConfig | None = None,
     ) -> None:
         self._quota_manager = quota_manager
         self._local_manager = local_manager
         self._http_get_fn = http_get_fn or self._default_http_get
+        self.matrix = matrix or load_matrix()
         if quota_checker is not None:
             self._quota_checker = quota_checker
         elif quota_manager is not None:
@@ -104,9 +111,77 @@ class HybridRouter:
         logger.info("Modelo local '%s' inicializado com sucesso.", canonical_key.value)
 
     def route(self, analysis: ComplexityAnalysis, force_local: bool = False) -> RoutingDecision:
-        """Route slice to provider and model based on complexity tier and quota availability."""
+        """Route slice to provider and model based on complexity tier and matrix configuration."""
         tier = analysis.recommended_tier
+        return self.route_situation(tier, force_local=force_local)
 
+    def route_situation(
+        self,
+        situation: DemandSituation | str,
+        force_local: bool = False,
+    ) -> RoutingDecision:
+        """Route an execution situation (junior, pleno, senior, upstream_critical, etc.) based on the matrix."""
+        sit_key = situation.value if isinstance(situation, DemandSituation) else str(situation).lower()
+        route = self.matrix.get_route(sit_key)
+
+        if route.primary is not None:
+            # 1. Force local flag requested
+            if force_local:
+                if route.fallback is not None and "local" in route.fallback.provider.lower():
+                    return RoutingDecision(
+                        provider_name=route.fallback.provider,
+                        model_name=route.fallback.model,
+                        tier=sit_key,
+                        is_fallback=True,
+                        reason=f"Fallback triggered by force_local flag: using configured fallback {route.fallback.model}",
+                    )
+                if "local" in route.primary.provider.lower():
+                    return RoutingDecision(
+                        provider_name=route.primary.provider,
+                        model_name=route.primary.model,
+                        tier=sit_key,
+                        is_fallback=False,
+                        reason=f"Force local using primary local model {route.primary.model}",
+                    )
+                return RoutingDecision(
+                    provider_name=route.fallback.provider if route.fallback else "vllm-local",
+                    model_name=route.fallback.model if route.fallback else "gemma-26b-awq",
+                    tier=sit_key,
+                    is_fallback=True,
+                    reason="Fallback triggered by force_local flag",
+                )
+
+            # 2. Check cloud quota / cooldown
+            is_cloud = "local" not in route.primary.provider.lower()
+            has_quota = self._quota_checker(route.primary.provider) if is_cloud else True
+
+            if has_quota:
+                return RoutingDecision(
+                    provider_name=route.primary.provider,
+                    model_name=route.primary.model,
+                    tier=sit_key,
+                    is_fallback=False,
+                    reason=f"Assigned to primary model {route.primary.model} on {route.primary.provider} (quota available)",
+                )
+
+            # 3. Fallback when cloud quota exhausted or in cooldown
+            if route.fallback is not None:
+                return RoutingDecision(
+                    provider_name=route.fallback.provider,
+                    model_name=route.fallback.model,
+                    tier=sit_key,
+                    is_fallback=True,
+                    reason=(
+                        f"Fallback triggered by exhausted cloud quota (429/limit reached) on {route.primary.provider}: "
+                        f"using fallback {route.fallback.model} on {route.fallback.provider}"
+                    ),
+                )
+
+        # Baseline fallback if route is not specifically configured in matrix
+        return self._legacy_route(sit_key, force_local)
+
+    def _legacy_route(self, tier: str, force_local: bool) -> RoutingDecision:
+        """Deterministic baseline routing when no specific matrix route is configured."""
         if tier == "junior":
             return RoutingDecision(
                 provider_name="vllm-local",
@@ -125,37 +200,43 @@ class HybridRouter:
                 reason="Pleno tier assigned to high-performance local Qwen 9B model",
             )
 
-        # Senior Tier (Score 3)
-        return self._route_senior(tier, force_local)
+        if tier in ("senior", "upstream_critical", "final_review"):
+            if force_local:
+                return RoutingDecision(
+                    provider_name="vllm-local",
+                    model_name="gemma-26b-awq",
+                    tier=tier,
+                    is_fallback=True,
+                    reason="Fallback triggered by force_local flag: using senior local model gemma-26b-awq",
+                )
 
-    def _route_senior(self, tier: str, force_local: bool) -> RoutingDecision:
-        if force_local:
+            target_cloud_provider = "cloud_zai"
+            has_quota = self._quota_checker(target_cloud_provider)
+
+            if has_quota:
+                return RoutingDecision(
+                    provider_name=target_cloud_provider,
+                    model_name="glm-4-plus",
+                    tier=tier,
+                    is_fallback=False,
+                    reason="Senior tier assigned to preferred cloud provider (quota available)",
+                )
+
             return RoutingDecision(
                 provider_name="vllm-local",
                 model_name="gemma-26b-awq",
                 tier=tier,
                 is_fallback=True,
-                reason="Fallback triggered by force_local flag: using senior local model gemma-26b-awq",
+                reason="Fallback triggered by exhausted cloud quota (429/limit reached): using senior local model gemma-26b-awq",
             )
 
-        target_cloud_provider = "cloud_zai"
-        has_quota = self._quota_checker(target_cloud_provider)
-
-        if has_quota:
-            return RoutingDecision(
-                provider_name=target_cloud_provider,
-                model_name="glm-4-plus",
-                tier=tier,
-                is_fallback=False,
-                reason="Senior tier assigned to preferred cloud provider (quota available)",
-            )
-
+        # Upstream light
         return RoutingDecision(
             provider_name="vllm-local",
-            model_name="gemma-26b-awq",
+            model_name="lfm3",
             tier=tier,
-            is_fallback=True,
-            reason="Fallback triggered by exhausted cloud quota (429/limit reached): using senior local model gemma-26b-awq",
+            is_fallback=False,
+            reason="Upstream light assigned to lightweight local model",
         )
 
     async def execute_with_failover(

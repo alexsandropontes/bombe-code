@@ -21,7 +21,12 @@ def test_cli_models(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
     result = runner.invoke(app, ["models"])
     assert result.exit_code == 0
-    assert "Catálogo de Modelos" in result.stdout or "openai" in result.stdout.lower()
+    assert "matriz" in result.stdout.lower() or "catálogo" in result.stdout.lower() or "openai" in result.stdout.lower()
+
+    # Subcomando catalog exibe catálogo de modelos
+    res_cat = runner.invoke(app, ["models", "catalog"])
+    assert res_cat.exit_code == 0
+    assert "catálogo" in res_cat.stdout.lower() or "openai" in res_cat.stdout.lower()
 
 
 def test_cli_run_prompt(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):

@@ -2860,24 +2860,20 @@ class WaveOrchestrator:
             else f"docs/waves/{self.state_machine.wave_id}/stories/{target_story}.md"
         )
         story_title = target_story
-        tarefas = PBBDecomposer.decompose_story(
-            story_id=target_story,
-            story_title=story_title,
-            requires_db=True,
-            requires_frontend=True,
-        )
-
-        # ── KANBAN DE AGENTES MANDA EM TUDO ──
-        # Braço ESCRITOR: tasks do breakdown nascem NO KANBAN, designadas, na
-        # ordem — BACKLOG → AGUARDANDO DEV. Sem ordem no kanban, agente nem
-        # acorda. Cards DEV DONE são IGNORADOS (revalidar é papel do code
-        # review final da story); BLOCKED tem prioridade (Impedimento).
         onda_id = self.state_machine.wave_id
-        # NASCIMENTO: o decompose é APENAS o escritor do kanban — os objetos
-        # em memória morrem aqui. O que queima são as ROWS do kanban.
-        self._garcom_preparar_tasks(onda_id, target_story, tarefas)
-        qtd_nascidas = len(tarefas)
-        del tarefas
+        existentes = self.db.carregar_tasks_kanban(onda_id, target_story)
+        if not existentes:
+            tarefas = PBBDecomposer.decompose_story(
+                story_id=target_story,
+                story_title=story_title,
+                requires_db=True,
+                requires_frontend=True,
+            )
+            self._garcom_preparar_tasks(onda_id, target_story, tarefas)
+            qtd_nascidas = len(tarefas)
+            del tarefas
+        else:
+            qtd_nascidas = len(existentes)
         pendentes, _cartoes = self._garcom_carregar_fila(onda_id, target_story)
         # Ciclo só-de-validação? (nada a queimar — kanban 100% DEV DONE/DONE
         # DEFINITIVO). O código já está no disco de queimas anteriores; quem
