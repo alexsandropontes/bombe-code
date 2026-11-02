@@ -234,20 +234,20 @@ Dentro da etapa `EXECUTE`, cada história de usuário atravessa um ciclo determi
 
 O Bombe Code equilibra disciplina industrial com agilidade imediata:
 
-### Modos de Engenharia: VIBE FLOW vs VIBE CODE
-* **VIBE FLOW (`tdd-code` — Padrão / Engenharia Estruturada):**
+### Modos de Engenharia: SLICE FLOW vs VIBE FLOW
+* **SLICE FLOW (`slice-flow` — Padrão / Engenharia Estruturada):**
   * Rigor determinístico máximo guiado pela Metodologia ONDA.
   * Travas rígidas por etapa via `StageGuard`: código de produção em `src/` é bloqueado em `DISCUSS`, `DISCOVERY`, `PLAN`, `INCEPTION` e `REFINEMENT`.
   * Ciclo atômico `RED` ➔ `GREEN` ➔ `REFACTOR` ➔ `REVIEW`.
   * **Navegação Contextual com `Tab`:** A tecla `Tab` cicla as etapas válidas para o tipo de onda ativa:
     * Na Onda 0: cicla entre `DISCOVERY` e `INCEPTION`.
     * Nas Ondas de Entrega: cicla entre `PLAN`, `REFINEMENT`, `EXECUTE` e `VALIDATE`.
-* **VIBE CODE (`vibe-code` — Prototipagem Livre & Iteração Ágil):**
-  * Alternado instantaneamente com **`Shift + Tab`** (ou comando `/mode vibe`).
+* **VIBE FLOW (`vibe-flow` — Prototipagem Livre & Iteração Ágil):**
+  * Alternado instantaneamente com **`Shift + Tab`** (ou comando `/mode flow` ou `/mode vibe`).
   * Liberdade total: sem etapas, sem travas de arquivo e sem cerimônias. A LLM executa diretamente qualquer script, código ou refatoração solicitada.
-  * Indicador em **VERMELHO VIVO** na status bar (`Modo: [VIBE]`).
-  * No modo VIBE CODE, a tecla **`Tab` NÃO cicla etapas** (fica reservada para autocompletar `/comandos` ou `@arquivos`).
-  * Pressionar `Shift + Tab` novamente restaura com precisão o modo VIBE FLOW (`tdd-code`) e a última etapa ativa.
+  * Indicador em **VERMELHO VIVO** na status bar (`Modo: [VIBE FLOW]`).
+  * No modo VIBE FLOW, a tecla **`Tab` NÃO cicla etapas** (fica reservada para autocompletar `/comandos` ou `@arquivos`).
+  * Pressionar `Shift + Tab` novamente restaura com precisão o modo SLICE FLOW (`slice-flow`) e a última etapa ativa.
 
 ### Níveis de Autonomia
 * **`AUTO`:** A ONDA progride autonomamente através das stories enquanto os gates forem aprovados.
