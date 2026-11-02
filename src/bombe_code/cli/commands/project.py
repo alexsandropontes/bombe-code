@@ -25,7 +25,7 @@ project_app.add_typer(starter_cli, name="starter")
 @project_app.command("configure")
 def project_configure(
     mode: Annotated[
-        str | None, typer.Option("--mode", "-m", help="Modo: slice-code ou vibe-code")
+        str | None, typer.Option("--mode", "-m", help="Modo: slice-flow ou vibe-flow")
     ] = None,
     backend_path: Annotated[
         str | None, typer.Option("--backend-path", help="Subdiretório de backend")

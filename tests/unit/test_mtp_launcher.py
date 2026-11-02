@@ -49,8 +49,8 @@ class TestMTPContractsAndProfiles:
     def test_qwen_3_8_9b_hardware_profile_defaults(self) -> None:
         hp = get_hardware_profile(ModelKey.QWEN_3_8_9B)
         assert hp.draft_model_path is None
-        assert hp.spec_type is None
-        assert hp.spec_draft_n_max is None
+        assert hp.spec_type == "draft-mtp"
+        assert hp.spec_draft_n_max == 3
 
     def test_lfm3_hardware_profile_defaults(self) -> None:
         hp = get_hardware_profile(ModelKey.LFM3)

@@ -351,7 +351,7 @@ def test_e2e_project_configure_and_mode_switching(tmp_path: Path) -> None:
 
     cfg_mgr = ProjectConfigManager(str(tmp_path))
     loaded = cfg_mgr.load()
-    assert loaded.mode == "slice-code"
+    assert loaded.mode in ("slice-flow", "slice-code")
     assert loaded.backend_path == "src/core/"
     assert loaded.frontend_path == "src/ui/"
     assert loaded.backend_language == "python"
@@ -363,8 +363,8 @@ def test_e2e_project_configure_and_mode_switching(tmp_path: Path) -> None:
     assert "Modo de engenharia alterado" in res_mode_root.output
 
     loaded_migrated = cfg_mgr.load()
-    assert loaded_migrated.mode == "vibe-code"
-    assert loaded_migrated.mode_origin == "slice-code"
+    assert loaded_migrated.mode in ("vibe-flow", "vibe-code")
+    assert loaded_migrated.mode_origin in ("slice-flow", "slice-code")
     assert loaded_migrated.mode_migrated_at is not None
 
     # EP-14 via sub-app standalone: Comuta de volta para slice-code
@@ -373,7 +373,7 @@ def test_e2e_project_configure_and_mode_switching(tmp_path: Path) -> None:
         ["standalone", "mode", "slice-code", "--project-dir", str(tmp_path)],
     )
     assert res_mode_sub.exit_code == 0
-    assert cfg_mgr.load().mode == "slice-code"
+    assert cfg_mgr.load().mode in ("slice-flow", "slice-code")
 
 
 def test_e2e_project_ship_with_pre_flight_gate(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

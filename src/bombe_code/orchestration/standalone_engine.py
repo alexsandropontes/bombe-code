@@ -20,9 +20,11 @@ class StandaloneEngine:
         """Switches project engineering or autonomy mode with audit metadata in .bombeconfig."""
         target_mode = mode.strip().lower()
         if target_mode in {"tdd", "tdd-code", "tdd_code"}:
-            target_mode = "slice-code"
-        elif target_mode in {"vibe", "vibe_code"}:
-            target_mode = "vibe-code"
+            target_mode = "slice-flow"
+        elif target_mode in {"vibe", "vibe_code", "vibe-code", "vibe_flow", "vibe-flow"}:
+            target_mode = "vibe-flow"
+        elif target_mode in {"slice", "slice_code", "slice-code", "slice_flow", "slice-flow"}:
+            target_mode = "slice-flow"
 
         config = self.config_manager.load()
 
@@ -31,9 +33,9 @@ class StandaloneEngine:
             self.config_manager.save(config)
             return config
 
-        if target_mode not in {"slice-code", "vibe-code"}:
+        if target_mode not in {"slice-flow", "vibe-flow"}:
             raise InvalidModeError(
-                f"Modo '{mode}' é inválido. Modos permitidos: ['slice-code', 'vibe-code']"
+                f"Modo '{mode}' é inválido. Modos permitidos: ['slice-flow', 'vibe-flow']"
             )
 
         config.mode_origin = config.mode

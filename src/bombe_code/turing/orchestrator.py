@@ -5164,12 +5164,12 @@ class WaveOrchestrator:
             self.state_machine.set_autonomy_mode(new_autonomy)
             cfg.autonomy = cleaned
             updated_autonomy = True
-        elif cleaned in ("tdd", "tdd-code", "tdd_code"):
+        elif cleaned in ("tdd", "tdd-code", "tdd_code", "slice", "slice-code", "slice_code", "slice-flow", "slice_flow"):
             self.state_machine.set_engineering_mode(EngineeringMode.TDD_CODE)
-            cfg.mode = "tdd-code"
-        elif cleaned in ("vibe", "vibe-code", "vibe_code"):
+            cfg.mode = "slice-flow"
+        elif cleaned in ("vibe", "vibe-code", "vibe_code", "vibe-flow", "vibe_flow"):
             self.state_machine.set_engineering_mode(EngineeringMode.VIBE_CODE)
-            cfg.mode = "vibe-code"
+            cfg.mode = "vibe-flow"
         else:
             return {
                 "success": False,

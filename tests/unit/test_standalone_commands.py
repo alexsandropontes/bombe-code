@@ -67,19 +67,19 @@ def test_standalone_engine_switch_mode_audits_metadata(tmp_path: Path) -> None:
     """switch_mode writes mode_origin and mode_migrated_at to .bombeconfig."""
     cfg_mgr = ProjectConfigManager(str(tmp_path))
     cfg = cfg_mgr.load()
-    cfg.mode = "slice-code"
+    cfg.mode = "slice-flow"
     cfg_mgr.save(cfg)
 
     engine = StandaloneEngine(project_dir=tmp_path)
-    updated = engine.switch_mode("vibe-code")
+    updated = engine.switch_mode("vibe-flow")
 
-    assert updated.mode == "vibe-code"
-    assert updated.mode_origin == "slice-code"
+    assert updated.mode == "vibe-flow"
+    assert updated.mode_origin == "slice-flow"
     assert updated.mode_migrated_at is not None
 
     reloaded = cfg_mgr.load()
-    assert reloaded.mode == "vibe-code"
-    assert reloaded.mode_origin == "slice-code"
+    assert reloaded.mode == "vibe-flow"
+    assert reloaded.mode_origin == "slice-flow"
     assert reloaded.mode_migrated_at == updated.mode_migrated_at
 
 
@@ -100,7 +100,7 @@ def test_standalone_engine_generate_status_report(tmp_path: Path) -> None:
     rep = engine.generate_status_report()
 
     assert rep["project_name"] == tmp_path.name
-    assert rep["mode"] in {"slice-code", "vibe-code"}
+    assert rep["mode"] in {"slice-flow", "vibe-flow", "slice-code", "vibe-code"}
     assert rep["missions_count"] == 1
     assert rep["missions"][0]["id"] == "01"
     assert rep["missions"][0]["status"] == "active"
@@ -157,7 +157,7 @@ def test_cli_project_configure_updates_bombeconfig(tmp_path: Path) -> None:
 
     cfg_mgr = ProjectConfigManager(str(tmp_path))
     cfg = cfg_mgr.load()
-    assert cfg.mode == "vibe-code"
+    assert cfg.mode in {"vibe-flow", "vibe-code"}
     assert cfg.backend_path == "src/api/"
     assert cfg.frontend_path == "src/web/"
     assert cfg.backend_language == "go"

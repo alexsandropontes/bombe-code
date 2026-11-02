@@ -22,11 +22,11 @@ standalone_app = typer.Typer(
 def mode_cmd(
     mode_str: Annotated[
         str,
-        typer.Argument(help="Modo de engenharia: slice-code ou vibe-code"),
+        typer.Argument(help="Modo de engenharia: slice-flow ou vibe-flow"),
     ],
     project_dir: Annotated[str, typer.Option("--project-dir", help="Pasta do projeto")] = ".",
 ) -> None:
-    """Alterna modo de engenharia entre slice-code e vibe-code com auditoria."""
+    """Alterna modo de engenharia entre slice-flow e vibe-flow com auditoria."""
     engine = StandaloneEngine(project_dir=project_dir)
     try:
         is_autonomy = mode_str.strip().lower() in {"auto", "semi-auto", "semi_auto", "manual"}

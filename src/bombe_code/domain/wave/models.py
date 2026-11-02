@@ -68,18 +68,23 @@ class AutonomyMode(str, Enum):
 class EngineeringMode(str, Enum):
     """Modo de disciplina de engenharia."""
 
+    SLICE_FLOW = "slice-flow"
+    VIBE_FLOW = "vibe-flow"
+
+    # Aliases retrocompatíveis
     TDD = "tdd-code"
     VIBE = "vibe-code"
     SPEC = "spec-code"
+    SLICE_CODE = "slice-code"
 
     @classmethod
     def from_str(cls, val: str) -> EngineeringMode:
         v = (val or "").strip().lower()
         if "vibe" in v:
-            return cls.VIBE
-        if "spec" in v:
-            return cls.SPEC
-        return cls.TDD
+            return cls.VIBE_FLOW
+        if "slice" in v or "spec" in v or "tdd" in v:
+            return cls.SLICE_FLOW
+        return cls.SLICE_FLOW
 
 
 class DeliveryTarget(str, Enum):

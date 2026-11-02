@@ -121,8 +121,8 @@ HARDWARE_PROFILES: dict[ModelKey, HardwareProfile] = {
         n_cpu_moe=None,
         n_gpu_layers=18,
         draft_model_path=None,
-        spec_type=None,
-        spec_draft_n_max=None,
+        spec_type="draft-mtp",
+        spec_draft_n_max=3,
         extra_args=("-b", "1024", "-ub", "256", "--parallel", "1", "--jinja"),
     ),
     ModelKey.LFM3: HardwareProfile(

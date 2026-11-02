@@ -17,6 +17,24 @@ class InvalidModeError(ValueError):
     """Exceção levantada quando um modo não suportado ou extinto é configurado."""
 
 
+MODE_ALIASES: dict[str, str] = {
+    # Vibe flow
+    "vibe-flow": "vibe-flow",
+    "vibe_flow": "vibe-flow",
+    "vibe-code": "vibe-flow",
+    "vibe_code": "vibe-flow",
+    "vibe": "vibe-flow",
+    # Slice flow
+    "slice-flow": "slice-flow",
+    "slice_flow": "slice-flow",
+    "slice-code": "slice-flow",
+    "slice_code": "slice-flow",
+    "slice": "slice-flow",
+}
+
+CANONICAL_MODES: set[str] = {"slice-flow", "vibe-flow"}
+
+
 class ProjectConfig(BaseModel):
     """Modelo declarativo de configuração do projeto (.bombeconfig)."""
 
@@ -33,8 +51,8 @@ class ProjectConfig(BaseModel):
     docs_root: str = Field(default="docs/", description="Diretório raiz de documentação")
     branch: str = Field(default="dev", description="Branch de trabalho da IA")
     mode: str = Field(
-        default="slice-code",
-        description="Modo de engenharia: slice-code ou vibe-code",
+        default="slice-flow",
+        description="Modo de engenharia: slice-flow ou vibe-flow",
     )
     mode_origin: str | None = Field(
         default=None,
@@ -56,22 +74,22 @@ class ProjectConfig(BaseModel):
 
     def __init__(self, **data: Any) -> None:
         if "mode" in data and data["mode"] is not None:
-            self.validate_mode(data["mode"])
+            data["mode"] = self.validate_mode(data["mode"])
         super().__init__(**data)
 
     @field_validator("mode")
     @classmethod
     def validate_mode(cls, v: str) -> str:
-        valid_modes = {"slice-code", "vibe-code"}
-        if v not in valid_modes:
-            if v in {"tdd-code", "spec-code"}:
-                raise InvalidModeError(
-                    f"Modo '{v}' foi descontinuado no Bombe Core v4. Modos permitidos: {sorted(valid_modes)}"
-                )
+        raw = str(v).strip().lower()
+        if raw in {"tdd-code", "spec-code"}:
             raise InvalidModeError(
-                f"Modo '{v}' é inválido. Modos permitidos: {sorted(valid_modes)}"
+                f"Modo '{v}' foi descontinuado no Bombe Core v4. Modos permitidos: {sorted(CANONICAL_MODES)}"
             )
-        return v
+        if raw in MODE_ALIASES:
+            return MODE_ALIASES[raw]
+        raise InvalidModeError(
+            f"Modo '{v}' é inválido. Modos permitidos: {sorted(CANONICAL_MODES)}"
+        )
 
 
 class ProjectConfigManager:

@@ -10,9 +10,9 @@ from bombe_code.config.project_config import (
 
 
 def test_project_config_defaults():
-    """Valida defaults soberanos: slice-code e enterprise-grade."""
+    """Valida defaults soberanos: slice-flow e enterprise-grade."""
     cfg = ProjectConfig()
-    assert cfg.mode == "slice-code"
+    assert cfg.mode == "slice-flow"
     assert cfg.delivery_target == "enterprise-grade"
     assert cfg.mode_origin is None
     assert cfg.mode_migrated_at is None
@@ -29,9 +29,11 @@ def test_project_config_invalid_mode_raises():
 
 
 def test_project_config_valid_vibe_code():
-    """Garante suporte ao modo vibe-code."""
+    """Garante suporte ao modo vibe-flow e normalização de vibe-code."""
     cfg = ProjectConfig(mode="vibe-code")
-    assert cfg.mode == "vibe-code"
+    assert cfg.mode == "vibe-flow"
+    cfg_flow = ProjectConfig(mode="vibe-flow")
+    assert cfg_flow.mode == "vibe-flow"
 
 
 def test_config_manager_load_and_migrate_legacy(tmp_path: Path):
@@ -42,7 +44,7 @@ def test_config_manager_load_and_migrate_legacy(tmp_path: Path):
     mgr = ProjectConfigManager(project_dir=str(tmp_path))
     cfg = mgr.load()
 
-    assert cfg.mode == "slice-code"
+    assert cfg.mode == "slice-flow"
     assert cfg.mode_origin == "tdd-code"
     assert cfg.mode_migrated_at is not None
     assert cfg.name == "legacy-app"
@@ -53,14 +55,14 @@ def test_config_manager_save_persists_migration_fields(tmp_path: Path):
     mgr = ProjectConfigManager(project_dir=str(tmp_path))
     cfg = ProjectConfig(
         name="migrated-app",
-        mode="slice-code",
+        mode="slice-flow",
         mode_origin="tdd-code",
         mode_migrated_at="2026-10-31T15:00:00Z",
     )
     mgr.save(cfg)
 
     reloaded = mgr.load()
-    assert reloaded.mode == "slice-code"
+    assert reloaded.mode == "slice-flow"
     assert reloaded.mode_origin == "tdd-code"
     assert reloaded.mode_migrated_at == "2026-10-31T15:00:00Z"
     assert reloaded.delivery_target == "enterprise-grade"

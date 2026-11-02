@@ -1,14 +1,14 @@
 # 📖 Manual do Usuário — Bombe Code
 
-Bem-vindo ao **Bombe Code**, o ambiente autônomo de engenharia de software com **Governança Determinística pelo Turing Runtime**, suporte híbrido a **TDD Formal** e **Vibe Coding**, e orquestração de **24 Agentes Especialistas**.
+Bem-vindo ao **Bombe Code**, o ambiente autônomo de engenharia de software com **Governança Determinística pelo Turing Runtime**, suporte aos fluxos **SLICE FLOW** (Engenharia Guiada de Ponta a Ponta) e **VIBE FLOW** (Prototipagem Ágil & Livre), e orquestração de **25 Agentes Especialistas**.
 
 ---
 
 ## 🎯 Sumário
 1. [Visão Geral & Filosofia](#-visão-geral--filosofia)
-2. [Os Dois Grandes Modos: TDD vs VIBE](#-os-dois-grandes-modos-tdd-vs-vibe)
-   - [Modo TDD (`tdd-code` — Engenharia Formal & Governada)](#-modo-tdd-tdd-code--engenharia-formal--governada)
-   - [Modo VIBE (`vibe-code` — Vibe Coding Livre & Ágil)](#-modo-vibe-vibe-code--vibe-coding-livre--ágil)
+2. [Os Dois Grandes Modos: SLICE FLOW vs VIBE FLOW](#-os-dois-grandes-modos-slice-flow-vs-vibe-flow)
+   - [Modo SLICE FLOW (`slice-flow` — Engenharia Estruturada de Ponta a Ponta)](#-modo-slice-flow-slice-flow--engenharia-estruturada-de-ponta-a-ponta)
+   - [Modo VIBE FLOW (`vibe-flow` — Prototipagem Ágil & Iteração Livre)](#-modo-vibe-flow-vibe-flow--prototipagem-ágil--iteração-livre)
 3. [Chave Mestra: Atalho Shift + Tab](#-chave-mestra-atalho-shift--tab)
 4. [Ontologia das Ondas & Comportamento Contextual da Tecla Tab](#-ontologia-das-ondas--comportamento-contextual-da-tecla-tab)
    - [Onda 0: Greenfield Lean Inception Macro (`DISCOVERY` ➔ `INCEPTION`)](#onda-0-greenfield-lean-inception-macro)
@@ -18,7 +18,7 @@ Bem-vindo ao **Bombe Code**, o ambiente autônomo de engenharia de software com 
    - [Iniciar uma Nova ONDA (`/wave start`)](#iniciar-uma-nova-onda-wave-start)
    - [Alerta de Ondas Incompletas & Proteção `--force`](#alerta-de-ondas-incompletas--proteção---force)
    - [Execução Passo a Passo vs Modo Automático](#execução-passo-a-passo-vs-modo-automático)
-6. [Elenco Oficial de 24 Agentes Especialistas](#-elenco-oficial-de-23-agentes-especialistas)
+6. [Elenco Oficial de 25 Agentes Especialistas](#-elenco-oficial-de-25-agentes-especialistas)
 7. [Atalhos de Teclado na TUI](#-atalhos-de-teclado-na-tui)
 8. [Caixa de Entrada Multilinha & Colagem Segura (Paste Support)](#-caixa-de-entrada-multilinha--colagem-segura-paste-support)
 9. [Streaming em Tempo Real & Raciocínio ao Vivo](#-streaming-em-tempo-real--raciocínio-ao-vivo)
@@ -29,8 +29,8 @@ Bem-vindo ao **Bombe Code**, o ambiente autônomo de engenharia de software com 
 ## 🌟 Visão Geral & Filosofia
 
 O Bombe Code opera como uma esteira de engenharia completa e local-first dentro do diretório do seu projeto. Ele une o melhor de dois mundos:
-* **Modo VIBE FLOW (Metodologia ONDA / Governança Estruturada):** Rigor arquitetural, planejamento Upstream (PRD, jornadas, modelo de dados), testes antes do código com QA (`@aniche`), revisão técnica independente por Tech Lead (`@unclebob`), homologação por `@edith` e fiscalização determinística por quality gates em código Python imperativo.
-* **Modo VIBE CODE (Prototipagem Ágil & Iteração Livre):** Liberdade criativa imediata para experimentação rápida, automação, protótipos e alterações diretas sem cerimônias de pipeline.
+* **Modo SLICE FLOW (`slice-flow`):** Rigor arquitetural, planejamento Upstream (PRD, jornadas, modelo de dados), testes antes do código com QA (`@aniche`), revisão técnica independente por Tech Lead (`@unclebob`), homologação por `@edith` e fiscalização determinística por quality gates em código Python imperativo.
+* **Modo VIBE FLOW (`vibe-flow`):** Liberdade criativa imediata para experimentação rápida, automação, protótipos e alterações diretas sem cerimônias de pipeline.
 
 ### ⚠️ Copiloto Humano-no-Loop: MVP vs. Enterprise Grade
 * **Construção de MVPs:** Uma pessoa com conhecimento introdutório de produto e lógica de programação consegue evoluir ideias e levar projetos funcionais até o nível de **MVP**, contando com a orquestração dos 25 agentes especializados.
@@ -40,7 +40,7 @@ Toda a persistência física das especificações é mantida em arquivos Markdow
 
 ---
 
-## 🧭 Os Dois Grandes Modos: VIBE FLOW vs VIBE CODE
+## 🧭 Os Dois Grandes Modos: SLICE FLOW vs VIBE FLOW
 
 O Bombe Code organiza sua experiência em dois modos de trabalho:
 
@@ -51,7 +51,7 @@ O Bombe Code organiza sua experiência em dois modos de trabalho:
                                       │
                ┌──────────────────────┴──────────────────────┐
                ▼                                             ▼
-    🛡️ MODO VIBE FLOW (`tdd-code`)                🔥 MODO VIBE CODE (`vibe-code`)
+    🛡️ MODO SLICE FLOW (`slice-flow`)             🔥 MODO VIBE FLOW (`vibe-flow`)
  ┌───────────────────────────────┐              ┌───────────────────────────────┐
  │ • Governança estruturada ONDA │              │ • Modo livre e irrestrito     │
  │ • Travas rígidas por etapa    │              │ • Sem etapas ou travas        │
@@ -63,7 +63,7 @@ O Bombe Code organiza sua experiência em dois modos de trabalho:
 
 ---
 
-### 🛡️ Modo VIBE FLOW (Engenharia Estruturada & Governada pela ONDA)
+### 🛡️ Modo SLICE FLOW (Engenharia Estruturada & Governada pela ONDA)
 
 * **O que é:** O modo de entrega profissional e estruturado da ONDA. Toda evolução de código segue o fluxo de engenharia, onde o problema e a arquitetura são clarificados no Upstream e testes automatizados são concebidos antes da implementação no Downstream.
 * **Controle:** O desenvolvedor e a LLM estão **presos às diretrizes da etapa ativa**. Se a LLM tentar escrever código de produção na etapa de concepção ou planejamento, as ferramentas de escrita em `src/` são bloqueadas deterministicamente com mensagens de veto instrutivas (`StageGuard`).
@@ -71,14 +71,14 @@ O Bombe Code organiza sua experiência em dois modos de trabalho:
 
 ---
 
-### 🔥 Modo VIBE CODE (Prototipagem Ágil & Iteração Livre)
+### 🔥 Modo VIBE FLOW (Prototipagem Ágil & Iteração Livre)
 
-* **O que é:** O modo de liberdade criativa total. Aqui o desenvolvedor pode fazer vibe coding à vontade, solicitando qualquer funcionalidade, refatoração, arquivo avulso, protótipo ou script direto sem cerimônias de pipeline.
+* **O que é:** O modo de liberdade criativa total. Aqui o desenvolvedor pode fazer iterações rápidas, solicitando qualquer funcionalidade, refatoração, arquivo avulso, protótipo ou script direto sem cerimônias de pipeline.
 * **Sem Sub-etapas:** Não há divisões ou travas por etapa. A LLM executa prontamente o que você pedir.
-* **Comportamento do `Tab`:** No modo VIBE CODE, pressionar **`Tab` NÃO cicla etapas** (ele é reservado exclusivamente para autocompletar `/comandos` ou `@arquivos`).
-* **Sinalização em VERMELHO VIVO:** A barra de status exibe o indicador em vermelho vivo:  
-  `Modo: [VIBE CODE]` (destaque visual marcante).
-* **Permanência:** Uma vez no modo VIBE CODE, você só sai de lá pressionando `Shift + Tab` novamente (ou digitando `/mode flow`).
+* **Comportamento do `Tab`:** No modo VIBE FLOW, pressionar **`Tab` NÃO cicla etapas** (ele é reservado exclusivamente para autocompletar `/comandos` ou `@arquivos`).
+* **Sinalização em VERMELHO VIVO:** A barra de status exibe o indicador em destaque:  
+  `Modo: [VIBE FLOW]`.
+* **Permanência:** Uma vez no modo VIBE FLOW, você só sai de lá pressionando `Shift + Tab` novamente (ou digitando `/mode flow`).
 
 ---
 
@@ -86,8 +86,8 @@ O Bombe Code organiza sua experiência em dois modos de trabalho:
 
 A qualquer momento durante o desenvolvimento na TUI:
 
-* **Pressione `Shift + Tab`:** Comuta instantaneamente entre o **Modo VIBE FLOW** e o **Modo VIBE CODE**.
-* **Retorno Inteligente:** Ao retornar para o Modo VIBE FLOW, o sistema restaura com segurança exatamente a etapa onde você parou.
+* **Pressione `Shift + Tab`:** Comuta instantaneamente entre o **Modo SLICE FLOW** e o **Modo VIBE FLOW**.
+* **Retorno Inteligente:** Ao retornar para o Modo SLICE FLOW, o sistema restaura com segurança exatamente a etapa onde você parou.
 * Funciona mesmo com o foco ativo no campo de digitação de texto.
 
 ---
